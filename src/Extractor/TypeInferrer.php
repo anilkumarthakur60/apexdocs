@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace ApexDocs\Extractor;
 
+use ReflectionIntersectionType;
 use ReflectionMethod;
 use ReflectionNamedType;
 use ReflectionUnionType;
@@ -73,6 +74,13 @@ final class TypeInferrer
 
         if ($type instanceof ReflectionUnionType) {
             return implode('|', array_map(
+                fn ($t) => $t->getName(),
+                $type->getTypes(),
+            ));
+        }
+
+        if ($type instanceof ReflectionIntersectionType) {
+            return implode('&', array_map(
                 fn ($t) => $t->getName(),
                 $type->getTypes(),
             ));

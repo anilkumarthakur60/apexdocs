@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ApexDocs\Bridge\Laravel;
 
 use ApexDocs\ApexDocs;
+use ApexDocs\Export\BrunoExporter;
 use ApexDocs\Export\InsomniaExporter;
 use ApexDocs\Export\JsonExporter;
 use ApexDocs\Export\PostmanExporter;
@@ -23,6 +24,7 @@ class DocsController extends Controller
         private YamlExporter $yaml,
         private PostmanExporter $postman,
         private InsomniaExporter $insomnia,
+        private BrunoExporter $bruno,
     ) {}
 
     public function ui(Request $request): Response
@@ -69,5 +71,14 @@ class DocsController extends Controller
         return response($content)
             ->header('Content-Type', 'application/json')
             ->header('Content-Disposition', 'attachment; filename="insomnia-collection.json"');
+    }
+
+    public function bruno(): Response
+    {
+        $content = $this->bruno->toString($this->apexDocs->generate());
+
+        return response($content)
+            ->header('Content-Type', 'application/json')
+            ->header('Content-Disposition', 'attachment; filename="bruno-collection.json"');
     }
 }

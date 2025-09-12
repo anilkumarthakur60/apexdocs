@@ -23,8 +23,11 @@ final class Config
         public readonly int $maxSchemaDepth = 6,
         public readonly bool $cacheEnabled = false,
         public readonly int $cacheTtl = 3600,
-        public readonly string $defaultUi = 'scalar',
+
+        /** UI renderer: 'apex' (native, no CDN) | 'scalar' | 'swagger' | 'redoc' | 'stoplight' | 'rapidoc' */
+        public readonly string $defaultUi = 'apex',
         public readonly bool $showUiSwitcher = true,
+
         public readonly array $contact = [],
         public readonly array $license = [],
         public readonly string $termsOfService = '',
@@ -35,6 +38,35 @@ final class Config
         public readonly bool $documentRateLimits = true,
         public readonly array $webhookScanPaths = [],
         public readonly string $exportPath = '',
+
+        /** When non-empty, only routes tagged #[ApiGroup(name)] matching this value are included. */
+        public readonly string $specGroup = '',
+
+        // ── UI customisation ──────────────────────────────────────────────────
+
+        /** 'dark' | 'light' | 'auto' (follows system preference). Applies to the native Apex UI and toolbar. */
+        public readonly string $theme = 'dark',
+
+        /** Optional URL to replace the default lightning-bolt brand icon. */
+        public readonly string $customLogo = '',
+
+        /** Raw CSS injected into every documentation page <head>. */
+        public readonly string $customCss = '',
+
+        /**
+         * Banner shown above the toolbar. Plain text or basic HTML.
+         * Leave empty to hide.
+         */
+        public readonly string $announcementBanner = '',
+
+        /** 'info' | 'warning' | 'error' — controls the banner colour. */
+        public readonly string $announcementBannerType = 'info',
+
+        /** Enable the Try-It-Out panel in the native Apex UI. */
+        public readonly bool $tryItOutEnabled = true,
+
+        /** Default code-sample language in Apex UI: 'curl' | 'js' | 'python' | 'php' | 'go' */
+        public readonly string $defaultLanguage = 'curl',
     ) {}
 
     public static function fromArray(array $config): self
@@ -54,7 +86,7 @@ final class Config
             maxSchemaDepth: $config['responses']['max_depth'] ?? 6,
             cacheEnabled: $config['cache']['enabled'] ?? false,
             cacheTtl: $config['cache']['ttl'] ?? 3600,
-            defaultUi: $config['ui']['default'] ?? 'scalar',
+            defaultUi: $config['ui']['default'] ?? 'apex',
             showUiSwitcher: $config['ui']['show_ui_switcher'] ?? true,
             contact: array_filter($config['info']['contact'] ?? []),
             license: array_filter($config['info']['license'] ?? []),
@@ -66,6 +98,14 @@ final class Config
             documentRateLimits: $config['rate_limits']['enabled'] ?? true,
             webhookScanPaths: $config['webhooks']['scan_paths'] ?? [],
             exportPath: $config['export']['default_path'] ?? sys_get_temp_dir().'/apexdocs',
+            specGroup: $config['spec_group'] ?? '',
+            theme: $config['ui']['theme'] ?? 'dark',
+            customLogo: $config['ui']['custom_logo'] ?? '',
+            customCss: $config['ui']['custom_css'] ?? '',
+            announcementBanner: $config['ui']['announcement_banner'] ?? '',
+            announcementBannerType: $config['ui']['announcement_banner_type'] ?? 'info',
+            tryItOutEnabled: $config['ui']['try_it_out'] ?? true,
+            defaultLanguage: $config['ui']['default_language'] ?? 'curl',
         );
     }
 
@@ -96,6 +136,14 @@ final class Config
             documentRateLimits: $overrides['documentRateLimits'] ?? $this->documentRateLimits,
             webhookScanPaths: $overrides['webhookScanPaths'] ?? $this->webhookScanPaths,
             exportPath: $overrides['exportPath'] ?? $this->exportPath,
+            specGroup: $overrides['specGroup'] ?? $this->specGroup,
+            theme: $overrides['theme'] ?? $this->theme,
+            customLogo: $overrides['customLogo'] ?? $this->customLogo,
+            customCss: $overrides['customCss'] ?? $this->customCss,
+            announcementBanner: $overrides['announcementBanner'] ?? $this->announcementBanner,
+            announcementBannerType: $overrides['announcementBannerType'] ?? $this->announcementBannerType,
+            tryItOutEnabled: $overrides['tryItOutEnabled'] ?? $this->tryItOutEnabled,
+            defaultLanguage: $overrides['defaultLanguage'] ?? $this->defaultLanguage,
         );
     }
 }
