@@ -198,6 +198,9 @@ final class UiRenderer
             <button class="apex-icon-btn" id="apexEnvBtn" title="Switch server environment" aria-label="Environments">
                 {$srvIcon}
             </button>
+            <button class="apex-icon-btn" onclick="if(window.axShortcutsOpen)axShortcutsOpen()" title="Keyboard shortcuts (?)" aria-label="Shortcuts" type="button">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/><path d="M6.2 6.2c.3-1 1.1-1.6 2-1.6 1.1 0 1.9.7 1.9 1.7 0 .9-.5 1.3-1.3 1.6-.7.3-.9.7-.9 1.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/><circle cx="8" cy="11.6" r=".8" fill="currentColor"/></svg>
+            </button>
             <span class="apex-vdiv"></span>
             <button class="apex-icon-btn apex-copy-btn" title="Copy spec URL" aria-label="Copy spec URL"
                     onclick="apexCopy(this)" data-url={$specJs}>
@@ -301,6 +304,27 @@ final class UiRenderer
         <div id="axui-env-popover" hidden>
             <div class="axui-env-title">Server Environment</div>
             <div id="axui-env-list"></div>
+        </div>
+        <button id="axui-sb-toggle" class="apex-icon-btn" aria-label="Toggle sidebar" onclick="axSidebarToggle()" type="button">
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+        <div id="axui-sb-backdrop" onclick="axSidebarClose()"></div>
+        <div id="ax-shortcuts" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" hidden>
+            <div class="ax-sc-backdrop" onclick="axShortcutsClose()"></div>
+            <div class="ax-sc-box">
+                <div class="ax-sc-header"><h3>Keyboard shortcuts</h3><button onclick="axShortcutsClose()" class="ax-sc-close" aria-label="Close">✕</button></div>
+                <div class="ax-sc-grid">
+                    <div class="ax-sc-row"><kbd>⌘</kbd><kbd>K</kbd><span>Search endpoints</span></div>
+                    <div class="ax-sc-row"><kbd>/</kbd><span>Focus sidebar filter</span></div>
+                    <div class="ax-sc-row"><kbd>j</kbd> / <kbd>k</kbd><span>Next / previous endpoint</span></div>
+                    <div class="ax-sc-row"><kbd>g</kbd><span>Back to overview</span></div>
+                    <div class="ax-sc-row"><kbd>t</kbd><span>Toggle theme</span></div>
+                    <div class="ax-sc-row"><kbd>c</kbd><span>Copy current code sample</span></div>
+                    <div class="ax-sc-row"><kbd>1</kbd>…<kbd>6</kbd><span>Switch UI backend</span></div>
+                    <div class="ax-sc-row"><kbd>?</kbd><span>Show this dialog</span></div>
+                    <div class="ax-sc-row"><kbd>Esc</kbd><span>Close any overlay</span></div>
+                </div>
+            </div>
         </div>
         HTML;
     }
@@ -780,10 +804,179 @@ final class UiRenderer
         .axw-stat:hover{border-color:var(--border-s)}
 
         /* ── Responsive ── */
-        @media(max-width:1100px){#axui-panel{display:none}}
-        @media(max-width:820px){#axui-sidebar{width:220px}}
-        @media(max-width:680px){#axui-sidebar{display:none}.apex-tabs-wrap{display:none}}
-        @media(max-width:960px){.apex-api-title,.apex-version{display:none}.apex-export-trigger span:not(.apex-chevron){display:none}}
+        /* ── Section title row with expand-toggle buttons ── */
+        .ax-section-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
+        .ax-expand-toggle{display:inline-flex;gap:4px}
+        .ax-expand-toggle button{font-size:10.5px;padding:3px 8px;background:var(--s1);border:1px solid var(--border);color:var(--t2);border-radius:5px;cursor:pointer;font-family:inherit;transition:background .12s,color .12s}
+        .ax-expand-toggle button:hover{background:var(--s2);color:var(--t1)}
+
+        /* ── Property badges ── */
+        .ax-prop-badges{display:inline-flex;flex-wrap:wrap;gap:4px;margin-left:6px}
+        .ax-badge{font-size:9.5px;padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.02em;line-height:1.5;border:1px solid transparent;white-space:nowrap}
+        .ax-b-req{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:#f87171}
+        .ax-b-null{background:rgba(113,113,122,.12);border-color:rgba(113,113,122,.3);color:#a1a1aa}
+        .ax-b-ro{background:rgba(96,165,250,.1);border-color:rgba(96,165,250,.25);color:#60a5fa}
+        .ax-b-wo{background:rgba(168,85,247,.1);border-color:rgba(168,85,247,.25);color:#a78bfa}
+        .ax-b-dep{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#fbbf24}
+        .ax-b-fmt{background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.25);color:#a5b4fc}
+        .ax-b-def{background:rgba(74,222,128,.08);border-color:rgba(74,222,128,.22);color:#86efac}
+        .ax-b-rng{background:var(--s1);border-color:var(--border);color:var(--t2)}
+        .ax-b-pat{background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.22);color:#c4b5fd;cursor:help}
+
+        /* ── Schemas group icon in sidebar ── */
+        .axm-schema{background:rgba(168,85,247,.12);color:#c4b5fd}
+        .axi-schema .axi-path{font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px}
+        .ax-used-list{display:flex;flex-direction:column;gap:4px}
+        .ax-used-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;background:var(--s1);border:1px solid var(--border);transition:background .12s,border-color .12s}
+        .ax-used-item:hover{background:var(--s2);border-color:var(--border-s)}
+
+        /* ── Deprecation banner ── */
+        .ax-dep-banner{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;margin:14px 0 18px;border-radius:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.28)}
+        .ax-dep-icon{font-size:22px;color:#fbbf24;line-height:1;flex-shrink:0}
+        .ax-dep-body{flex:1;min-width:0}
+        .ax-dep-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fbbf24;margin-bottom:4px}
+        .ax-dep-msg{font-size:13px;color:var(--t2);line-height:1.55}
+        .ax-dep-sunset{font-size:12px;color:var(--t2);margin-top:8px}
+        .ax-dep-mig{display:inline-block;margin-top:6px;font-size:12px;color:#a5b4fc;text-decoration:none}
+        .ax-dep-mig:hover{text-decoration:underline}
+
+        /* ── Examples switcher ── */
+        .ax-ex-block{margin-top:14px;padding:12px;background:var(--s1);border:1px solid var(--border);border-radius:8px}
+        .ax-ex-title{font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
+        .ax-ex-tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
+        .ax-ex-tab{font-size:11.5px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--t2);border-radius:5px;cursor:pointer;font-family:inherit;transition:all .12s}
+        .ax-ex-tab:hover{background:var(--s2)}
+        .ax-ex-tab.active{background:rgba(99,102,241,.14);border-color:rgba(99,102,241,.4);color:#a5b4fc}
+        .ax-ex-desc{font-size:12px;color:var(--t2);margin-bottom:8px}
+
+        /* ── Markdown block styling ── */
+        .axw-md p{margin:0 0 8px;line-height:1.55}.axw-md p:last-child{margin-bottom:0}
+        .axw-md h2{font-size:18px;margin:14px 0 8px;font-weight:600}
+        .axw-md h3{font-size:15px;margin:12px 0 6px;font-weight:600;color:var(--t1)}
+        .axw-md h4{font-size:13px;margin:10px 0 5px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.04em}
+        .axw-md ul{margin:6px 0 8px 22px;padding:0;line-height:1.6}
+        .axw-md li{margin:2px 0}
+        .axw-md code{font-family:'JetBrains Mono','SF Mono',monospace;font-size:.9em;padding:1px 6px;border-radius:4px;background:var(--s2);border:1px solid var(--border);color:#f0abfc}
+        .axw-md a{color:#a5b4fc;text-decoration:none;border-bottom:1px dashed rgba(165,180,252,.3)}
+        .axw-md a:hover{border-bottom-style:solid}
+        .axw-md strong{color:var(--t1);font-weight:600}
+        .axw-md em{font-style:italic;color:var(--t1)}
+        .ax-md-pre{margin:8px 0;padding:10px 12px;background:var(--s1);border:1px solid var(--border);border-radius:6px;overflow-x:auto;font-family:'JetBrains Mono','SF Mono',monospace;font-size:12px;color:var(--t1)}
+        .ax-md-pre code{background:transparent;border:none;padding:0;color:inherit}
+
+        /* ── Rich response viewer ── */
+        .ax-res-panel{border:1px solid var(--border);border-radius:8px;background:var(--s1);overflow:hidden;margin-top:10px}
+        .ax-res-status-bar{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--s2)}
+        .ax-res-status{font-size:12px;font-weight:700;padding:3px 10px;border-radius:5px;letter-spacing:.02em}
+        .ax-res-s-ok{background:rgba(74,222,128,.13);color:#4ade80;border:1px solid rgba(74,222,128,.3)}
+        .ax-res-s-info{background:rgba(96,165,250,.13);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}
+        .ax-res-s-warn{background:rgba(245,158,11,.13);color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
+        .ax-res-s-err{background:rgba(239,68,68,.13);color:#f87171;border:1px solid rgba(239,68,68,.3)}
+        .ax-res-meta{font-size:11.5px;color:var(--t3);flex:1;font-family:'JetBrains Mono','SF Mono',monospace}
+        .ax-res-copy{padding:4px 10px;font-size:11px;background:transparent;border:1px solid var(--border);color:var(--t2);border-radius:5px;cursor:pointer;font-family:inherit;transition:all .12s}
+        .ax-res-copy:hover{background:var(--s3);color:var(--t1)}
+        .ax-res-tabs{display:flex;border-bottom:1px solid var(--border);background:var(--s1)}
+        .ax-res-tab{flex:0 0 auto;padding:8px 14px;font-size:11.5px;background:transparent;border:none;border-bottom:2px solid transparent;color:var(--t3);cursor:pointer;font-family:inherit;font-weight:500;transition:all .12s}
+        .ax-res-tab:hover{color:var(--t2)}
+        .ax-res-tab.active{color:var(--t1);border-bottom-color:var(--accent)}
+        .ax-res-body-wrap{max-height:420px;overflow:auto}
+        .ax-res-pane{padding:0}
+        .ax-res-pre{padding:12px;margin:0;font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--t1)}
+        .ax-res-headers-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+        .ax-res-headers-tbl td{padding:6px 12px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--t2);font-family:'JetBrains Mono','SF Mono',monospace}
+        .ax-res-headers-tbl td:first-child{color:var(--t1);font-weight:500;width:35%;white-space:nowrap}
+
+        /* ── Request history ── */
+        .ax-hist-section{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
+        .ax-hist-section.collapsed .ax-hist-list,.ax-hist-section.collapsed .ax-hist-clear{display:none}
+        .ax-panel-section-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+        .ax-hist-toggle{background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;padding:2px 6px}
+        .ax-hist-list{display:flex;flex-direction:column;gap:4px}
+        .ax-hist-empty{font-size:11px;color:var(--t3);padding:8px;text-align:center;font-style:italic}
+        .ax-hist-item{display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--s1);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .12s}
+        .ax-hist-item:hover{background:var(--s2);border-color:var(--border-s)}
+        .ax-hist-time{font-size:11px;color:var(--t2);flex:1}
+        .ax-hist-ms{font-size:10.5px;color:var(--t3);font-family:'JetBrains Mono','SF Mono',monospace}
+        .ax-hist-clear{margin-top:8px;width:100%;padding:5px;background:none;border:1px dashed var(--border);color:var(--t3);font-size:10.5px;border-radius:5px;cursor:pointer;transition:all .12s;font-family:inherit}
+        .ax-hist-clear:hover{background:var(--s1);color:var(--red);border-color:rgba(239,68,68,.4)}
+
+        /* ── OAuth helper button ── */
+        .ax-oauth-btn{padding:6px 12px;font-size:11px;background:rgba(99,102,241,.14);border:1px solid rgba(99,102,241,.4);color:#a5b4fc;border-radius:var(--r);cursor:pointer;font-family:inherit;font-weight:500;white-space:nowrap;transition:all .12s}
+        .ax-oauth-btn:hover{background:rgba(99,102,241,.22)}
+
+        /* ── Bulk JSON edit toggle ── */
+        .ax-bulk-row{display:flex;align-items:center;justify-content:space-between;margin-top:10px;margin-bottom:4px}
+        .ax-bulk-row .ax-try-label{margin:0;color:var(--t3)}
+        .ax-bulk-btn{font-size:10px;padding:2px 8px;background:transparent;border:1px solid var(--border);color:var(--t2);border-radius:4px;cursor:pointer;font-family:inherit;letter-spacing:.04em;text-transform:uppercase;transition:all .12s}
+        .ax-bulk-btn:hover{background:var(--s2);color:var(--t1);border-color:var(--border-s)}
+        .ax-bulk-btn.active{background:rgba(99,102,241,.16);border-color:rgba(99,102,241,.45);color:#a5b4fc}
+        .ax-bulk-area{display:none;width:100%;min-height:80px;padding:8px 10px;font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px;color:var(--t1);background:var(--s1);border:1px solid var(--border);border-radius:var(--r);outline:none;resize:vertical}
+        .ax-bulk-area:focus{border-color:rgba(99,102,241,.5);background:var(--s2)}
+        .ax-bulk-area.show{display:block}
+        .ax-bulk-actions{display:flex;gap:6px;margin-top:6px;margin-bottom:8px}
+        .ax-bulk-actions button{flex:1;font-size:10.5px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);color:var(--t2);border-radius:5px;cursor:pointer;font-family:inherit;transition:all .12s}
+        .ax-bulk-actions button:hover{background:var(--s2);color:var(--t1)}
+        .ax-bulk-fields.hidden{display:none}
+        .ax-bulk-err{font-size:10.5px;color:#f87171;margin-top:4px;padding:0 2px;min-height:14px;font-family:'JetBrains Mono','SF Mono',monospace}
+
+        /* ── Error / empty states ── */
+        .ax-error-url{font-size:10.5px;color:var(--t3);font-family:'JetBrains Mono','SF Mono',monospace;margin-top:6px;word-break:break-all;padding:0 8px}
+        .ax-error-retry{margin-top:14px;padding:6px 14px;font-size:12px;background:rgba(99,102,241,.16);border:1px solid rgba(99,102,241,.4);color:#a5b4fc;border-radius:6px;cursor:pointer;font-family:inherit}
+        .ax-error-retry:hover{background:rgba(99,102,241,.26)}
+        .ax-empty-spec{padding:36px 16px;text-align:center}
+        .ax-empty-icon{font-size:38px;margin-bottom:10px;opacity:.7}
+        .ax-empty-title{font-size:15px;font-weight:600;color:var(--t1);margin-bottom:4px}
+        .ax-empty-msg{font-size:12.5px;color:var(--t3)}
+
+        /* ── Shortcuts modal ── */
+        #ax-shortcuts[hidden]{display:none}
+        #ax-shortcuts{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center}
+        .ax-sc-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)}
+        .ax-sc-box{position:relative;width:min(440px,92vw);max-height:80vh;overflow-y:auto;background:var(--bg);border:1px solid var(--border-s);border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.55);padding:18px 22px}
+        .ax-sc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+        .ax-sc-header h3{font-size:14px;font-weight:600;color:var(--t1);margin:0}
+        .ax-sc-close{background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer;width:28px;height:28px;border-radius:6px;transition:all .12s}
+        .ax-sc-close:hover{background:var(--s2);color:var(--t1)}
+        .ax-sc-grid{display:flex;flex-direction:column;gap:6px}
+        .ax-sc-row{display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:12.5px;color:var(--t2)}
+        .ax-sc-row kbd{font-family:'JetBrains Mono','SF Mono',monospace;font-size:10.5px;padding:2px 7px;background:var(--s2);border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;color:var(--t1);min-width:18px;text-align:center}
+        .ax-sc-row span{margin-left:auto;color:var(--t2)}
+
+        /* ── Mobile sidebar toggle + drawer ── */
+        #axui-sb-toggle{display:none;position:fixed;left:12px;bottom:14px;z-index:9999;width:42px;height:42px;border-radius:50%;background:var(--bar-bg);border:1px solid var(--border-s);backdrop-filter:blur(20px);box-shadow:0 8px 28px rgba(0,0,0,.4)}
+        #axui-sb-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:998}
+        .axui-sb-open #axui-sb-backdrop{display:block}
+
+        /* ── Responsive overrides ── */
+        @media(max-width:1100px){
+            #axui-panel{display:none}
+        }
+        @media(max-width:820px){
+            #axui-sidebar{width:240px}
+        }
+        @media(max-width:768px){
+            #axui-sb-toggle{display:flex;align-items:center;justify-content:center}
+            #axui-sidebar{position:fixed;left:0;top:0;bottom:0;z-index:999;width:84vw;max-width:320px;transform:translateX(-105%);transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:0 0 40px rgba(0,0,0,.5)}
+            .axui-sb-open #axui-sidebar{transform:translateX(0)}
+            #axui-content{padding:14px 12px}
+            .ax-op-header{flex-wrap:wrap}
+            .ax-params{font-size:11.5px}
+            .ax-params th,.ax-params td{padding:6px 4px}
+            .ax-section{padding:10px}
+            .axw-stats{flex-direction:column}
+            .ax-res-headers-tbl td:first-child{width:auto}
+        }
+        @media(max-width:680px){
+            .apex-tabs-wrap{display:none}
+            #axui-sidebar{width:90vw}
+        }
+        @media(max-width:960px){
+            .apex-api-title,.apex-version{display:none}
+            .apex-export-trigger span:not(.apex-chevron){display:none}
+        }
+        @media(prefers-reduced-motion:reduce){
+            *{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
+        }
         CSS;
     }
 
@@ -859,7 +1052,13 @@ final class UiRenderer
         var _specCache=null;
         var _activeEnv=localStorage.getItem('apex-env')||null;
         function getSpecUrl(){return APEX_CFG.specUrl;}
-        function loadSpec(cb){if(_specCache){cb(_specCache);return;}fetch(getSpecUrl()).then(function(r){return r.json();}).then(function(s){_specCache=s;cb(s);}).catch(function(){});}
+        function loadSpec(cb,onErr){
+            if(_specCache){cb(_specCache);return;}
+            fetch(getSpecUrl())
+                .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status+' '+r.statusText);return r.text().then(function(t){try{return JSON.parse(t);}catch(e){throw new Error('Invalid JSON response');}});})
+                .then(function(s){_specCache=s;cb(s);})
+                .catch(function(e){if(onErr)onErr(e&&e.message?e.message:String(e));});
+        }
         if(envBtn&&envPop){
             envBtn.addEventListener('click',function(e){
                 e.stopPropagation();
@@ -946,10 +1145,22 @@ final class UiRenderer
         document.addEventListener('keydown',function(e){
             var inField=e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.isContentEditable||e.isComposing;
             if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();palOpen();return;}
-            if(e.key==='Escape'){apexPaletteClose();return;}
+            if(e.key==='Escape'){apexPaletteClose();if(window.axShortcutsClose)axShortcutsClose();if(window.axSidebarClose)axSidebarClose();return;}
             if(inField)return;
+            if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault();if(window.axShortcutsOpen)axShortcutsOpen();return;}
             if(e.key==='/'){e.preventDefault();var f=document.getElementById('axui-filter');if(f){f.focus();f.select();}return;}
             if(e.ctrlKey||e.metaKey||e.altKey)return;
+            /* j / k → next / previous endpoint */
+            if(e.key==='j'||e.key==='k'){
+                var items=Array.prototype.slice.call(document.querySelectorAll('#axui-sidebar-body .axi'));
+                if(!items.length)return;
+                var idx=items.findIndex(function(el){return el.classList.contains('active');});
+                idx=e.key==='j'?Math.min(items.length-1,idx+1):Math.max(0,idx-1);
+                if(idx<0)idx=0;items[idx].click();items[idx].scrollIntoView({block:'nearest'});return;
+            }
+            if(e.key==='g'){if(window.axGoWelcome)axGoWelcome();return;}
+            if(e.key==='t'){var tb=document.getElementById('apexThemeBtn');if(tb)tb.click();return;}
+            if(e.key==='c'){var cb=document.querySelector('.ax-code-copy-btn');if(cb)cb.click();return;}
             var uis=['apex','scalar','swagger','redoc','stoplight','rapidoc'];
             var n=parseInt(e.key);if(n>=1&&n<=6){var t=document.querySelector('.apex-tab[data-ui="'+uis[n-1]+'"]');if(t)t.click();}
         });
@@ -961,25 +1172,292 @@ final class UiRenderer
             var LANG_LABELS={curl:'cURL',js:'JavaScript',python:'Python',php:'PHP',go:'Go'};
             var _server=localStorage.getItem('apex-env')||'';
             var _activeOpKey=null;
+            var _activeSchemaName=null;
             var _schemaIds=0;
+            var _expandAll=false;
+
+            /* ── Per-spec namespaced storage ── */
+            var _ns='apex:'+(APEX_CFG.specUrl||'default').replace(/[^a-z0-9]/gi,'_');
+            function lsGet(k,d){try{var v=localStorage.getItem(_ns+':'+k);return v==null?d:v;}catch(e){return d;}}
+            function lsSet(k,v){try{localStorage.setItem(_ns+':'+k,v);}catch(e){}}
+            function lsGetJson(k,d){var v=lsGet(k,null);if(v==null)return d;try{return JSON.parse(v);}catch(e){return d;}}
+            function lsSetJson(k,v){lsSet(k,JSON.stringify(v));}
+
+            /* ── Minimal XSS-safe markdown renderer ── */
+            function md(s){
+                if(s==null||s==='')return '';
+                s=String(s);
+                /* Fenced code blocks first */
+                var blocks=[];
+                s=s.replace(/```([\s\S]*?)```/g,function(_,c){blocks.push(c);return ' B'+(blocks.length-1)+' ';});
+                s=escH(s);
+                /* Headings */
+                s=s.replace(/^### (.+)$/gm,'<h4>$1</h4>')
+                    .replace(/^## (.+)$/gm,'<h3>$1</h3>')
+                    .replace(/^# (.+)$/gm,'<h2>$1</h2>');
+                /* Bold / italic / inline code */
+                s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+                    .replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>')
+                    .replace(/`([^`\n]+)`/g,'<code>$1</code>');
+                /* Links — whitelist http/https/mailto */
+                s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+                /* Unordered lists */
+                s=s.replace(/(^|\n)((?:[-*] .+\n?)+)/g,function(_,pre,list){
+                    var items=list.trim().split(/\n/).map(function(l){return '<li>'+l.replace(/^[-*] /,'')+'</li>';}).join('');
+                    return pre+'<ul>'+items+'</ul>';
+                });
+                /* Paragraphs / line breaks */
+                s=s.split(/\n{2,}/).map(function(p){
+                    if(/^<(h\d|ul|pre|blockquote)/.test(p.trim()))return p;
+                    return '<p>'+p.replace(/\n/g,'<br>')+'</p>';
+                }).join('');
+                /* Re-inject fenced blocks */
+                s=s.replace(/ B(\d+) /g,function(_,i){return '<pre class="ax-md-pre"><code>'+escH(blocks[+i])+'</code></pre>';});
+                return s;
+            }
+
+            /* ── Property badges builder ── */
+            function propBadges(pv,isRequired){
+                var b='';
+                if(isRequired)b+='<span class="ax-badge ax-b-req" title="Required">required</span>';
+                if(pv.nullable||(Array.isArray(pv.type)&&pv.type.indexOf('null')!==-1))b+='<span class="ax-badge ax-b-null" title="Nullable">nullable</span>';
+                if(pv.readOnly)b+='<span class="ax-badge ax-b-ro" title="Read-only">readOnly</span>';
+                if(pv.writeOnly)b+='<span class="ax-badge ax-b-wo" title="Write-only">writeOnly</span>';
+                if(pv.deprecated)b+='<span class="ax-badge ax-b-dep" title="Deprecated">deprecated</span>';
+                if(pv.format)b+='<span class="ax-badge ax-b-fmt" title="Format">'+escH(pv.format)+'</span>';
+                if(pv['default']!==undefined)b+='<span class="ax-badge ax-b-def" title="Default value">default: '+escH(JSON.stringify(pv['default']))+'</span>';
+                if(pv.minimum!=null||pv.maximum!=null){var r='';if(pv.minimum!=null)r+='≥'+pv.minimum;if(pv.maximum!=null)r+=(r?' ':'')+'≤'+pv.maximum;b+='<span class="ax-badge ax-b-rng">'+escH(r)+'</span>';}
+                if(pv.minLength!=null||pv.maxLength!=null){var r2='';if(pv.minLength!=null)r2+='≥'+pv.minLength;if(pv.maxLength!=null)r2+=(r2?' ':'')+'≤'+pv.maxLength;b+='<span class="ax-badge ax-b-rng">'+escH(r2)+' chars</span>';}
+                if(pv.pattern)b+='<span class="ax-badge ax-b-pat" title="Pattern: '+escH(pv.pattern)+'">regex</span>';
+                return b;
+            }
+
+            /* ── Request history (per-endpoint, last 10) ── */
+            function histKey(method,path){return 'hist:'+method+':'+path;}
+            function histPush(method,path,entry){
+                var k=histKey(method,path);var arr=lsGetJson(k,[]);
+                entry.ts=Date.now();
+                arr.unshift(entry);arr=arr.slice(0,10);
+                lsSetJson(k,arr);
+            }
+            function histLoad(method,path){return lsGetJson(histKey(method,path),[]);}
+            function histClear(method,path){try{localStorage.removeItem(_ns+':'+histKey(method,path));}catch(e){}}
+            window.axHistClear=function(method,path){histClear(method,path);renderHistory(method,path);toast('History cleared');};
+            window.axHistRestore=function(method,path,idx){
+                var arr=histLoad(method,path);var h=arr[+idx];if(!h)return;
+                if(h.auth!=null){var a=document.getElementById('axi-auth');if(a){a.value=h.auth;authPersist();}}
+                if(h.params){for(var k in h.params){var el=document.getElementById('axi-'+k);if(el)el.value=h.params[k];}}
+                if(h.headers){for(var hk in h.headers){var hel=document.getElementById('axi-h-'+hk);if(hel)hel.value=h.headers[hk];}}
+                if(h.body!=null){var b=document.getElementById('axi-body');if(b)b.value=h.body;}
+                toast('Restored from history');
+            };
+            function renderHistory(method,path){
+                var box=document.getElementById('ax-hist-list');if(!box)return;
+                var arr=histLoad(method,path);
+                if(!arr.length){box.innerHTML='<div class="ax-hist-empty">No history yet — send a request to record it.</div>';return;}
+                box.innerHTML=arr.map(function(h,i){
+                    var ago=Math.round((Date.now()-h.ts)/1000);
+                    var rel=ago<60?ago+'s ago':ago<3600?Math.round(ago/60)+'m ago':Math.round(ago/3600)+'h ago';
+                    var sc=h.status||0;var cls=sc<300?'ax-res-s-ok':sc<400?'ax-res-s-info':sc<500?'ax-res-s-warn':'ax-res-s-err';
+                    return '<div class="ax-hist-item" onclick="axHistRestore(\''+method+'\',\''+escH(path)+'\','+i+')">'
+                        +'<span class="'+cls+'" style="font-size:10px;padding:1px 6px;border-radius:4px">'+escH(String(sc||'—'))+'</span>'
+                        +'<span class="ax-hist-time">'+rel+'</span>'
+                        +(h.ms?'<span class="ax-hist-ms">'+h.ms+'ms</span>':'')
+                        +'</div>';
+                }).join('')+'<button class="ax-hist-clear" onclick="axHistClear(\''+method+'\',\''+escH(path)+'\')">Clear history</button>';
+            }
+
+            /* ── Auth token persistence ── */
+            function authPersist(){
+                var a=document.getElementById('axi-auth');var t=document.getElementById('axi-auth-type');
+                if(a)lsSet('auth.token',a.value||'');
+                if(t)lsSet('auth.type',t.value||'bearer');
+            }
+            function authRestore(){
+                var a=document.getElementById('axi-auth');var t=document.getElementById('axi-auth-type');
+                if(t){t.value=lsGet('auth.type','bearer');if(window.axAuthTypeChange)axAuthTypeChange();}
+                if(a){a.value=lsGet('auth.token','');}
+                if(a)a.addEventListener('input',authPersist);
+                if(t)t.addEventListener('change',authPersist);
+            }
+
+            /* ── Bulk JSON edit for header/query/path groups ── */
+            function bulkGroupEl(gid){return document.querySelector('.ax-bulk-group[data-gid="'+gid+'"]');}
+            function bulkReadFields(group){
+                var prefix=group.dataset.prefix;var names=JSON.parse(group.dataset.names||'[]');
+                var out={};
+                names.forEach(function(n){
+                    var el=document.getElementById(prefix+n);
+                    if(el&&el.value!=='')out[n]=el.value;
+                });
+                return out;
+            }
+            function bulkWriteFields(group,obj){
+                var prefix=group.dataset.prefix;var names=JSON.parse(group.dataset.names||'[]');var unknown=[];
+                Object.keys(obj||{}).forEach(function(k){
+                    var el=document.getElementById(prefix+k);
+                    if(el){el.value=obj[k]==null?'':typeof obj[k]==='string'?obj[k]:JSON.stringify(obj[k]);}
+                    else if(names.indexOf(k)===-1){unknown.push(k);}
+                });
+                return unknown;
+            }
+            window.axBulkToggle=function(gid){
+                var g=bulkGroupEl(gid);if(!g)return;
+                var area=document.getElementById(gid+'-area');var btn=g.querySelector('.ax-bulk-btn');
+                var fields=g.querySelector('.ax-bulk-fields');var actions=g.querySelector('.ax-bulk-actions');
+                var on=!area.classList.contains('show');
+                if(on){
+                    area.value=JSON.stringify(bulkReadFields(g),null,2);
+                    area.classList.add('show');actions.style.display='';fields.classList.add('hidden');btn.classList.add('active');
+                    setTimeout(function(){area.focus();area.select();},10);
+                } else {
+                    area.classList.remove('show');actions.style.display='none';fields.classList.remove('hidden');btn.classList.remove('active');
+                    var err=document.getElementById(gid+'-err');if(err)err.textContent='';
+                }
+            };
+            window.axBulkApply=function(gid){
+                var g=bulkGroupEl(gid);if(!g)return;
+                var area=document.getElementById(gid+'-area');var err=document.getElementById(gid+'-err');
+                err.textContent='';
+                var txt=(area.value||'').trim();
+                if(!txt){bulkWriteFields(g,{});axBulkToggle(gid);return;}
+                var parsed;try{parsed=JSON.parse(txt);}catch(e){err.textContent='Invalid JSON: '+e.message;return;}
+                if(typeof parsed!=='object'||Array.isArray(parsed)||parsed===null){err.textContent='Expected a JSON object {…}';return;}
+                /* Clear existing field values first so removed keys are reflected */
+                var prefix=g.dataset.prefix;var names=JSON.parse(g.dataset.names||'[]');
+                names.forEach(function(n){var el=document.getElementById(prefix+n);if(el)el.value='';});
+                var unknown=bulkWriteFields(g,parsed);
+                if(unknown.length){err.textContent='Ignored unknown keys: '+unknown.join(', ');err.style.color='var(--amber)';}
+                else{toast('Applied '+Object.keys(parsed).length+' values');axBulkToggle(gid);}
+            };
+            window.axBulkSyncFromFields=function(gid){
+                var g=bulkGroupEl(gid);if(!g)return;
+                var area=document.getElementById(gid+'-area');
+                area.value=JSON.stringify(bulkReadFields(g),null,2);
+                toast('Synced from fields');
+            };
+            window.axBulkCopy=function(gid){
+                var area=document.getElementById(gid+'-area');if(!area)return;
+                if(navigator.clipboard)navigator.clipboard.writeText(area.value).then(function(){toast('Copied JSON');});
+                else{fb(area.value);toast('Copied JSON');}
+            };
+
+            /* ── OAuth2 implicit-flow helper ── */
+            function findOAuth2Scheme(spec){
+                var schemes=(spec.components&&spec.components.securitySchemes)||{};
+                for(var k in schemes){if(schemes[k]&&schemes[k].type==='oauth2')return {name:k,scheme:schemes[k]};}
+                return null;
+            }
+            function wireOAuthHelper(spec){
+                var found=findOAuth2Scheme(spec);if(!found)return;
+                var authWrap=document.querySelector('.ax-try-auth-wrap');if(!authWrap||authWrap.querySelector('.ax-oauth-btn'))return;
+                var flows=found.scheme.flows||{};
+                var implicit=flows.implicit||flows.authorizationCode;
+                if(!implicit||!implicit.authorizationUrl)return;
+                var btn=document.createElement('button');btn.className='ax-oauth-btn';btn.type='button';btn.textContent='Get token';btn.title='Open OAuth2 authorization';
+                btn.onclick=function(){
+                    var cid=lsGet('oauth.client_id','')||prompt('OAuth2 client_id:','');
+                    if(!cid)return;
+                    lsSet('oauth.client_id',cid);
+                    var scopes=Object.keys(implicit.scopes||{}).join(' ');
+                    var redirect=location.origin+location.pathname;
+                    var url=implicit.authorizationUrl+(implicit.authorizationUrl.indexOf('?')>-1?'&':'?')
+                        +'response_type=token&client_id='+encodeURIComponent(cid)
+                        +'&redirect_uri='+encodeURIComponent(redirect)
+                        +(scopes?'&scope='+encodeURIComponent(scopes):'')
+                        +'&state='+Math.random().toString(36).slice(2);
+                    var w=window.open(url,'apex_oauth','width=600,height=720');
+                    var poll=setInterval(function(){
+                        try{
+                            if(!w||w.closed){clearInterval(poll);return;}
+                            var h=w.location.hash||'';
+                            var m=/access_token=([^&]+)/.exec(h);
+                            if(m){
+                                var token=decodeURIComponent(m[1]);
+                                var a=document.getElementById('axi-auth');if(a){a.value=token;authPersist();toast('Token received');}
+                                w.close();clearInterval(poll);
+                            }
+                        }catch(e){/* cross-origin until redirect lands */}
+                    },500);
+                };
+                authWrap.appendChild(btn);
+            }
+
+            /* ── Shortcuts modal ── */
+            window.axShortcutsOpen=function(){var m=document.getElementById('ax-shortcuts');if(m)m.hidden=false;};
+            window.axShortcutsClose=function(){var m=document.getElementById('ax-shortcuts');if(m)m.hidden=true;};
+
+            /* ── Mobile sidebar drawer ── */
+            window.axSidebarToggle=function(){document.getElementById('axui').classList.toggle('axui-sb-open');};
+            window.axSidebarClose=function(){document.getElementById('axui').classList.remove('axui-sb-open');};
+
+            /* ── Schema browser navigation ── */
+            window.axNavSchema=function(name){
+                _activeSchemaName=name;_activeOpKey=null;
+                var spec=_specCache;if(!spec||!spec.components||!spec.components.schemas)return;
+                var schema=spec.components.schemas[name];if(!schema)return;
+                renderSidebar(spec);
+                renderSchemaView(name,schema,spec);
+                history.replaceState(null,'','#schema_'+encodeURIComponent(name));
+                var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
+                axSidebarClose();
+            };
+            function renderSchemaView(name,schema,spec){
+                var wrap=document.getElementById('axui-content-inner');if(!wrap)return;
+                _schemaIds=0;
+                var usedBy=[];
+                for(var p in spec.paths||{}){for(var m in spec.paths[p]){
+                    var op=spec.paths[p][m];if(typeof op!=='object')continue;
+                    var s=JSON.stringify(op);if(s.indexOf('#/components/schemas/'+name)!==-1)usedBy.push({path:p,method:m,op:op});
+                }}
+                var usedHtml=usedBy.length?'<div class="ax-section"><div class="ax-section-title">Used by ('+usedBy.length+')</div><div class="ax-used-list">'
+                    +usedBy.map(function(u){return '<div class="ax-used-item" onclick="axNav(\''+u.method+'__'+escH(u.path)+'\',\''+escH(u.path)+'\',\''+u.method+'\')"><span class="axm axm-'+u.method+'">'+u.method.toUpperCase()+'</span><span>'+escH(u.path)+'</span></div>';}).join('')
+                    +'</div></div>':'';
+                wrap.innerHTML='<div class="ax-breadcrumb"><span class="ax-breadcrumb-item ax-breadcrumb-link" onclick="axGoWelcome()">Schemas</span><span class="ax-breadcrumb-sep">›</span><span class="ax-breadcrumb-current">'+escH(name)+'</span></div>'
+                    +'<div class="ax-op-header"><div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(name)+'</div>'
+                    +(schema.title?'<div class="ax-op-summary">'+escH(schema.title)+'</div>':'')+'</div></div>'
+                    +(schema.description?'<div class="ax-op-desc">'+md(schema.description)+'</div>':'')
+                    +'<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Definition</div>'+expandToggle()+'</div>'+renderSchema(schema,spec,0)+'</div>'
+                    +usedHtml;
+                var panel=document.getElementById('axui-panel-inner');
+                if(panel)panel.innerHTML='<div class="ax-panel-section-title">JSON Schema</div><pre class="ax-code">'+hlJson(escH(JSON.stringify(schema,null,2)))+'</pre>';
+            }
+            function expandToggle(){return '<div class="ax-expand-toggle"><button onclick="axExpandAll(true)">Expand all</button><button onclick="axExpandAll(false)">Collapse all</button></div>';}
+            window.axExpandAll=function(open){
+                _expandAll=open;
+                document.querySelectorAll('.ax-ref-expanded,.ax-prop-nested').forEach(function(el){el.style.display=open?'':'none';});
+                document.querySelectorAll('.ax-schema-collapse-btn').forEach(function(b){b.textContent=open?'▼':'▶';});
+            };
 
             function init(){
                 loadSpec(function(spec){
+                    if(!spec||typeof spec!=='object'){renderError('Spec is empty or invalid JSON');return;}
                     _server=_server||(spec.servers&&spec.servers[0]&&spec.servers[0].url)||'';
                     renderSidebar(spec);
-                    renderWelcome(spec);
+                    var pathCount=Object.keys(spec.paths||{}).length;
+                    if(pathCount===0&&!Object.keys(spec.webhooks||{}).length){renderEmptySpec(spec);}
+                    else{renderWelcome(spec);}
                     renderSidebarFooter(spec);
                     var hash=location.hash.slice(1);if(hash)navigateHash(hash,spec);
                     var filter=document.getElementById('axui-filter');
                     if(filter){filter.addEventListener('input',function(){renderSidebar(spec,filter.value);});}
-                });
-                // Error state if fetch fails
+                },function(err){renderError(err);});
+                /* Fallback */
                 setTimeout(function(){
                     var body=document.getElementById('axui-sidebar-body');
-                    if(body&&body.querySelector('.axui-loading-state')){
-                        body.innerHTML='<div class="ax-error-state"><div class="ax-error-icon">⚠</div><div class="ax-error-title">Failed to load spec</div><div class="ax-error-msg">Check network or spec URL</div></div>';
-                    }
+                    if(body&&body.querySelector('.axui-loading-state')){renderError('Request timed out after 10s');}
                 },10000);
+            }
+            function renderError(msg){
+                var body=document.getElementById('axui-sidebar-body');
+                if(body)body.innerHTML='<div class="ax-error-state"><div class="ax-error-icon">⚠</div><div class="ax-error-title">Failed to load spec</div><div class="ax-error-msg">'+escH(String(msg||'Unknown error'))+'</div><div class="ax-error-url">'+escH(APEX_CFG.specUrl||'')+'</div><button class="ax-error-retry" onclick="location.reload()">Retry</button></div>';
+                var w=document.getElementById('axui-welcome');if(w)w.innerHTML='';
+            }
+            function renderEmptySpec(spec){
+                var w=document.getElementById('axui-welcome');if(!w)return;
+                w.innerHTML='<div class="axw-title">'+escH((spec.info&&spec.info.title)||'API')+'</div>'
+                    +'<div class="ax-empty-spec"><div class="ax-empty-icon">📭</div><div class="ax-empty-title">No endpoints documented yet</div>'
+                    +'<div class="ax-empty-msg">Add controllers with route attributes, then regenerate the spec.</div></div>';
             }
 
             window._axui={setServer:function(url){_server=url;}};
@@ -1023,6 +1501,28 @@ final class UiRenderer
                             +'<span class="axm axm-'+i.method+'">'+i.method.toUpperCase()+'</span>'
                             +'<span class="axi-path">'+escH(i.path)+'</span>'
                             +(i.op.deprecated?'<span class="axi-depr-dot">D</span>':'')
+                            +'</div>';
+                    });
+                    html+='</div></div>';
+                }
+                // Schemas section
+                var schemas=(spec.components&&spec.components.schemas)||{};
+                var schemaKeys=Object.keys(schemas);
+                if(q)schemaKeys=schemaKeys.filter(function(n){return n.toLowerCase().includes(q);});
+                if(schemaKeys.length){
+                    anyResult=true;
+                    var schOpen=(_activeSchemaName||q)?' open':'';
+                    html+='<div class="axg'+schOpen+'" id="axg-__schemas__">'
+                        +'<div class="axg-header" onclick="axToggleGroup(this)">'
+                        +'<span class="axg-arrow">▶</span>'
+                        +'<span class="axg-name">Schemas</span>'
+                        +'<span class="axg-count">'+schemaKeys.length+'</span>'
+                        +'</div><div class="axg-items">';
+                    schemaKeys.forEach(function(n){
+                        var active=(n===_activeSchemaName)?' active':'';
+                        html+='<div class="axi axi-schema'+active+'" onclick="axNavSchema(\''+escH(n)+'\')">'
+                            +'<span class="axm axm-schema">{}</span>'
+                            +'<span class="axi-path">'+escH(n)+'</span>'
                             +'</div>';
                     });
                     html+='</div></div>';
@@ -1075,7 +1575,7 @@ final class UiRenderer
             window.axNavWhEl=function(el){var g=el.closest('.axg');if(g)g.classList.add('open');axNavWebhook(el.dataset.wname,el.dataset.wmethod);};
 
             window.axNav=function(key,path,method){
-                _activeOpKey=key;
+                _activeOpKey=key;_activeSchemaName=null;
                 var spec=_specCache;if(!spec)return;
                 var op=spec.paths&&spec.paths[path]&&spec.paths[path][method];if(!op)return;
                 renderSidebar(spec);
@@ -1106,6 +1606,9 @@ final class UiRenderer
                 }
                 if(hash.startsWith('wh_')){
                     var p2=hash.slice(3).split('_');if(p2.length>=2)axNavWebhook(p2[0],p2[1]);
+                }
+                if(hash.startsWith('schema_')){
+                    var sn=decodeURIComponent(hash.slice(7));axNavSchema(sn);
                 }
             }
 
@@ -1140,7 +1643,7 @@ final class UiRenderer
                 document.getElementById('axui-welcome').innerHTML=
                     '<div class="axw-title">'+escH(info.title||'API')+'</div>'
                     +'<div class="axw-meta"><span class="axw-version">v'+escH(info.version||'1.0')+'</span><span class="axw-openapi">'+escH(spec.openapi||'OpenAPI')+'</span>'+(deprCount?'<span style="font-size:11px;color:var(--amber);padding:2px 6px;border-radius:4px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)">'+deprCount+' deprecated</span>':'')+'</div>'
-                    +(info.description?'<div class="axw-desc">'+escH(info.description)+'</div>':'')
+                    +(info.description?'<div class="axw-desc axw-md">'+md(info.description)+'</div>':'')
                     +stats
                     +(metaHtml?'<div class="axw-contact-block">'+metaHtml+'</div>':'')
                     +(servers?'<div class="axw-servers"><div class="axw-servers-title">Servers</div>'+servers+'</div>':'')
@@ -1178,13 +1681,21 @@ final class UiRenderer
                 // Permalink
                 var opId=op.operationId||(isWebhook?'wh_':'op_')+method+'__'+path;
                 var plBtn='<button class="ax-permalink-btn" onclick="axCopyPermalink(\''+escH(opId)+'\')" title="Copy permalink"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M7 9a3 3 0 0 0 4.5.3l2-2A3 3 0 0 0 9.2 3L8.1 4.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 7a3 3 0 0 0-4.5-.3l-2 2A3 3 0 0 0 6.8 13l1.1-1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>';
-                var html=bc
+                /* Deprecation / sunset banner */
+                var depBanner='';
+                if(op.deprecated||op['x-sunset-date']||op['x-deprecation-notice']||op['x-migration-guide']){
+                    var notice=op['x-deprecation-notice']||'This endpoint is deprecated and will be removed in a future version.';
+                    var sunset=op['x-sunset-date']?'<div class="ax-dep-sunset">Sunset: <strong>'+escH(op['x-sunset-date'])+'</strong></div>':'';
+                    var mig=op['x-migration-guide']?'<a class="ax-dep-mig" href="'+escH(op['x-migration-guide'])+'" target="_blank" rel="noreferrer">Migration guide ↗</a>':'';
+                    depBanner='<div class="ax-dep-banner"><div class="ax-dep-icon">⚠</div><div class="ax-dep-body"><div class="ax-dep-title">Deprecated</div><div class="ax-dep-msg axw-md">'+md(notice)+'</div>'+sunset+mig+'</div></div>';
+                }
+                var html=bc+depBanner
                     +'<div class="ax-op-header">'
                     +'<span class="axm axm-'+method+'">'+method.toUpperCase()+'</span>'
                     +'<div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(path)+dep+plBtn+'</div>'
                     +(op.summary?'<div class="ax-op-summary">'+escH(op.summary)+'</div>':'')
                     +'</div></div>'
-                    +(op.description?'<div class="ax-op-desc">'+escH(op.description)+'</div>':'')
+                    +(op.description?'<div class="ax-op-desc axw-md">'+md(op.description)+'</div>':'')
                     +secHtml+extHtml;
                 // Parameters
                 var params=(op.parameters||[]);
@@ -1198,15 +1709,15 @@ final class UiRenderer
                             +'<td><span class="ax-in-badge">'+escH(p.in)+'</span></td>'
                             +'<td><span class="ax-type-badge">'+escH(t)+(sc.format?'<span style="opacity:.6"> ('+escH(sc.format)+')</span>':'')+'</span></td>'
                             +'<td>'+(p.required?'<span class="ax-req-badge">req</span>':'<span style="color:var(--t3);font-size:11px">opt</span>')+'</td>'
-                            +'<td style="color:var(--t3)">'+escH(p.description||'')+enums+'</td></tr>';
+                            +'<td class="axw-md" style="color:var(--t3)">'+(p.description?md(p.description):'')+enums+'</td></tr>';
                     });
                     html+='</tbody></table></div>';
                 }
                 // Request body
                 if(op.requestBody){
                     var ct=op.requestBody.content||{};var ctKeys=Object.keys(ct);
-                    html+='<div class="ax-section"><div class="ax-section-title">Request Body'+(op.requestBody.required?'':' <span style="font-size:10px;font-weight:400;color:var(--t3)">(optional)</span>')+'</div>';
-                    if(op.requestBody.description)html+='<div style="font-size:13px;color:var(--t2);margin-bottom:10px">'+escH(op.requestBody.description)+'</div>';
+                    html+='<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Request Body'+(op.requestBody.required?'':' <span style="font-size:10px;font-weight:400;color:var(--t3)">(optional)</span>')+'</div>'+expandToggle()+'</div>';
+                    if(op.requestBody.description)html+='<div class="axw-md" style="font-size:13px;color:var(--t2);margin-bottom:10px">'+md(op.requestBody.description)+'</div>';
                     if(ctKeys.length>1){
                         html+='<div class="ax-resp-ct-tabs">';
                         ctKeys.forEach(function(mime,i){html+='<button class="ax-resp-ct-btn'+(i===0?' active':'')+'" onclick="axSwitchReqCt(this,\''+escH(mime)+'\')">'+escH(mime)+'</button>';});
@@ -1221,7 +1732,7 @@ final class UiRenderer
                 }
                 // Responses
                 if(op.responses){
-                    html+='<div class="ax-section"><div class="ax-section-title">Responses</div>';
+                    html+='<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Responses</div>'+expandToggle()+'</div>';
                     var rKeys=Object.keys(op.responses);
                     rKeys.forEach(function(status,ri){
                         var resp=op.responses[status];var sc=parseInt(status);
@@ -1241,7 +1752,32 @@ final class UiRenderer
                             rck.forEach(function(mime,i){html+='<button class="ax-resp-ct-btn'+(i===0?' active':'')+'" onclick="axSwitchRespCt(this,\'ax-resp-'+escH(status)+'\',\''+escH(mime)+'\')">'+escH(mime)+'</button>';});
                             html+='</div>';
                         }
-                        rck.forEach(function(mime,i){html+='<div class="ax-resp-ct-panel" data-mime="'+escH(mime)+'" style="'+(i>0?'display:none':'')+'">'+renderSchema(rc[mime].schema||{},spec,0)+'</div>';});
+                        rck.forEach(function(mime,i){
+                            var mediaObj=rc[mime]||{};
+                            var examples=mediaObj.examples||{};var exKeys=Object.keys(examples);
+                            var exHtml='';
+                            if(exKeys.length>=2){
+                                var exId='ax-ex-'+escH(status)+'-'+i;
+                                exHtml='<div class="ax-ex-block"><div class="ax-ex-title">Examples</div><div class="ax-ex-tabs">'
+                                    +exKeys.map(function(k,j){return '<button class="ax-ex-tab'+(j===0?' active':'')+'" onclick="axExSwitch(\''+exId+'\',\''+escH(k)+'\')">'+escH(examples[k].summary||k)+'</button>';}).join('')
+                                    +'</div><div id="'+exId+'" class="ax-ex-panels">'
+                                    +exKeys.map(function(k,j){
+                                        var ex=examples[k]||{};
+                                        var val=ex.value!==undefined?ex.value:'';
+                                        var pretty=typeof val==='string'?val:JSON.stringify(val,null,2);
+                                        return '<div class="ax-ex-panel" data-name="'+escH(k)+'" style="'+(j>0?'display:none':'')+'">'
+                                            +(ex.description?'<div class="ax-ex-desc axw-md">'+md(ex.description)+'</div>':'')
+                                            +'<pre class="ax-code">'+hlJson(escH(pretty))+'</pre></div>';
+                                    }).join('')+'</div></div>';
+                            } else if(exKeys.length===1){
+                                var only=examples[exKeys[0]];var v=only.value!==undefined?only.value:'';var p=typeof v==='string'?v:JSON.stringify(v,null,2);
+                                exHtml='<div class="ax-ex-block"><div class="ax-ex-title">Example</div>'+(only.description?'<div class="ax-ex-desc axw-md">'+md(only.description)+'</div>':'')+'<pre class="ax-code">'+hlJson(escH(p))+'</pre></div>';
+                            } else if(mediaObj.example!==undefined){
+                                var e=mediaObj.example;var ep=typeof e==='string'?e:JSON.stringify(e,null,2);
+                                exHtml='<div class="ax-ex-block"><div class="ax-ex-title">Example</div><pre class="ax-code">'+hlJson(escH(ep))+'</pre></div>';
+                            }
+                            html+='<div class="ax-resp-ct-panel" data-mime="'+escH(mime)+'" style="'+(i>0?'display:none':'')+'">'+renderSchema(mediaObj.schema||{},spec,0)+exHtml+'</div>';
+                        });
                         html+='</div></div>';
                     });
                     html+='</div>';
@@ -1270,6 +1806,15 @@ final class UiRenderer
                 if(_specCache){renderSidebar(_specCache);renderWelcome(_specCache);}
                 var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
                 history.replaceState(null,'',location.pathname);
+            };
+            window.axExSwitch=function(id,name){
+                var box=document.getElementById(id);if(!box)return;
+                box.querySelectorAll('.ax-ex-panel').forEach(function(el){el.style.display=el.dataset.name===name?'':'none';});
+                var parent=box.parentElement;if(parent)parent.querySelectorAll('.ax-ex-tab').forEach(function(t){t.classList.toggle('active',t.textContent.trim()===(box.querySelector('.ax-ex-panel[data-name="'+name+'"]')||{dataset:{name:name}}).dataset.name||t.textContent.includes(name));});
+                /* simpler: mark by index match */
+                var tabs=parent?parent.querySelectorAll('.ax-ex-tab'):[];
+                var panels=box.querySelectorAll('.ax-ex-panel');
+                for(var i=0;i<panels.length;i++){if(panels[i].dataset.name===name){tabs[i]&&tabs[i].classList.add('active');}else{tabs[i]&&tabs[i].classList.remove('active');}}
             };
             window.axCopyPermalink=function(id){
                 var url=location.origin+location.pathname+'#op_'+id;
@@ -1313,15 +1858,16 @@ final class UiRenderer
                         var pv=props[pn];var pt=pv.type||(pv['$ref']?pv['$ref'].split('/').pop():(pv.properties?'object':'any'));
                         var isNested=(pv.type==='object'||pv.properties)&&depth<2;
                         var nestedId=isNested?'axs'+(++_schemaIds):'';
+                        var isReq=req.indexOf(pn)!==-1;
                         html+='<div class="ax-prop-row">'
-                            +(isNested?'<button class="ax-schema-collapse-btn" data-schema="'+nestedId+'" onclick="axToggleSchema(\''+nestedId+'\')">▼</button>':'')
+                            +(isNested?'<button class="ax-schema-collapse-btn" data-schema="'+nestedId+'" onclick="axToggleSchema(\''+nestedId+'\')">'+(_expandAll?'▼':'▶')+'</button>':'')
                             +'<span class="ax-prop-name">'+escH(pn)+'</span>'
-                            +'<span class="ax-prop-type ax-type-badge">'+escH(pt)+(pv.format?'<span style="opacity:.6"> ('+escH(pv.format)+')</span>':'')+(pv.nullable?'<span style="opacity:.6"> | null</span>':'')+'</span>'
-                            +(req.includes(pn)?'<span class="ax-req-badge ax-prop-req">req</span>':'')
-                            +(pv.description?'<span class="ax-prop-desc">'+escH(pv.description)+'</span>':'')
+                            +'<span class="ax-prop-type ax-type-badge">'+escH(pt)+'</span>'
+                            +'<span class="ax-prop-badges">'+propBadges(pv,isReq)+'</span>'
+                            +(pv.description?'<span class="ax-prop-desc axw-md">'+md(pv.description)+'</span>':'')
                             +'</div>';
                         if(pv.enum)html+='<div style="padding:4px 12px 6px 12px"><div class="ax-enum-wrap">'+pv.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div></div>';
-                        if(isNested)html+='<div id="'+nestedId+'" class="ax-prop-nested">'+renderSchema(pv,spec,depth+1)+'</div>';
+                        if(isNested)html+='<div id="'+nestedId+'" class="ax-prop-nested" style="'+(_expandAll?'':'display:none')+'">'+renderSchema(pv,spec,depth+1)+'</div>';
                     });
                     return html+'</div>';
                 }
@@ -1373,9 +1919,26 @@ final class UiRenderer
                         });
                         return h;
                     }
-                    if(pathParams.length)tryHtml+='<div class="ax-try-label" style="margin-top:8px;color:var(--t3)">Path</div>'+paramFields(pathParams,'axi-');
-                    if(queryParams.length)tryHtml+='<div class="ax-try-label" style="margin-top:8px;color:var(--t3)">Query</div>'+paramFields(queryParams,'axi-');
-                    if(headerParams.length)tryHtml+='<div class="ax-try-label" style="margin-top:8px;color:var(--t3)">Headers</div>'+paramFields(headerParams,'axi-h-');
+                    /* Wrap a group of fields with a bulk-JSON edit toggle */
+                    function bulkGroup(title,list,prefix,gid){
+                        if(!list.length)return '';
+                        var names=list.map(function(p){return p.name;});
+                        return '<div class="ax-bulk-group" data-gid="'+gid+'" data-prefix="'+prefix+'" data-names="'+escH(JSON.stringify(names))+'">'
+                            +'<div class="ax-bulk-row"><div class="ax-try-label">'+title+'</div>'
+                            +'<button class="ax-bulk-btn" type="button" onclick="axBulkToggle(\''+gid+'\')">JSON</button></div>'
+                            +'<div class="ax-bulk-fields">'+paramFields(list,prefix)+'</div>'
+                            +'<textarea class="ax-bulk-area" id="'+gid+'-area" spellcheck="false" placeholder=\'{ "key": "value" }\'></textarea>'
+                            +'<div class="ax-bulk-actions" style="display:none">'
+                                +'<button type="button" onclick="axBulkApply(\''+gid+'\')">Apply</button>'
+                                +'<button type="button" onclick="axBulkSyncFromFields(\''+gid+'\')">Refresh from fields</button>'
+                                +'<button type="button" onclick="axBulkCopy(\''+gid+'\')">Copy</button>'
+                            +'</div>'
+                            +'<div class="ax-bulk-err" id="'+gid+'-err"></div>'
+                            +'</div>';
+                    }
+                    if(pathParams.length)tryHtml+=bulkGroup('Path',pathParams,'axi-','axb-path');
+                    if(queryParams.length)tryHtml+=bulkGroup('Query',queryParams,'axi-','axb-query');
+                    if(headerParams.length)tryHtml+=bulkGroup('Headers',headerParams,'axi-h-','axb-hdr');
                     if(hasBody&&op.requestBody){
                         var ct=op.requestBody.content||{};var ex='{}';
                         if(ct['application/json']&&ct['application/json'].schema)ex=JSON.stringify(buildExample(ct['application/json'].schema,spec),null,2);
@@ -1383,8 +1946,16 @@ final class UiRenderer
                     }
                     tryHtml+='<button class="ax-try-send" id="axi-send" onclick="axSend(\''+escH(_server)+'\',\''+escH(path)+'\',\''+escH(method)+'\')">Send Request</button><div id="axi-result"></div></div>';
                 }
-                panel.innerHTML=codeHtml+tryHtml;
+                /* History section */
+                var histHtml='<div class="ax-hist-section"><div class="ax-panel-section-title-row"><div class="ax-panel-section-title">Recent</div><button class="ax-hist-toggle" onclick="this.parentElement.parentElement.classList.toggle(\'collapsed\')">▾</button></div><div id="ax-hist-list" class="ax-hist-list"></div></div>';
+                panel.innerHTML=codeHtml+tryHtml+histHtml;
                 renderCode(path,method,op,spec,_server);
+                /* Restore persisted auth + wire listeners */
+                authRestore();
+                /* Inject OAuth2 "Get token" button if any oauth2 scheme is defined */
+                wireOAuthHelper(spec);
+                /* Populate request history */
+                renderHistory(method,path);
             }
 
             window.axAuthTypeChange=function(){
@@ -1500,20 +2071,59 @@ final class UiRenderer
                 btn.disabled=true;btn.textContent='Sending…';
                 var t0=Date.now();
                 result.innerHTML='<div class="axui-loading-state"><div class="axui-spinner"></div><span>Waiting for response…</span></div>';
+                /* Snapshot of params for history */
+                var paramSnap={};specParams.forEach(function(p){var el=document.getElementById('axi-'+p.name);if(el&&el.value)paramSnap[p.name]=el.value;});
+                var headerSnap={};specParams.filter(function(p){return p.in==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headerSnap[p.name]=el.value;});
                 fetch(url,opts).then(function(r){
                     var ms=Date.now()-t0;var sc=r.status;
                     var cls=sc<300?'ax-res-s-ok':sc<400?'ax-res-s-info':sc<500?'ax-res-s-warn':'ax-res-s-err';
-                    var hdrLines='';r.headers.forEach(function(v,n){hdrLines+=escH(n)+': '+escH(v)+'\n';});
+                    var hdrPairs=[];r.headers.forEach(function(v,n){hdrPairs.push([n,v]);});
+                    var ctype=(r.headers.get('content-type')||'').toLowerCase();
                     return r.text().then(function(raw){
-                        var fmt=raw;try{fmt=JSON.stringify(JSON.parse(raw),null,2);}catch(e){}
+                        var size=raw.length;var sizeStr=size<1024?size+' B':size<1048576?(size/1024).toFixed(1)+' KB':(size/1048576).toFixed(2)+' MB';
+                        var isJson=ctype.indexOf('json')!==-1;var fmt=raw;
+                        if(isJson){try{fmt=JSON.stringify(JSON.parse(raw),null,2);}catch(e){}}
+                        var bodyHtml=isJson?'<pre class="ax-res-pre">'+hlJson(escH(fmt))+'</pre>':'<pre class="ax-res-pre">'+escH(fmt)+'</pre>';
+                        var hdrTable='<table class="ax-res-headers-tbl">'+hdrPairs.map(function(kv){return '<tr><td>'+escH(kv[0])+'</td><td>'+escH(kv[1])+'</td></tr>';}).join('')+'</table>';
+                        var rid='axres-'+(Date.now());
                         result.innerHTML='<div class="ax-res-panel">'
-                            +'<div class="ax-res-status-bar"><span class="'+cls+'">'+sc+' '+escH(r.statusText)+'</span><span class="ax-res-ms">'+ms+'ms</span></div>'
-                            +(hdrLines?'<details class="ax-res-headers"><summary style="font-size:11px;color:var(--t3);padding:6px 10px;cursor:pointer;user-select:none">Response headers</summary><pre style="padding:4px 10px 8px;font-size:11px;color:var(--t3);overflow-x:auto">'+hdrLines+'</pre></details>':'')
-                            +'<div class="ax-res-body"><pre class="ax-res-pre">'+hlJson(escH(fmt))+'</pre></div></div>';
+                            +'<div class="ax-res-status-bar">'
+                                +'<span class="ax-res-status '+cls+'">'+sc+' '+escH(r.statusText)+'</span>'
+                                +'<span class="ax-res-meta">'+ms+'ms · '+sizeStr+'</span>'
+                                +'<button class="ax-res-copy" onclick="apexCopyText(this,\''+rid+'-body\')" title="Copy body">Copy</button>'
+                            +'</div>'
+                            +'<div class="ax-res-tabs">'
+                                +'<button class="ax-res-tab active" data-t="body" onclick="axResTab(\''+rid+'\',\'body\')">Body</button>'
+                                +'<button class="ax-res-tab" data-t="headers" onclick="axResTab(\''+rid+'\',\'headers\')">Headers ('+hdrPairs.length+')</button>'
+                                +'<button class="ax-res-tab" data-t="raw" onclick="axResTab(\''+rid+'\',\'raw\')">Raw</button>'
+                            +'</div>'
+                            +'<div id="'+rid+'" class="ax-res-body-wrap">'
+                                +'<div class="ax-res-pane" data-pane="body" id="'+rid+'-body" data-raw="'+escH(fmt)+'">'+bodyHtml+'</div>'
+                                +'<div class="ax-res-pane" data-pane="headers" style="display:none">'+hdrTable+'</div>'
+                                +'<div class="ax-res-pane" data-pane="raw" style="display:none"><pre class="ax-res-pre">'+escH(raw)+'</pre></div>'
+                            +'</div></div>';
+                        histPush(method,path,{status:sc,ms:ms,auth:(auth&&auth.value)||null,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
+                        renderHistory(method,path);
                     });
                 }).catch(function(err){
-                    result.innerHTML='<div class="ax-res-panel"><div class="ax-res-status-bar"><span class="ax-res-s-err">Network Error: '+escH(err.message)+'</span></div><div class="ax-res-body" style="font-size:12px;color:var(--t3);padding:8px">Check CORS headers or verify the server is reachable.</div></div>';
+                    result.innerHTML='<div class="ax-res-panel"><div class="ax-res-status-bar"><span class="ax-res-status ax-res-s-err">Network Error</span><span class="ax-res-meta">'+escH(err.message)+'</span></div><div class="ax-res-body-wrap"><div class="ax-res-pane">'
+                        +'<div style="font-size:12px;color:var(--t3);padding:10px;line-height:1.6">'
+                        +'<strong>Possible causes:</strong><ul style="margin:6px 0 0 18px;padding:0"><li>The server is offline or unreachable.</li><li>CORS is not configured to allow this origin.</li><li>The URL is wrong: <code>'+escH(url)+'</code></li></ul></div></div></div></div>';
+                    histPush(method,path,{status:0,ms:Date.now()-t0,auth:(auth&&auth.value)||null,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
+                    renderHistory(method,path);
                 }).finally(function(){btn.disabled=false;btn.textContent='Send Request';});
+            };
+            window.axResTab=function(rid,t){
+                var box=document.getElementById(rid);if(!box)return;
+                box.querySelectorAll('.ax-res-pane').forEach(function(el){el.style.display=el.dataset.pane===t?'':'none';});
+                var tabs=box.parentElement.querySelectorAll('.ax-res-tab');
+                tabs.forEach(function(tb){tb.classList.toggle('active',tb.dataset.t===t);});
+            };
+            window.apexCopyText=function(btn,id){
+                var el=document.getElementById(id);if(!el)return;
+                var raw=el.dataset.raw||el.textContent;
+                if(navigator.clipboard)navigator.clipboard.writeText(raw).then(function(){btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);});
+                else{fb(raw);btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);}
             };
 
             function hlJson(s){
