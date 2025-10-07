@@ -9,6 +9,7 @@ use ApexDocs\Contract\OperationTransformerInterface;
 use ApexDocs\Contract\RouteCollectionInterface;
 use ApexDocs\Contract\SecurityDetectorInterface;
 use ApexDocs\Contract\ValidationExtractorInterface;
+use ApexDocs\Exception\MissingRouteCollectionException;
 use ApexDocs\Generator\SpecBuilder;
 use ApexDocs\Spec\Document;
 use Closure;
@@ -153,7 +154,7 @@ final class ApexDocs
     public function generate(): Document
     {
         if ($this->routeCollection === null) {
-            throw new \LogicException('No route collection provided. Call ->routes($collection) before ->generate().');
+            throw MissingRouteCollectionException::create();
         }
 
         $builder = new SpecBuilder(
