@@ -5,12 +5,16 @@ declare(strict_types=1);
 namespace ApexDocs\Cache;
 
 use ApexDocs\Spec\Document;
-use ApexDocs\Spec\Operation;
 use Psr\SimpleCache\CacheInterface;
 
 /**
  * PSR-16 backed spec cache. Framework-agnostic.
- * The concrete CacheInterface implementation is injected by the framework bridge.
+ *
+ * The concrete CacheInterface implementation is injected by the framework
+ * bridge (e.g. Laravel's `cache.psr16`). Specs are stored as plain arrays
+ * and round-tripped through {@see Document::fromArray()} on read so every
+ * section — info, servers, components, tags, webhooks, security,
+ * extensions — survives a cache hit.
  */
 final class SpecCache
 {
@@ -27,26 +31,21 @@ final class SpecCache
             return null;
         }
 
-        $doc = new Document;
-        // Reconstruct from raw array stored in cache
-        foreach ($data['paths'] ?? [] as $path => $methods) {
-            foreach ($methods as $method => $op) {
-                $operation = new Operation;
-                // Restore key fields
-                foreach ($op['parameters'] ?? [] as $p) {
-                    $operation->addParameter($p);
-                }
-                foreach ($op['responses'] ?? [] as $status => $resp) {
-                    $operation->addResponse((string) $status, $resp);
-                }
-                if (isset($op['summary'])) {
-                    $operation->summary($op['summary']);
-                }
-                $doc->addOperation($path, $method, $operation);
-            }
-        }
+        return Document::fromArray($data);
+    }
 
-        return $doc;
+    /**
+     * Read the cached spec without materialising a {@see Document}. Cheaper
+     * for HTTP handlers that just need to serialise — they can stream the
+     * cached array directly through JSON/YAML exporters.
+     *
+     * @return array<string, mixed>|null
+     */
+    public function getArray(string $key = 'default'): ?array
+    {
+        $data = $this->psr16->get($this->prefix.$key);
+
+        return is_array($data) ? $data : null;
     }
 
     public function put(string $key, Document $doc): void

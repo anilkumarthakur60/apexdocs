@@ -40,6 +40,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controlled values. The builder is now a pure function of `Config`. The
   Laravel bridge feeds `config('app.url')` (a trusted source) when the user
   hasn't configured `servers` explicitly.
+- **Security:** `apexdocs:mock` no longer embeds the OpenAPI spec inside a
+  PHP heredoc. The router now lives in `resources/mock/server.php` and reads
+  the spec from a temp file passed via the `APEXDOCS_MOCK_SPEC` env var,
+  removing the code-injection attack surface where descriptions, route
+  metadata, or example values containing `'` could break out of the PHP
+  string literal.
+- **Robustness:** `ValidationExtractor` (Laravel) now wraps the entire
+  `rules()` invocation in `error_reporting(0)` + a `Throwable` catch, skips
+  `rules()` methods that require parameters, and caches the resulting body
+  schema per-class. A FormRequest that throws — including from missing
+  request context like `$this->route('id')` — can no longer kill spec
+  generation.
+- **Correctness:** `SpecCache` now round-trips the full spec — info,
+  servers, components, tags, webhooks, security, and `x-*` extensions all
+  survive a cache hit. Backed by new `Document::fromArray()` and
+  `Components::fromArray()` constructors. Added `SpecCache::getArray()` for
+  HTTP fast paths that just need the serialised form.
+- **Maintainability:** Spec-export response bodies + headers now flow through
+  a single `ApexDocs\Http\SpecPayload` value object. The PSR-15 `Handler` and
+  Laravel `DocsController` both delegate to it so they can no longer drift on
+  content type, CORS, or download filenames.
+- **Robustness:** `WebhookScanner` now uses `token_get_all()` instead of
+  regex to find namespace + class declarations. Avoids false positives on
+  `::class` constants, multi-line namespace blocks, and `class` appearing
+  inside doc comments.
 - **Correctness:** Nullable schemas now emit OpenAPI 3.1's `type: [..., 'null']`
   instead of the deprecated `nullable: true` keyword. Applied across
   `SchemaBuilder` (reflection + union), `RuleParser`, `PostmanExporter`, the

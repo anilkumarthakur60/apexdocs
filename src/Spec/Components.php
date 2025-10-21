@@ -77,6 +77,27 @@ final class Components
         return $this;
     }
 
+    /**
+     * Inverse of {@see toArray()} — populate from a serialised form (e.g. a
+     * cached spec). Round-trips every supported section so callers get the
+     * exact components map back.
+     *
+     * @param  array<string, array<string, mixed>>  $data
+     */
+    public static function fromArray(array $data): self
+    {
+        $c = new self;
+        $c->schemas = $data['schemas'] ?? [];
+        $c->responses = $data['responses'] ?? [];
+        $c->parameters = $data['parameters'] ?? [];
+        $c->examples = $data['examples'] ?? [];
+        $c->requestBodies = $data['requestBodies'] ?? [];
+        $c->headers = $data['headers'] ?? [];
+        $c->securitySchemes = $data['securitySchemes'] ?? [];
+
+        return $c;
+    }
+
     public function toArray(): array
     {
         return array_filter([

@@ -26,11 +26,11 @@ test('union type becomes oneOf', function () {
     expect(count($schema['oneOf']))->toBe(2);
 });
 
-test('nullable union collapses to single type', function () {
+test('nullable union encodes as OpenAPI 3.1 type-array', function () {
     $b = new SchemaBuilder;
     $schema = $b->fromTypeString('string|null');
-    expect($schema['type'])->toBe('string');
-    expect($schema['nullable'])->toBeTrue();
+    expect($schema['type'])->toBe(['string', 'null'])
+        ->and($schema)->not->toHaveKey('nullable');
 });
 
 test('enum class', function () {

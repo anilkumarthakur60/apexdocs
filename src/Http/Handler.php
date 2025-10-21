@@ -5,11 +5,6 @@ declare(strict_types=1);
 namespace ApexDocs\Http;
 
 use ApexDocs\ApexDocs;
-use ApexDocs\Export\BrunoExporter;
-use ApexDocs\Export\InsomniaExporter;
-use ApexDocs\Export\JsonExporter;
-use ApexDocs\Export\PostmanExporter;
-use ApexDocs\Export\YamlExporter;
 use Psr\Http\Message\ResponseFactoryInterface;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
@@ -27,6 +22,10 @@ use Psr\Http\Server\RequestHandlerInterface;
  *   GET /postman   → Postman Collection JSON (download)
  *   GET /insomnia  → Insomnia Export JSON (download)
  *   GET /bruno     → Bruno Collection JSON (download)
+ *
+ * Payload construction is delegated to {@see SpecPayload} so this handler
+ * and the Laravel {@see \ApexDocs\Bridge\Laravel\DocsController} stay in
+ * lockstep — same bytes, same headers, no drift.
  */
 final class Handler implements RequestHandlerInterface
 {
@@ -41,74 +40,26 @@ final class Handler implements RequestHandlerInterface
     {
         $path = rtrim($request->getUri()->getPath(), '/');
 
-        return match (true) {
-            str_ends_with($path, '/spec.json') => $this->jsonSpec(),
-            str_ends_with($path, '/spec.yaml') => $this->yamlSpec(),
-            str_ends_with($path, '/postman') => $this->postman(),
-            str_ends_with($path, '/insomnia') => $this->insomnia(),
-            str_ends_with($path, '/bruno') => $this->bruno(),
-            default => $this->ui($request),
+        $payload = match (true) {
+            str_ends_with($path, '/spec.json') => SpecPayload::json($this->apexDocs),
+            str_ends_with($path, '/spec.yaml') => SpecPayload::yaml($this->apexDocs),
+            str_ends_with($path, '/postman') => SpecPayload::postman($this->apexDocs),
+            str_ends_with($path, '/insomnia') => SpecPayload::insomnia($this->apexDocs),
+            str_ends_with($path, '/bruno') => SpecPayload::bruno($this->apexDocs),
+            default => SpecPayload::html($this->renderUi($request)),
         };
+
+        return $this->toPsrResponse($payload);
     }
 
-    private function jsonSpec(): ResponseInterface
-    {
-        $doc = $this->apexDocs->generate();
-        $content = (new JsonExporter)->toString($doc);
-
-        return $this->respond($content, 'application/json')
-            ->withHeader('Access-Control-Allow-Origin', '*')
-            ->withHeader('Cache-Control', 'no-store');
-    }
-
-    private function yamlSpec(): ResponseInterface
-    {
-        $doc = $this->apexDocs->generate();
-        $content = (new YamlExporter)->toString($doc);
-
-        return $this->respond($content, 'application/yaml')
-            ->withHeader('Access-Control-Allow-Origin', '*')
-            ->withHeader('Cache-Control', 'no-store');
-    }
-
-    private function postman(): ResponseInterface
-    {
-        $doc = $this->apexDocs->generate();
-        $json = (new PostmanExporter)->toString($doc);
-        $name = 'postman-collection.json';
-
-        return $this->respond($json, 'application/json')
-            ->withHeader('Content-Disposition', "attachment; filename=\"{$name}\"");
-    }
-
-    private function insomnia(): ResponseInterface
-    {
-        $doc = $this->apexDocs->generate();
-        $json = (new InsomniaExporter)->toString($doc);
-        $name = 'insomnia-collection.json';
-
-        return $this->respond($json, 'application/json')
-            ->withHeader('Content-Disposition', "attachment; filename=\"{$name}\"");
-    }
-
-    private function bruno(): ResponseInterface
-    {
-        $doc = $this->apexDocs->generate();
-        $json = (new BrunoExporter)->toString($doc);
-        $name = 'bruno-collection.json';
-
-        return $this->respond($json, 'application/json')
-            ->withHeader('Content-Disposition', "attachment; filename=\"{$name}\"");
-    }
-
-    private function ui(ServerRequestInterface $request): ResponseInterface
+    private function renderUi(ServerRequestInterface $request): string
     {
         $params = $request->getQueryParams();
-        $ui = $params['ui'] ?? $this->apexDocs->getConfig()->defaultUi;
+        $config = $this->apexDocs->getConfig();
+        $ui = is_string($params['ui'] ?? null) ? $params['ui'] : $config->defaultUi;
         $specUrl = $this->specUrlFromRequest($request);
-        $html = $this->uiRenderer->render($ui, $specUrl, $this->apexDocs->getConfig());
 
-        return $this->respond($html, 'text/html; charset=UTF-8');
+        return $this->uiRenderer->render($ui, $specUrl, $config);
     }
 
     private function specUrlFromRequest(ServerRequestInterface $request): string
@@ -118,10 +69,22 @@ final class Handler implements RequestHandlerInterface
         return rtrim((string) $uri, '/').'/spec.json';
     }
 
-    private function respond(string $body, string $contentType): ResponseInterface
+    private function toPsrResponse(SpecPayload $payload): ResponseInterface
     {
-        return $this->responseFactory->createResponse(200)
-            ->withHeader('Content-Type', $contentType)
-            ->withBody($this->streamFactory->createStream($body));
+        $response = $this->responseFactory->createResponse(200)
+            ->withHeader('Content-Type', $payload->contentType)
+            ->withBody($this->streamFactory->createStream($payload->body));
+
+        foreach ($payload->headers as $name => $value) {
+            $response = $response->withHeader($name, $value);
+        }
+        if ($payload->downloadName !== null) {
+            $response = $response->withHeader(
+                'Content-Disposition',
+                'attachment; filename="'.$payload->downloadName.'"',
+            );
+        }
+
+        return $response;
     }
 }

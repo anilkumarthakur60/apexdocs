@@ -93,21 +93,110 @@ final class WebhookScanner
         return $files;
     }
 
+    /**
+     * Resolve the fully-qualified class name declared in a PHP file.
+     *
+     * Uses the PHP tokenizer rather than regex because the regex approach
+     * breaks on real-world code: multi-line `namespace` blocks, `class` in
+     * doc comments, classes nested inside conditionals, attributes on the
+     * class line, and `class` used as a const reference all defeated the
+     * previous implementation.
+     */
     private function classFromFile(string $file): ?string
     {
-        $src = file_get_contents($file);
-        if ($src === false) {
+        $src = @file_get_contents($file);
+        if ($src === false || $src === '') {
             return null;
         }
-        $ns = '';
+
+        $tokens = @token_get_all($src);
+        $namespace = '';
         $class = '';
-        if (preg_match('/^namespace\s+([^;{]+)/m', $src, $m)) {
-            $ns = trim($m[1]);
-        }
-        if (preg_match('/^(?:final\s+|abstract\s+)?class\s+(\w+)/m', $src, $m)) {
-            $class = trim($m[1]);
+        $count = count($tokens);
+
+        for ($i = 0; $i < $count; $i++) {
+            $token = $tokens[$i];
+            if (! is_array($token)) {
+                continue;
+            }
+
+            if ($token[0] === T_NAMESPACE) {
+                $namespace = $this->readNamespace($tokens, $i, $count);
+
+                continue;
+            }
+
+            if ($token[0] === T_CLASS && ! $this->isClassConst($tokens, $i)) {
+                $class = $this->readClassName($tokens, $i, $count);
+                if ($class !== '') {
+                    break;
+                }
+            }
         }
 
-        return $class !== '' ? ($ns !== '' ? $ns.'\\'.$class : $class) : null;
+        if ($class === '') {
+            return null;
+        }
+
+        return $namespace !== '' ? $namespace.'\\'.$class : $class;
+    }
+
+    /**
+     * Skip `::class` — that's a class-name resolution constant, not a class
+     * declaration.
+     *
+     * @param  list<array{0:int,1:string,2:int}|string>  $tokens
+     */
+    private function isClassConst(array $tokens, int $i): bool
+    {
+        for ($j = $i - 1; $j >= 0; $j--) {
+            $prev = $tokens[$j];
+            if (is_array($prev) && $prev[0] === T_WHITESPACE) {
+                continue;
+            }
+
+            return is_array($prev) && $prev[0] === T_DOUBLE_COLON;
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  list<array{0:int,1:string,2:int}|string>  $tokens
+     */
+    private function readNamespace(array $tokens, int $i, int $count): string
+    {
+        $ns = '';
+        for ($j = $i + 1; $j < $count; $j++) {
+            $t = $tokens[$j];
+            if ($t === ';' || $t === '{') {
+                break;
+            }
+            if (is_array($t) && in_array($t[0], [T_STRING, T_NS_SEPARATOR, T_NAME_QUALIFIED, T_NAME_FULLY_QUALIFIED], true)) {
+                $ns .= $t[1];
+            }
+        }
+
+        return trim($ns, '\\');
+    }
+
+    /**
+     * @param  list<array{0:int,1:string,2:int}|string>  $tokens
+     */
+    private function readClassName(array $tokens, int $i, int $count): string
+    {
+        for ($j = $i + 1; $j < $count; $j++) {
+            $t = $tokens[$j];
+            if (is_array($t) && $t[0] === T_WHITESPACE) {
+                continue;
+            }
+            if (is_array($t) && $t[0] === T_STRING) {
+                return $t[1];
+            }
+
+            return '';
+        }
+
+        return '';
     }
 }

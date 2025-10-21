@@ -5,80 +5,74 @@ declare(strict_types=1);
 namespace ApexDocs\Bridge\Laravel;
 
 use ApexDocs\ApexDocs;
-use ApexDocs\Export\BrunoExporter;
-use ApexDocs\Export\InsomniaExporter;
-use ApexDocs\Export\JsonExporter;
-use ApexDocs\Export\PostmanExporter;
-use ApexDocs\Export\YamlExporter;
+use ApexDocs\Http\SpecPayload;
 use ApexDocs\Http\UiRenderer;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Routing\Controller;
 
+/**
+ * Laravel HTTP entry point for the docs site.
+ *
+ * Body + headers are produced by the framework-agnostic {@see SpecPayload}
+ * so this controller and the PSR-15 {@see \ApexDocs\Http\Handler} can never
+ * drift apart on content-type, CORS, or download filenames.
+ */
 class DocsController extends Controller
 {
     public function __construct(
         private ApexDocs $apexDocs,
         private UiRenderer $uiRenderer,
-        private JsonExporter $json,
-        private YamlExporter $yaml,
-        private PostmanExporter $postman,
-        private InsomniaExporter $insomnia,
-        private BrunoExporter $bruno,
     ) {}
 
     public function ui(Request $request): Response
     {
-        $ui = $request->query('ui', $this->apexDocs->getConfig()->defaultUi);
+        $config = $this->apexDocs->getConfig();
+        $ui = (string) $request->query('ui', $config->defaultUi);
         $specUrl = route('apexdocs.json');
-        $html = $this->uiRenderer->render((string) $ui, $specUrl, $this->apexDocs->getConfig());
+        $html = $this->uiRenderer->render($ui, $specUrl, $config);
 
-        return response($html)->header('Content-Type', 'text/html; charset=UTF-8');
+        return $this->respond(SpecPayload::html($html));
     }
 
     public function json(): Response
     {
-        $content = $this->json->toString($this->apexDocs->generate());
-
-        return response($content)
-            ->header('Content-Type', 'application/json')
-            ->header('Access-Control-Allow-Origin', '*')
-            ->header('Cache-Control', 'no-store');
+        return $this->respond(SpecPayload::json($this->apexDocs));
     }
 
     public function yaml(): Response
     {
-        $content = $this->yaml->toString($this->apexDocs->generate());
-
-        return response($content)
-            ->header('Content-Type', 'application/yaml')
-            ->header('Access-Control-Allow-Origin', '*');
+        return $this->respond(SpecPayload::yaml($this->apexDocs));
     }
 
     public function postman(): Response
     {
-        $content = $this->postman->toString($this->apexDocs->generate());
-
-        return response($content)
-            ->header('Content-Type', 'application/json')
-            ->header('Content-Disposition', 'attachment; filename="postman-collection.json"');
+        return $this->respond(SpecPayload::postman($this->apexDocs));
     }
 
     public function insomnia(): Response
     {
-        $content = $this->insomnia->toString($this->apexDocs->generate());
-
-        return response($content)
-            ->header('Content-Type', 'application/json')
-            ->header('Content-Disposition', 'attachment; filename="insomnia-collection.json"');
+        return $this->respond(SpecPayload::insomnia($this->apexDocs));
     }
 
     public function bruno(): Response
     {
-        $content = $this->bruno->toString($this->apexDocs->generate());
+        return $this->respond(SpecPayload::bruno($this->apexDocs));
+    }
 
-        return response($content)
-            ->header('Content-Type', 'application/json')
-            ->header('Content-Disposition', 'attachment; filename="bruno-collection.json"');
+    private function respond(SpecPayload $payload): Response
+    {
+        $response = response($payload->body)->header('Content-Type', $payload->contentType);
+        foreach ($payload->headers as $name => $value) {
+            $response = $response->header($name, $value);
+        }
+        if ($payload->downloadName !== null) {
+            $response = $response->header(
+                'Content-Disposition',
+                'attachment; filename="'.$payload->downloadName.'"',
+            );
+        }
+
+        return $response;
     }
 }
