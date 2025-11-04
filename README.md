@@ -1,5 +1,11 @@
 # ApexDocs
 
+[![Latest Stable Version](https://img.shields.io/packagist/v/anil/apexdocs.svg?style=flat-square)](https://packagist.org/packages/anil/apexdocs)
+[![Total Downloads](https://img.shields.io/packagist/dt/anil/apexdocs.svg?style=flat-square)](https://packagist.org/packages/anil/apexdocs)
+[![PHP Version](https://img.shields.io/packagist/php-v/anil/apexdocs.svg?style=flat-square)](https://packagist.org/packages/anil/apexdocs)
+[![License](https://img.shields.io/packagist/l/anil/apexdocs.svg?style=flat-square)](LICENSE)
+[![Tests](https://img.shields.io/github/actions/workflow/status/anilkumarthakur60/apexdocs/tests.yml?branch=main&style=flat-square&label=tests)](https://github.com/anilkumarthakur60/apexdocs/actions/workflows/tests.yml)
+
 **Framework-agnostic OpenAPI 3.1 documentation generator for PHP 8.2+.**
 
 Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or any PHP project — bring your own route collection.

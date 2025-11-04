@@ -14,7 +14,8 @@ is published.
 
 **Do not file a public GitHub issue.**
 
-Report security issues privately to **security@apexdocs.dev**. Include:
+Report security issues privately to **anilkumarthakur60@gmail.com** with the
+subject prefix `[ApexDocs Security]`. Include:
 
 - A description of the issue and the impact you believe it has.
 - A minimal reproduction (spec, controller, route, config — whichever applies).
