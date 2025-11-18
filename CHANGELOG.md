@@ -11,6 +11,34 @@ _No unreleased changes yet._
 
 ## [0.1.0] - 2026-05-13
 
+### Repo + publish readiness
+
+- Repo hygiene: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1),
+  `.github/ISSUE_TEMPLATE/*` (bug + feature + config router),
+  `.github/PULL_REQUEST_TEMPLATE.md`, `.github/CODEOWNERS`,
+  `.github/FUNDING.yml`, `.github/dependabot.yml`.
+- CI: weekly `composer audit` for known CVEs, Codecov coverage upload from
+  the PHP 8.3 / Laravel 12 row, and `release.yml` that auto-creates a
+  GitHub Release with CHANGELOG excerpt on every SemVer tag push.
+- Composer: `funding` block, `scripts.{security,lint,ci}` with
+  `scripts-descriptions`, `branch-alias` for `dev-main`.
+
+### Test coverage uplift (Pest only — 155 tests / 387 assertions)
+
+- Symfony container compile test exercising the bundle through a real
+  `ContainerBuilder` for every public service, including a rejection test
+  proving the config schema is enforced.
+- Artisan command coverage for `apexdocs:generate`, `apexdocs:validate`,
+  `apexdocs:export` (× 5 formats), and `apexdocs:diff` (success / failure
+  / breaking-change paths).
+- OpenAPI 3.1 structural conformance suite — every invariant required by
+  the 3.1 meta-schema (openapi field, info, type-array nullables, server
+  url, response codes, parameter shapes, valid JSON-Schema types,
+  round-trip JSON + YAML).
+- PSR-15 Handler integration test driving real `nyholm/psr7` requests
+  through every route, plus parity check that the bytes match the Laravel
+  flow (both go through `SpecPayload`).
+
 ### Added
 
 - Native Apex UI: persistent auth token (per-spec localStorage), rich response
