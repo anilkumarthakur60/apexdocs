@@ -15,5 +15,6 @@ final class CookieParam
         public readonly string $description = '',
         public readonly bool $required = false,
         public readonly mixed $example = null,
+        public readonly bool $deprecated = false,
     ) {}
 }
