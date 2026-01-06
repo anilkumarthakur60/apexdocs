@@ -99,7 +99,16 @@ final class Operation
 
     public function externalDocs(string $url, string $description = ''): self
     {
-        $this->externalDocs = array_filter(['url' => $url, 'description' => $description]);
+        // `url` is the only required field of an External Documentation Object,
+        // and "0" is a legitimate value — so filter on emptiness, not falsiness.
+        if ($url === '') {
+            return $this;
+        }
+
+        $this->externalDocs = ['url' => $url];
+        if ($description !== '') {
+            $this->externalDocs['description'] = $description;
+        }
 
         return $this;
     }

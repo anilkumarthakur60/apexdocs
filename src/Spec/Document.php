@@ -82,11 +82,13 @@ final class Document implements JsonSerializable
 
     public function info(string $title, string $version, string $description = ''): self
     {
-        $this->info = array_filter([
-            'title' => $title,
-            'version' => $version,
-            'description' => $description,
-        ]);
+        // `title` and `version` are REQUIRED by the spec, so they are emitted
+        // even when falsy-looking ("0" is a legitimate version). Only the
+        // optional description is dropped when empty.
+        $this->info = ['title' => $title, 'version' => $version];
+        if ($description !== '') {
+            $this->info['description'] = $description;
+        }
 
         return $this;
     }
@@ -102,7 +104,15 @@ final class Document implements JsonSerializable
 
     public function addServer(string $url, string $description = '', array $variables = []): self
     {
-        $server = array_filter(['url' => $url, 'description' => $description, 'variables' => $variables]);
+        // `url` is the only required field of a Server Object — keep it even if
+        // empty rather than emitting a server object that cannot be valid.
+        $server = ['url' => $url];
+        if ($description !== '') {
+            $server['description'] = $description;
+        }
+        if ($variables !== []) {
+            $server['variables'] = $variables;
+        }
         $this->servers[] = $server;
 
         return $this;
@@ -115,6 +125,17 @@ final class Document implements JsonSerializable
         $this->paths[$path][strtolower($method)] = $operation->toArray();
 
         return $this;
+    }
+
+    public function hasOperation(string $path, string $method): bool
+    {
+        return isset($this->paths[$path][strtolower($method)]);
+    }
+
+    /** @return array<string, array<string, mixed>> */
+    public function getPaths(): array
+    {
+        return $this->paths;
     }
 
     // ── Webhooks ──────────────────────────────────────────────────────────────
@@ -146,12 +167,19 @@ final class Document implements JsonSerializable
 
     public function addTag(string $name, string $description = ''): self
     {
+        if ($name === '') {
+            return $this;
+        }
         foreach ($this->tags as $tag) {
-            if ($tag['name'] === $name) {
+            if (($tag['name'] ?? null) === $name) {
                 return $this;
             }
         }
-        $this->tags[] = array_filter(['name' => $name, 'description' => $description]);
+        $tag = ['name' => $name];
+        if ($description !== '') {
+            $tag['description'] = $description;
+        }
+        $this->tags[] = $tag;
 
         return $this;
     }
