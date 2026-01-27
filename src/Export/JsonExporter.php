@@ -8,6 +8,8 @@ use ApexDocs\Spec\Document;
 
 final class JsonExporter
 {
+    use WritesFiles;
+
     public function toString(Document $doc, bool $pretty = true): string
     {
         $flags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR;
@@ -20,14 +22,6 @@ final class JsonExporter
 
     public function toFile(Document $doc, string $path): void
     {
-        $this->ensureDir(dirname($path));
-        file_put_contents($path, $this->toString($doc));
-    }
-
-    private function ensureDir(string $dir): void
-    {
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
+        $this->write($path, $this->toString($doc)."\n");
     }
 }

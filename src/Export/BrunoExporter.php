@@ -10,32 +10,38 @@ use ApexDocs\Spec\Document;
  * Exports an OpenAPI Document to a Bruno Collection (v1).
  * Bruno is an open-source, Git-friendly API client (https://www.usebruno.com/).
  *
- * The exported JSON can be imported via Bruno → Import Collection → OpenAPI/Bruno.
+ * The exported JSON can be imported via Bruno → Import Collection → Bruno Collection.
  */
 final class BrunoExporter
 {
+    use CollectionExport;
+    use WritesFiles;
+
+    private int $sequence = 0;
+
     /** @return array<string, mixed> */
     public function toArray(Document $doc): array
     {
-        $spec    = $doc->toArray();
-        $baseUrl = $spec['servers'][0]['url'] ?? 'http://localhost';
+        $this->sequence = 0;
+        $spec = $doc->toArray();
+        $example = new SchemaExample($spec);
 
         $collection = [
             'version' => '1',
-            'name'    => $spec['info']['title'] ?? 'API',
-            'meta'    => [
-                'version'     => $spec['info']['version'] ?? '1.0.0',
+            'name' => $spec['info']['title'] ?? 'API',
+            'meta' => [
+                'version' => $spec['info']['version'] ?? '1.0.0',
                 'description' => $spec['info']['description'] ?? '',
-                'openapi'     => $spec['openapi'] ?? '3.1.0',
+                'openapi' => $spec['openapi'] ?? '3.1.0',
             ],
             'environments' => $this->buildEnvironments($spec),
-            'items'        => [],
+            'items' => [],
         ];
 
         foreach ($this->groupByTag($spec) as $tag => $items) {
-            $folder = ['type' => 'folder', 'name' => $tag, 'items' => []];
+            $folder = ['type' => 'folder', 'name' => $tag, 'seq' => count($collection['items']) + 1, 'items' => []];
             foreach ($items as [$path, $method, $op]) {
-                $folder['items'][] = $this->buildItem($path, $method, $op, $baseUrl);
+                $folder['items'][] = $this->buildItem($path, $method, $op, $example, $spec);
             }
             $collection['items'][] = $folder;
         }
@@ -53,134 +59,178 @@ final class BrunoExporter
 
     public function toFile(Document $doc, string $path): void
     {
-        $dir = dirname($path);
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-        file_put_contents($path, $this->toString($doc));
+        $this->write($path, $this->toString($doc));
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private function groupByTag(array $spec): array
+    /**
+     * @param  array<string, mixed>  $op
+     * @param  array<string, mixed>  $spec
+     * @return array<string, mixed>
+     */
+    private function buildItem(string $path, string $method, array $op, SchemaExample $example, array $spec): array
     {
-        $groups = [];
-        foreach ($spec['paths'] ?? [] as $path => $methods) {
-            foreach ($methods as $method => $op) {
-                if (! is_array($op)) {
-                    continue;
-                }
-                $tag = $op['tags'][0] ?? 'General';
-                $groups[$tag][] = [$path, strtoupper($method), $op];
-            }
-        }
+        $brunoPath = preg_replace('/\{(\w+)}/', ':$1', $path) ?? $path;
 
-        return $groups;
-    }
-
-    private function buildItem(string $path, string $method, array $op, string $baseUrl): array
-    {
-        $brunoPath = preg_replace('/\{(\w+)\}/', ':$1', $path);
-        $url       = '{{baseUrl}}'.$brunoPath;
-
-        $item = [
+        return [
             'type' => 'http',
-            'name' => ($op['deprecated'] ?? false)
-                ? (($op['summary'] ?? $path).' [DEPRECATED]')
-                : ($op['summary'] ?? $path),
+            'name' => $this->itemName($path, $op),
+            'seq' => ++$this->sequence,
             'meta' => array_filter([
                 'description' => $op['description'] ?? '',
                 'operationId' => $op['operationId'] ?? '',
-                'deprecated'  => $op['deprecated'] ?? false,
+                'deprecated' => $op['deprecated'] ?? false,
             ]),
             'request' => [
-                'method'  => $method,
-                'url'     => $url,
+                'method' => $method,
+                'url' => '{{baseUrl}}'.$brunoPath,
                 'headers' => $this->buildHeaders($op),
-                'params'  => $this->buildParams($op),
-                'body'    => $this->buildBody($op),
-                'auth'    => $this->buildAuth($op),
+                'params' => $this->buildParams($op),
+                'body' => $this->buildBody($op, $example),
+                'auth' => $this->buildAuth($op, $spec),
             ],
         ];
-
-        return $item;
     }
 
+    /**
+     * @param  array<string, mixed>  $op
+     * @return list<array<string, mixed>>
+     */
     private function buildHeaders(array $op): array
     {
         $headers = [['name' => 'Accept', 'value' => 'application/json', 'enabled' => true]];
-        foreach ($op['parameters'] ?? [] as $p) {
-            if (($p['in'] ?? '') === 'header') {
-                $headers[] = [
-                    'name'    => $p['name'],
-                    'value'   => (string) ($p['example'] ?? ''),
-                    'enabled' => $p['required'] ?? false,
-                ];
-            }
+        foreach ($this->parametersIn($op, 'header') as $p) {
+            $headers[] = [
+                'name' => (string) $p['name'],
+                'value' => $this->paramValue($p),
+                'enabled' => (bool) ($p['required'] ?? false),
+            ];
         }
 
         return $headers;
     }
 
+    /**
+     * Bruno keeps query and path parameters in one list, distinguished by type.
+     *
+     * @param  array<string, mixed>  $op
+     * @return list<array<string, mixed>>
+     */
     private function buildParams(array $op): array
     {
         $params = [];
-        foreach ($op['parameters'] ?? [] as $p) {
-            if (($p['in'] ?? '') === 'query') {
-                $params[] = [
-                    'name'    => $p['name'],
-                    'value'   => (string) ($p['example'] ?? ''),
-                    'enabled' => $p['required'] ?? false,
-                ];
-            }
+
+        foreach ($this->parametersIn($op, 'query') as $p) {
+            $params[] = [
+                'name' => (string) $p['name'],
+                'value' => $this->paramValue($p),
+                'type' => 'query',
+                'enabled' => (bool) ($p['required'] ?? false),
+            ];
+        }
+
+        foreach ($this->parametersIn($op, 'path') as $p) {
+            $params[] = [
+                'name' => (string) $p['name'],
+                'value' => $this->paramValue($p),
+                'type' => 'path',
+                'enabled' => true,
+            ];
         }
 
         return $params;
     }
 
-    private function buildBody(array $op): array
+    /**
+     * @param  array<string, mixed>  $op
+     * @return array<string, mixed>
+     */
+    private function buildBody(array $op, SchemaExample $example): array
     {
         $content = $op['requestBody']['content'] ?? [];
+        if (! is_array($content)) {
+            return ['mode' => 'none'];
+        }
 
         if (isset($content['application/json'])) {
-            $example = json_encode(
-                $this->exampleFromSchema($content['application/json']['schema'] ?? []),
-                JSON_PRETTY_PRINT,
-            );
-
-            return ['mode' => 'json', 'json' => $example];
+            return ['mode' => 'json', 'json' => $this->jsonBody($content['application/json'], $example)];
         }
 
         if (isset($content['multipart/form-data'])) {
             $fields = [];
-            foreach (($content['multipart/form-data']['schema']['properties'] ?? []) as $k => $v) {
+            foreach ($this->propertiesOf($content['multipart/form-data'], $example) as $name => $prop) {
+                $binary = ($prop['format'] ?? '') === 'binary';
                 $fields[] = [
-                    'name'    => $k,
-                    'value'   => '',
+                    'name' => $name,
+                    'value' => $binary ? '' : $this->scalar($example->build($prop)),
                     'enabled' => true,
-                    'type'    => ($v['format'] ?? '') === 'binary' ? 'file' : 'text',
+                    'type' => $binary ? 'file' : 'text',
                 ];
             }
 
             return ['mode' => 'multipartForm', 'multipartForm' => $fields];
         }
 
+        if (isset($content['application/x-www-form-urlencoded'])) {
+            $fields = [];
+            foreach ($this->propertiesOf($content['application/x-www-form-urlencoded'], $example) as $name => $prop) {
+                $fields[] = ['name' => $name, 'value' => $this->scalar($example->build($prop)), 'enabled' => true];
+            }
+
+            return ['mode' => 'formUrlEncoded', 'formUrlEncoded' => $fields];
+        }
+
         return ['mode' => 'none'];
     }
 
-    private function buildAuth(array $op): array
+    /**
+     * @param  array<string, mixed>  $op
+     * @param  array<string, mixed>  $spec
+     * @return array<string, mixed>
+     */
+    private function buildAuth(array $op, array $spec): array
     {
         $security = $op['security'] ?? null;
         if ($security === null) {
             return ['mode' => 'inherit'];
         }
-        if (empty($security)) {
+        if ($security === []) {
             return ['mode' => 'none'];
         }
 
-        foreach ($security as $scheme) {
-            $name = array_key_first($scheme);
-            if (str_contains(strtolower($name), 'bearer') || str_contains(strtolower($name), 'sanctum') || str_contains(strtolower($name), 'jwt')) {
+        $schemes = $this->securitySchemes($spec);
+
+        foreach ($security as $requirement) {
+            if (! is_array($requirement)) {
+                continue;
+            }
+            $name = (string) array_key_first($requirement);
+            $definition = $schemes[$name] ?? [];
+            $type = strtolower((string) ($definition['type'] ?? ''));
+            $httpScheme = strtolower((string) ($definition['scheme'] ?? ''));
+            $lowerName = strtolower($name);
+
+            if ($type === 'oauth2') {
+                return ['mode' => 'oauth2', 'oauth2' => ['grantType' => 'authorization_code', 'accessTokenUrl' => '', 'clientId' => '', 'clientSecret' => '']];
+            }
+            if ($type === 'http' && $httpScheme === 'basic') {
+                return ['mode' => 'basic', 'basic' => ['username' => '{{username}}', 'password' => '{{password}}']];
+            }
+            if ($type === 'apikey') {
+                return ['mode' => 'apikey', 'apikey' => [
+                    'key' => (string) ($definition['name'] ?? 'X-API-Key'),
+                    'value' => '{{apiKey}}',
+                    'placement' => strtolower((string) ($definition['in'] ?? 'header')) === 'query' ? 'queryparams' : 'header',
+                ]];
+            }
+            // Fall back to the scheme name when the definition is missing.
+            if (($type === 'http' && $httpScheme === 'bearer')
+                || str_contains($lowerName, 'bearer')
+                || str_contains($lowerName, 'sanctum')
+                || str_contains($lowerName, 'jwt')
+                || str_contains($lowerName, 'token')
+            ) {
                 return ['mode' => 'bearer', 'bearer' => ['token' => '{{token}}']];
             }
         }
@@ -188,22 +238,33 @@ final class BrunoExporter
         return ['mode' => 'inherit'];
     }
 
+    /**
+     * @param  array<string, mixed>  $spec
+     * @return list<array<string, mixed>>
+     */
     private function buildEnvironments(array $spec): array
     {
         $envs = [];
-        foreach ($spec['servers'] ?? [] as $server) {
-            $name    = $server['description'] ?? $server['url'];
-            $envs[]  = [
-                'name'      => $name,
+        foreach (($spec['servers'] ?? []) as $server) {
+            $url = is_array($server) ? ($server['url'] ?? '') : '';
+            if (! is_string($url) || $url === '') {
+                continue;
+            }
+            $name = is_string($server['description'] ?? null) && $server['description'] !== ''
+                ? $server['description']
+                : $url;
+
+            $envs[] = [
+                'name' => $name,
                 'variables' => [
-                    ['name' => 'baseUrl', 'value' => $server['url'], 'enabled' => true, 'secret' => false],
+                    ['name' => 'baseUrl', 'value' => $url, 'enabled' => true, 'secret' => false],
                 ],
             ];
         }
 
-        if (empty($envs)) {
+        if ($envs === []) {
             $envs[] = [
-                'name'      => 'Local',
+                'name' => 'Local',
                 'variables' => [
                     ['name' => 'baseUrl', 'value' => 'http://localhost', 'enabled' => true, 'secret' => false],
                 ],
@@ -211,22 +272,5 @@ final class BrunoExporter
         }
 
         return $envs;
-    }
-
-    private function exampleFromSchema(array $schema): mixed
-    {
-        if (isset($schema['example'])) {
-            return $schema['example'];
-        }
-
-        return match ($schema['type'] ?? 'object') {
-            'object'  => (object) array_map(fn ($v) => $this->exampleFromSchema($v), $schema['properties'] ?? []),
-            'array'   => [$this->exampleFromSchema($schema['items'] ?? [])],
-            'integer' => 1,
-            'number'  => 1.0,
-            'boolean' => true,
-            'null'    => null,
-            default   => $schema['enum'][0] ?? 'string',
-        };
     }
 }
