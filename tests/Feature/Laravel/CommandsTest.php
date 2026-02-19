@@ -39,6 +39,39 @@ it('apexdocs:generate writes JSON to a file when --output is given', function ()
         ->toBe('3.1.0');
 });
 
+it('apexdocs:generate keeps stdout free of anything but the spec', function () {
+    // `apexdocs:generate > openapi.json` has to produce a parseable file, so the
+    // "N paths in Xms" summary must go to stderr, not stdout.
+    $output = new SplitStreamOutput;
+    $exit = $this->app[Illuminate\Contracts\Console\Kernel::class]->call('apexdocs:generate', [], $output);
+
+    expect($exit)->toBe(0)
+        ->and(json_decode(trim($output->fetch()), true))->toBeArray()
+        ->and($output->stderr->fetch())->toContain('paths in');
+});
+
+it('apexdocs:generate rejects an unknown format', function () {
+    $this->artisan('apexdocs:generate', ['--format' => 'toml'])
+        ->expectsOutputToContain('Unknown format')
+        ->assertFailed();
+});
+
+it('apexdocs:export fails on an unknown format', function () {
+    $this->artisan('apexdocs:export', ['format' => 'nonsense'])
+        ->expectsOutputToContain('Unknown format')
+        ->assertFailed();
+});
+
+it('apexdocs:diff reports a corrupt baseline instead of crashing', function () {
+    $path = sys_get_temp_dir().'/apexdocs_cmd/bad.json';
+    @mkdir(dirname($path), 0755, true);
+    file_put_contents($path, 'not json at all');
+
+    $this->artisan('apexdocs:diff', ['base' => $path])
+        ->expectsOutputToContain('not a valid OpenAPI JSON document')
+        ->assertFailed();
+});
+
 it('apexdocs:generate writes YAML when --format=yaml', function () {
     $path = sys_get_temp_dir().'/apexdocs_cmd/spec.yaml';
 
@@ -111,3 +144,34 @@ it('apexdocs:diff reports an added path against an empty baseline', function () 
         ->expectsOutputToContain('BREAKING')
         ->assertFailed();
 });
+
+/**
+ * A BufferedOutput has no separate error stream, so it cannot show whether the
+ * command kept stdout clean. This double keeps the two apart the way a real
+ * terminal does.
+ */
+class SplitStreamOutput extends Symfony\Component\Console\Output\BufferedOutput implements Symfony\Component\Console\Output\ConsoleOutputInterface
+{
+    public Symfony\Component\Console\Output\BufferedOutput $stderr;
+
+    public function __construct()
+    {
+        parent::__construct();
+        $this->stderr = new Symfony\Component\Console\Output\BufferedOutput;
+    }
+
+    public function getErrorOutput(): Symfony\Component\Console\Output\OutputInterface
+    {
+        return $this->stderr;
+    }
+
+    public function setErrorOutput(Symfony\Component\Console\Output\OutputInterface $error): void
+    {
+        // Not needed for the assertion.
+    }
+
+    public function section(): Symfony\Component\Console\Output\ConsoleSectionOutput
+    {
+        throw new RuntimeException('sections are not used by these commands');
+    }
+}

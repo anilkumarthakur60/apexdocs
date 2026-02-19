@@ -17,15 +17,23 @@ class DiffCommand extends Command
 
     public function handle(ApexDocs $apexDocs): int
     {
-        $basePath = $this->argument('base');
+        $basePath = (string) $this->argument('base');
 
-        if (! file_exists($basePath)) {
-            $this->error("Baseline file not found: {$basePath}");
+        if (! is_file($basePath) || ! is_readable($basePath)) {
+            $this->error("Baseline file not found or unreadable: {$basePath}");
 
             return self::FAILURE;
         }
 
-        $base = json_decode(file_get_contents($basePath), true);
+        $raw = file_get_contents($basePath);
+        $base = $raw === false ? null : json_decode($raw, true);
+
+        if (! is_array($base) || ! $this->hasUsablePaths($base)) {
+            $this->error("Baseline is not a valid OpenAPI JSON document: {$basePath}");
+
+            return self::FAILURE;
+        }
+
         $current = $apexDocs->generate()->toArray();
 
         [$breaking, $added, $changed] = $this->diff($base, $current);
@@ -50,6 +58,29 @@ class DiffCommand extends Command
         $this->line(count($breaking).' breaking · '.count($added).' added · '.count($changed).' changed');
 
         return empty($breaking) ? self::SUCCESS : self::FAILURE;
+    }
+
+    /**
+     * `paths` and every path item must be maps before the diff walks them; a
+     * scalar anywhere in there would reach array_keys() and throw.
+     *
+     * @param  array<string, mixed>  $base
+     */
+    private function hasUsablePaths(array $base): bool
+    {
+        if (! array_key_exists('paths', $base)) {
+            return true;
+        }
+        if (! is_array($base['paths'])) {
+            return false;
+        }
+        foreach ($base['paths'] as $item) {
+            if (! is_array($item)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function diff(array $base, array $current): array
@@ -101,6 +132,22 @@ class DiffCommand extends Command
                     $changed[] = strtoupper($m)." {$path}: param '{$p}' no longer required";
                 }
 
+                // Newly required request-body fields break existing clients too
+                $bBody = $this->requiredBodyFields($baseOp);
+                $cBody = $this->requiredBodyFields($currentOp);
+                foreach (array_diff($cBody, $bBody) as $field) {
+                    $breaking[] = strtoupper($m)." {$path}: new required body field '{$field}'";
+                }
+
+                // A response status a client relied on has disappeared
+                $bStatuses = array_keys($baseOp['responses'] ?? []);
+                $cStatuses = array_keys($currentOp['responses'] ?? []);
+                foreach (array_diff($bStatuses, $cStatuses) as $status) {
+                    if ((int) $status >= 200 && (int) $status < 400) {
+                        $breaking[] = strtoupper($m)." {$path}: response {$status} removed";
+                    }
+                }
+
                 if (! ($baseOp['deprecated'] ?? false) && ($currentOp['deprecated'] ?? false)) {
                     $changed[] = strtoupper($m)." {$path}: deprecated";
                 }
@@ -110,11 +157,32 @@ class DiffCommand extends Command
         return [$breaking, $added, $changed];
     }
 
+    /** @return list<string> */
     private function requiredParams(array $op): array
     {
-        return array_map(
-            fn ($p) => $p['name'].':'.$p['in'],
-            array_filter($op['parameters'] ?? [], fn ($p) => $p['required'] ?? false),
-        );
+        $out = [];
+        foreach ($op['parameters'] ?? [] as $param) {
+            if (is_array($param) && isset($param['name'], $param['in']) && ($param['required'] ?? false)) {
+                $out[] = $param['name'].':'.$param['in'];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Body fields that a client must now send but did not before.
+     *
+     * @param  array<string, mixed>  $op
+     * @return list<string>
+     */
+    private function requiredBodyFields(array $op): array
+    {
+        $schema = $op['requestBody']['content']['application/json']['schema'] ?? null;
+        if (! is_array($schema) || ! is_array($schema['required'] ?? null)) {
+            return [];
+        }
+
+        return array_values(array_filter($schema['required'], 'is_string'));
     }
 }
