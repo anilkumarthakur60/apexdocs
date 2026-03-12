@@ -56,15 +56,16 @@ final class Handler implements RequestHandlerInterface
     {
         $params = $request->getQueryParams();
         $config = $this->apexDocs->getConfig();
-        $ui = is_string($params['ui'] ?? null) ? $params['ui'] : $config->defaultUi;
-        $specUrl = $this->specUrlFromRequest($request);
+        $theme = UiRenderer::normalizeTheme($params['theme'] ?? null, $config->theme);
 
-        return $this->uiRenderer->render($ui, $specUrl, $config);
+        return $this->uiRenderer->render($this->specUrlFromRequest($request), $config, $theme);
     }
 
     private function specUrlFromRequest(ServerRequestInterface $request): string
     {
-        $uri = $request->getUri();
+        // Build from the path alone: keeping the query string would produce
+        // "/docs?theme=light/spec.json" whenever the page is deep-linked.
+        $uri = $request->getUri()->withQuery('')->withFragment('');
 
         return rtrim((string) $uri, '/').'/spec.json';
     }
