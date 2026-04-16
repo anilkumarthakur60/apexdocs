@@ -20,17 +20,19 @@ Laravel 11 and 12.
 - **Bug fixes** — always welcome. Include a Pest test that fails without your
   change.
 - **New features** — open an issue first so we can align on scope. The core
-  ships intentionally lean; framework specifics live in bridges, UI specifics
-  live behind the `UiBackend` strategy.
+  ships intentionally lean; framework specifics live in bridges, and the
+  documentation UI lives in `Http\UiRenderer` with its palette in `Http\Theme`.
 - **Documentation** — corrections, clarifications, and examples are always
   welcome and don't require an issue.
 
 ## What to avoid
 
-- New runtime dependencies. The core has eight PSR / Symfony deps and zero
-  framework deps — adding to that list needs strong justification.
-- Tooling sprawl. The project uses Pest only. We do not run PHPStan, Pint,
-  Rector, Infection, etc. in CI. Style is enforced by review, not by tools.
+- New runtime dependencies. The core requires `phpstan/phpdoc-parser`,
+  `symfony/yaml`, and three PSR interface packages — and zero framework
+  packages. Adding to that list needs strong justification.
+- Tooling sprawl. The project uses Pest only. CI runs `composer ci`
+  (`php -l` over every file, the Pest suite, and `composer audit`); it does not
+  run PHPStan, Pint, Rector, or Infection. Style is enforced by review.
 - Breaking changes to the public API (`ApexDocs\ApexDocs`, `ApexDocs\Config`,
   `ApexDocs\Contract\*`, `ApexDocs\Attribute\*`) without a deprecation cycle.
   Internals (`Generator/`, `Extractor/`, `Http/`) carry no BC promise.
@@ -60,3 +62,17 @@ Squash-merge is the default — write the final commit message in the PR body.
 ## Security issues
 
 Do not file a public issue. See `SECURITY.md`.
+
+## Releasing
+
+Maintainers only.
+
+1. Move the `[Unreleased]` section of `CHANGELOG.md` under a new version
+   heading with today's date, and add the compare/release links at the bottom.
+2. Note any breaking change in `UPGRADING.md`, with the migration step.
+3. `composer ci` — green.
+4. Tag and push: `git tag 0.2.0 && git push origin main --tags`.
+
+Pushing a SemVer tag triggers `.github/workflows/release.yml`, which publishes a
+GitHub Release using that CHANGELOG section as the body. Packagist picks the tag
+up through the GitHub webhook — no manual step.

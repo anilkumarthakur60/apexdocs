@@ -28,21 +28,24 @@ you in the release notes unless you ask us not to.
 
 ## Out of scope
 
-- Vulnerabilities in third-party UI backends (Scalar, Swagger, Redoc, Stoplight,
-  RapiDoc) loaded via their own CDNs. Report those to their respective
-  maintainers.
 - Issues that require an attacker to already have write access to your
   controller source or `apexdocs` configuration.
 - Findings in tooling-only dev dependencies (Orchestra Testbench, etc.).
 
 ## Hardening notes for operators
 
-- Mount the documentation routes behind authentication in production. The
-  default Laravel route group uses the `web` middleware — replace with
-  `auth` (or a custom guard) if your spec is not public.
-- Set `apexdocs.servers` explicitly in production. Without it, the spec falls
-  back to a constant default and the Laravel bridge injects `config('app.url')`
-  — make sure your `APP_URL` is correct.
-- Disable the `apexdocs:mock` command in production by removing
-  `MockCommand::class` from the service provider's command list. The mock
-  server is for local development only.
+- **The docs routes are not registered in production by default.**
+  `apexdocs.environments` defaults to `['local', 'staging']`. If you add
+  `production` to that list, also replace the default `['web']` middleware with
+  `['web', 'auth']` or a guard of your own — an OpenAPI document is a complete
+  map of your API surface, including parameter names and validation rules.
+- **Set `apexdocs.servers` explicitly in production.** Without it the Laravel
+  bridge injects `config('app.url')`, so make sure `APP_URL` is correct. The
+  generator never reads `$_SERVER`, so a forged `Host` header cannot end up in a
+  cached spec served to every consumer.
+- **Treat `apexdocs:mock` as a local tool.** It binds `127.0.0.1` by default and
+  serves example data from your spec with no authentication; do not bind it to a
+  public interface.
+- **`ui.announcement_banner` is rendered as raw HTML** so it can carry links.
+  Only put trusted content there — it is configuration, not user input, and is
+  not escaped.
