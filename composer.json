@@ -43,6 +43,8 @@
         "psr/http-factory-implementation": "Needed only for the PSR-15 handler (ApexDocs\\Http\\Handler)"
     },
 
+    "bin": ["bin/apexdocs-mcp"],
+
     "autoload": {
         "psr-4": {
             "ApexDocs\\": "src/"

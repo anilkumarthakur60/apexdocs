@@ -1,0 +1,83 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+/**
+ * Standalone ApexDocs MCP server for non-Laravel projects (Symfony, Slim,
+ * plain PHP).
+ *
+ *   vendor/bin/apexdocs-mcp --bootstrap=apexdocs.php
+ *
+ * The bootstrap file must `return` a configured ApexDocs\ApexDocs instance
+ * (routes attached). Because a long-lived PHP process cannot reload classes,
+ * the default is to run the bootstrap in a fresh subprocess for every
+ * snapshot (--mode=subprocess); pass --mode=in-process to build snapshots in
+ * this process instead (faster, but edits are not seen until restart).
+ *
+ *   vendor/bin/apexdocs-mcp --bootstrap=apexdocs.php --snapshot
+ *
+ * prints one JSON snapshot and exits — this is what the subprocess mode runs.
+ */
+
+$autoloads = [
+    __DIR__.'/../../../autoload.php',   // installed in vendor/anil/apexdocs/bin
+    __DIR__.'/../vendor/autoload.php',  // package checkout
+];
+foreach ($autoloads as $autoload) {
+    if (is_file($autoload)) {
+        require $autoload;
+        break;
+    }
+}
+
+$options = getopt('', ['bootstrap:', 'mode::', 'snapshot', 'timeout::', 'help']);
+
+if (isset($options['help']) || ! isset($options['bootstrap'])) {
+    fwrite(STDERR, <<<'TXT'
+    Usage: apexdocs-mcp --bootstrap=<file.php> [--mode=subprocess|in-process] [--timeout=120] [--snapshot]
+
+      --bootstrap  PHP file that returns a configured ApexDocs\ApexDocs instance
+      --mode       subprocess (default; sees code changes) or in-process
+      --timeout    seconds a snapshot subprocess may take (default 120)
+      --snapshot   print one JSON snapshot and exit (used internally)
+
+    TXT);
+    exit(isset($options['help']) ? 0 : 64);
+}
+
+$bootstrap = (string) $options['bootstrap'];
+if (! is_file($bootstrap)) {
+    fwrite(STDERR, "Bootstrap file not found: {$bootstrap}\n");
+    exit(66);
+}
+$bootstrap = (string) realpath($bootstrap);
+
+$load = static function () use ($bootstrap): ApexDocs\ApexDocs {
+    $instance = require $bootstrap;
+    if (! $instance instanceof ApexDocs\ApexDocs) {
+        throw new RuntimeException("{$bootstrap} must return an ApexDocs\\ApexDocs instance, got ".get_debug_type($instance));
+    }
+
+    return $instance;
+};
+
+if (isset($options['snapshot'])) {
+    echo json_encode(
+        ApexDocs\Mcp\Snapshot::fromApexDocs($load())->toArray(),
+        JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,
+    ), "\n";
+    exit(0);
+}
+
+$mode = (string) ($options['mode'] ?? 'subprocess');
+$provider = $mode === 'in-process'
+    ? new ApexDocs\Mcp\InProcessSnapshotProvider($load())
+    : new ApexDocs\Mcp\SubprocessSnapshotProvider(
+        [PHP_BINARY, __FILE__, '--bootstrap='.$bootstrap, '--snapshot'],
+        dirname($bootstrap),
+        max(5, (int) ($options['timeout'] ?? 120)),
+    );
+
+$server = new ApexDocs\Mcp\McpServer($provider, dirname(__DIR__).'/resources/ai');
+$server->serve(STDIN, STDOUT);
