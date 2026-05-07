@@ -20,13 +20,15 @@ Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or a
 - [Quick Start](#quick-start)
 - [Configuration (Laravel)](#configuration-laravel)
 - [PHP Attributes](#php-attributes)
+- [DTO Schemas](#dto-schemas)
 - [Artisan Commands](#artisan-commands-laravel)
+- [AI Assistants (Skills, Agents & MCP)](#ai-assistants-skills-agents--mcp)
 - [Standalone Usage](#standalone-usage-no-framework)
 - [Symfony](#symfony)
-- [PSR-15 Frameworks](#psrr-15-slim-mezzio-etc)
+- [PSR-15 Frameworks](#psr-15-slim-mezzio-etc)
 - [Custom Framework Bridge](#custom-framework-bridge)
 - [Customisation](#customisation)
-- [UI Options](#ui-options)
+- [The Documentation UI](#the-documentation-ui)
 - [Restricting Access](#restricting-access)
 - [Caching](#caching)
 - [Architecture](#architecture)
@@ -41,9 +43,10 @@ Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or a
 - Any **PSR-7/PSR-15** framework via the built-in HTTP handler
 - Auto-detects **Sanctum**, **Passport**, and **JWT** security from middleware
 - Extracts request schemas from Laravel **FormRequest** rules
-- Serves interactive docs with **5 UI options** (Scalar, Swagger UI, ReDoc, Stoplight Elements, RapiDoc)
-- Exports to **Postman Collection** and **Insomnia**
+- Serves interactive docs from a **native, CDN-free UI** — sidebar, command palette, try-it-out, code samples, zero outbound requests
+- Exports to **Postman Collection v2.1**, **Insomnia**, and **Bruno**
 - Breaking change detection, watch mode, and mock server
+- **AI-assistant ready**: ships a skill, a subagent and an **MCP server** so Claude Code, Cursor, Copilot and Codex can inspect and improve the generated spec
 
 ---
 
@@ -51,6 +54,10 @@ Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or a
 
 - PHP 8.2+
 - Laravel 11 or 12 (for the Laravel bridge)
+- Symfony 6.4, 7, or 8 (for the Symfony bridge)
+
+The core depends only on `phpstan/phpdoc-parser`, `symfony/yaml` (6.4 through
+8), and the PSR interfaces for caching and HTTP messages — no framework.
 
 ---
 
@@ -104,8 +111,12 @@ After installing, visit these URLs:
 | `/documentation/api/spec.yaml` | OpenAPI 3.1 YAML |
 | `/documentation/api/postman` | Postman Collection v2.1 |
 | `/documentation/api/insomnia` | Insomnia export |
+| `/documentation/api/bruno` | Bruno collection |
 
 No configuration is required. Routes with the `api` prefix are included automatically.
+
+By default the docs are registered only in the `local` and `staging`
+environments — see [Restricting Access](#restricting-access).
 
 ---
 
@@ -116,79 +127,90 @@ No configuration is required. Routes with the `api` prefix are included automati
 ```php
 return [
 
-    // API metadata
+    // API metadata. Read APP_NAME via env(): config files load alphabetically,
+    // so config('app.name') is still null while this file is parsed.
     'info' => [
-        'title'           => env('APP_NAME') . ' API',
-        'version'         => '1.0.0',
-        'description'     => '',
-        'contact'         => ['name' => '', 'email' => '', 'url' => ''],
-        'license'         => ['name' => '', 'url' => ''],
+        'title'            => env('APEXDOCS_TITLE', env('APP_NAME', 'Laravel') . ' API'),
+        'version'          => env('APEXDOCS_VERSION', '1.0.0'),
+        'description'      => env('APEXDOCS_DESCRIPTION', ''),
+        'contact'          => ['name' => '', 'email' => '', 'url' => ''],
+        'license'          => ['name' => '', 'url' => ''],
         'terms_of_service' => '',
     ],
 
-    // Only routes whose URI starts with these prefixes are included
-    'api_path_prefix' => 'api',    // string or array: ['api', 'v2']
+    // Only routes whose URI starts with these prefixes are documented.
+    // String or array; an empty array documents every route.
+    'api_path_prefix' => env('APEXDOCS_PATH_PREFIX', 'api'),
 
-    // Paths to exclude (prefix match)
+    // Glob or anchored-regex patterns; matching routes are skipped.
+    // 'api/internal/*' (glob) or '.*internal.*' (regex)
     'exclude_paths' => [],
 
-    // Manually declare server URLs (auto-detected from APP_URL when empty)
+    // Only include routes tagged #[ApiGroup('name')] when set.
+    'spec_group' => env('APEXDOCS_SPEC_GROUP', ''),
+
+    // Server URLs. Empty → APP_URL is used.
     'servers' => [
         // ['url' => 'https://api.example.com', 'description' => 'Production'],
     ],
 
     'ui' => [
-        'default'          => 'scalar',    // scalar | swagger | redoc | stoplight | rapidoc
-        'path'             => 'documentation/api',  // URL where docs are served
-        'show_ui_switcher' => true,        // show UI switcher toolbar
+        'path'                     => env('APEXDOCS_PATH', 'documentation/api'),
+        'show_toolbar'             => true,     // false hides the header bar
+        'theme'                    => env('APEXDOCS_THEME', 'dark'),  // dark | light | auto
+        'custom_logo'              => '',
+        'custom_css'               => '',
+        'announcement_banner'      => '',
+        'announcement_banner_type' => 'info',   // info | warning | error
+        'try_it_out'               => true,
+        'default_language'         => 'curl',   // curl | js | python | php | go
     ],
 
     'security' => [
         // Auto-detect Sanctum / Passport / JWT from route middleware
         'auto_detect' => true,
-        // Add custom OpenAPI security scheme objects
+        // Extra OpenAPI security scheme objects
         'schemes' => [
             // 'apiKey' => ['type' => 'apiKey', 'in' => 'header', 'name' => 'X-API-Key'],
         ],
     ],
 
     'responses' => [
-        'infer_error_responses'     => true,  // auto-add 4xx/5xx responses
-        'include_validation_errors' => true,  // include validation error schema
-        'include_pagination_meta'   => true,  // include pagination metadata
-        'max_depth'                 => 6,     // max nested schema depth
+        'infer_error_responses'     => true,  // add 401 for auth-protected routes
+        'include_validation_errors' => true,  // add 422 + ValidationError schema
+        'include_pagination_meta'   => true,  // add meta/links to collections
+        'max_depth'                 => 6,     // DTO recursion limit
     ],
 
     'rate_limits' => [
-        'enabled' => true,  // document rate limit response headers
+        'enabled' => true,  // add 429 + rate-limit headers for throttled routes
     ],
 
+    // Directories scanned for classes carrying #[Webhook]
     'webhooks' => [
-        'enabled'    => true,
         'scan_paths' => [
-            // app_path('Events'),
+            // app_path('Webhooks'),
         ],
     ],
 
+    // Building the spec reflects every controller — cache it outside local dev.
     'cache' => [
-        'enabled' => env('APEXDOCS_CACHE_ENABLED', ! app()->environment('local')),
-        'driver'  => env('APEXDOCS_CACHE_DRIVER', 'file'),
-        'ttl'     => 3600,
+        'enabled' => env('APEXDOCS_CACHE_ENABLED', env('APP_ENV', 'production') !== 'local'),
+        'driver'  => env('APEXDOCS_CACHE_DRIVER'),   // any store from config/cache.php
+        'ttl'     => (int) env('APEXDOCS_CACHE_TTL', 3600),
     ],
 
-    // Middleware applied to the /docs routes
-    'middleware' => ['web'],
-
-    // Docs are only visible in these environments
+    // Middleware on the docs routes, and the environments they exist in.
+    'middleware'   => ['web'],
     'environments' => ['local', 'staging'],
-
-    // Transformer classes (see Customisation section)
-    'document_transformers'  => [],
-    'operation_transformers' => [],
 
     'export' => [
         'default_path' => storage_path('apexdocs'),
     ],
+
+    // Transformer class names (see Customisation)
+    'document_transformers'  => [],
+    'operation_transformers' => [],
 ];
 ```
 
@@ -286,6 +308,46 @@ public function login() { ... }
 public function show(User $user) { ... }
 ```
 
+### DTO Schemas
+
+Response and request schemas are reflected from your classes. Public properties
+and promoted constructor parameters become properties; `@var` / `@param`
+annotations supply the element type where the PHP type cannot:
+
+```php
+use ApexDocs\Attribute\Schema;
+
+#[Schema(description: 'A customer order')]
+final class OrderDto
+{
+    /**
+     * @param  OrderLineDto[]  $lines           // → array of $ref
+     * @param  array<string, string>  $meta     // → object with additionalProperties
+     */
+    public function __construct(
+        public readonly int $id,
+        public readonly ?string $note,          // → type: ["string", "null"]
+        public readonly OrderStatus $status,    // → enum from the backed enum
+        public readonly array $lines = [],
+        public readonly array $meta = [],
+    ) {}
+}
+```
+
+Each class is emitted once under `components/schemas` and referenced by `$ref`
+everywhere else, including recursive and mutually recursive DTOs. Two classes
+sharing a short name get distinct component names. Nesting is bounded by
+`responses.max_depth`.
+
+Return types are read the same way, with generics unwrapped:
+
+```php
+/** @return OrderDto[] */                          // array of $ref
+/** @return Collection<int, OrderDto> */           // array of $ref
+/** @return LengthAwarePaginator<OrderDto> */      // array of $ref
+/** @return array<string, OrderDto> */             // object map of $ref
+```
+
 ### Webhooks
 
 ```php
@@ -320,20 +382,32 @@ Enable webhook scanning in config:
 
 | Attribute | Target | Purpose |
 |-----------|--------|---------|
-| `#[Group(name, description?)]` | Class | Tag all methods under a group |
+| `#[Group(name, description?)]` | Class | Tag all methods under a group (the description lands on the tag) |
 | `#[Endpoint(summary, description?)]` | Method | Override summary/description |
-| `#[Tag(name, description?)]` | Class, Method | Add OpenAPI tags |
+| `#[Tag(name, description?)]` | Class, Method | Add OpenAPI tags (repeatable) |
 | `#[Hidden]` | Class, Method | Exclude from spec |
 | `#[Deprecated(message?, since?)]` | Class, Method | Mark as deprecated |
 | `#[NoSecurity]` | Class, Method | Mark as public |
 | `#[Security(scheme, scopes?)]` | Class, Method | Declare required security |
-| `#[PathParam(name, type?, description?, example?)]` | Method | Document path parameter |
-| `#[QueryParam(name, type?, description?, required?, example?, enum?, deprecated?)]` | Method | Document query parameter |
-| `#[HeaderParam(name, type?, description?, required?, example?)]` | Method | Document header parameter |
-| `#[CookieParam(name, type?, description?, required?, example?)]` | Method | Document cookie parameter |
-| `#[ApiResponse(status, description?, resource?, collection?, schema?, headers?)]` | Method | Document a response |
-| `#[Example(name, value, summary?, for?)]` | Method | Attach an example |
+| `#[PathParam(name, type?, description?, example?, deprecated?)]` | Class, Method | Document path parameter |
+| `#[QueryParam(name, type?, description?, required?, example?, enum?, deprecated?)]` | Class, Method | Document query parameter |
+| `#[HeaderParam(name, type?, description?, required?, example?, deprecated?)]` | Class, Method | Document header parameter |
+| `#[CookieParam(name, type?, description?, required?, example?, deprecated?)]` | Class, Method | Document cookie parameter |
+| `#[ApiResponse(status, description?, resource?, collection?, schema?, headers?, examples?)]` | Method | Document a response |
+| `#[Example(name, value, summary?, for?)]` | Method | Attach a request or response example |
+| `#[BodyParam(name, type?, description?, required?, example?, enum?, format?, nullable?)]` | Class, Method | Document one body field |
+| `#[RequestBody(class, description?, required?, contentType?)]` | Method | Build the body schema from a DTO |
+| `#[ResponseHeader(name, type?, description?, example?, required?)]` | Class, Method | Document a response header |
+| `#[Produces(contentType, description?, schema?)]` | Method | Override the success response media type |
+| `#[Schema(title?, description?, example?, deprecated?, externalDocs?)]` | Class | Describe a DTO |
+| `#[ExternalDocs(url, description?)]` | Class, Method | Link to external docs |
+| `#[SunsetDate(date, migrationGuide?)]` | Class, Method | Planned removal date (adds a Sunset header) |
+| `#[ApiGroup(name)]` | Class, Method | Assign to a named spec group |
 | `#[Webhook(name, summary?, description?, schema?, tags?)]` | Class | Register as webhook |
+
+Parameter attributes work on the class (applying to every action) as well as on
+a single method; a method-level attribute wins where both define the same
+parameter.
 
 ---
 
@@ -342,13 +416,13 @@ Enable webhook scanning in config:
 ### Generate
 
 ```bash
-# Print JSON to stdout
-php artisan apexdocs:generate
+# Print JSON to stdout — nothing else goes to stdout, so redirection is safe
+php artisan apexdocs:generate > public/openapi.json
 
 # YAML format
 php artisan apexdocs:generate --format=yaml
 
-# Save to file
+# Save to file (the summary then prints normally)
 php artisan apexdocs:generate --output=public/openapi.json
 ```
 
@@ -356,9 +430,17 @@ php artisan apexdocs:generate --output=public/openapi.json
 
 ```bash
 php artisan apexdocs:validate
+
+# Fail the build on warnings too
+php artisan apexdocs:validate --strict
 ```
 
-Checks for missing operation IDs, empty summaries, unreachable paths, and other issues.
+Errors (exit code 1): missing `info.title`/`info.version`, no paths, a response
+with no `description`, an invalid status key, duplicate `operationId`s, a path
+template variable with no matching parameter, an unresolved `$ref`, and a
+security requirement naming an undefined scheme.
+
+Warnings: missing `operationId`, missing `summary`.
 
 ### Export
 
@@ -367,7 +449,11 @@ php artisan apexdocs:export openapi-json  --output=storage/apexdocs/spec.json
 php artisan apexdocs:export openapi-yaml  --output=storage/apexdocs/spec.yaml
 php artisan apexdocs:export postman       --output=storage/apexdocs/postman.json
 php artisan apexdocs:export insomnia      --output=storage/apexdocs/insomnia.json
+php artisan apexdocs:export bruno         --output=storage/apexdocs/bruno.json
 ```
+
+Without `--output`, files land in `export.default_path`. An unknown format or a
+failed write exits non-zero.
 
 ### Detect Breaking Changes
 
@@ -400,6 +486,41 @@ php artisan apexdocs:mock
 php artisan apexdocs:mock --host=127.0.0.1 --port=8081
 ```
 
+Each endpoint answers with an example built from its lowest documented 2xx
+response, including any documented response headers. Append `?__status=404` to
+any request to get a different documented response instead.
+
+---
+
+## AI Assistants (Skills, Agents & MCP)
+
+Let AI coding agents work with the generated documentation instead of guessing at it. One
+command installs a **skill** (how apexdocs works — every attribute, inference rule, config key),
+a **subagent** (a documentation specialist), an instructions block for `CLAUDE.md` / `AGENTS.md`,
+and registers the **MCP server**:
+
+```bash
+php artisan apexdocs:install-ai                 # Claude Code + AGENTS.md (default)
+php artisan apexdocs:install-ai --target=all    # + Cursor + GitHub Copilot
+```
+
+The MCP server (`php artisan apexdocs:mcp`) rebuilds the spec **from the code on disk in a fresh
+process on every call**, so an agent always sees the effect of its last edit:
+
+| Tool | Purpose |
+|---|---|
+| `spec_summary` | counts, tags, servers, security schemes, how many routes were excluded and why |
+| `list_routes` | every framework route with `included` and the exact exclusion reason (`api_path_prefix`, `exclude_paths`, `spec_group`, `filterRoutes`, `hidden`) |
+| `list_operations` / `describe_operation` | operations (filter by tag/method/path/security) and the full Operation Object + source route |
+| `list_schemas` / `get_schema` | `components/schemas` |
+| `validate_spec` / `diff_spec` | the same rules as `apexdocs:validate` / `apexdocs:diff` |
+| `export_spec` | write OpenAPI JSON/YAML, Postman, Insomnia or Bruno |
+| `get_config` / `attribute_reference` | effective config; live reflection of every `#[Attribute]` |
+| `read_reference` / `search_reference` | the bundled reference set (attributes, schemas & types, inference, config, commands, Laravel, Symfony, standalone, customisation, exports, validation & diff, testing) |
+
+Non-Laravel projects get the same server from `vendor/bin/apexdocs-mcp --bootstrap=apexdocs.php`,
+where `apexdocs.php` returns a configured `ApexDocs\ApexDocs` instance.
+
 ---
 
 ## Standalone Usage (No Framework)
@@ -416,6 +537,12 @@ $routes = new ArrayRouteCollection([
     new Route(['GET'],    '/api/users/{id}', [UserController::class, 'show']),
     new Route(['DELETE'], '/api/users/{id}', [UserController::class, 'destroy']),
 ]);
+
+// …or fluently, with "Class@method" handlers:
+$routes = (new ArrayRouteCollection)
+    ->add('GET',  '/api/users',      UserController::class . '@index')
+    ->add('POST', '/api/users',      UserController::class . '@store')
+    ->add('GET',  '/api/users/{id}', UserController::class . '@show');
 
 $config = Config::fromArray([
     'title'   => 'My API',
@@ -435,19 +562,70 @@ $array = $doc->toArray();
 
 ## Symfony
 
+Register the bundle in `config/bundles.php`:
+
+```php
+return [
+    // …
+    ApexDocs\Bridge\Symfony\ApexDocsBundle::class => ['all' => true],
+];
+```
+
+Configure it in `config/packages/apex_docs.yaml`:
+
+```yaml
+apex_docs:
+    info:
+        title: My API
+        version: '2.0.0'
+    api_path_prefix: api
+    ui:
+        default: apex
+    responses:
+        max_depth: 6
+```
+
+The bundle registers `ApexDocs\ApexDocs` as a public service, wired to Symfony's
+router, `#[MapRequestPayload]` bodies, and `#[IsGranted]` security. It does not
+register a docs route — mount the PSR-15 handler (below) or write a thin
+controller:
+
+```php
+use ApexDocs\ApexDocs;
+use ApexDocs\Http\SpecPayload;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
+
+class DocsController
+{
+    public function __construct(private ApexDocs $apexDocs) {}
+
+    #[Route('/documentation/api/spec.json')]
+    public function spec(): Response
+    {
+        $payload = SpecPayload::json($this->apexDocs);
+
+        return new Response($payload->body, 200, ['Content-Type' => $payload->contentType]);
+    }
+}
+```
+
+Or use it standalone, with no container:
+
 ```php
 use ApexDocs\ApexDocs;
 use ApexDocs\Config;
 use ApexDocs\Bridge\Symfony\RouteCollection;
 
-$routes = new RouteCollection($symfonyRouter);
-
 $doc = ApexDocs::make(Config::fromArray(['title' => 'My API']))
-    ->routes($routes)
+    ->routes(new RouteCollection($symfonyRouter))
     ->generate();
 
 echo $doc->toJson();
 ```
+
+Inline route requirements are understood: `/users/{id<\d+>}` is documented as
+`/users/{id}` with an integer parameter.
 
 ---
 
@@ -477,6 +655,7 @@ The handler serves:
 | `/docs/spec.yaml` | OpenAPI YAML |
 | `/docs/postman` | Postman Collection download |
 | `/docs/insomnia` | Insomnia export download |
+| `/docs/bruno` | Bruno collection download |
 
 ---
 
@@ -496,9 +675,10 @@ class MyFrameworkRouteCollection implements RouteCollectionInterface
     {
         return array_map(
             fn ($r) => new Route(
-                methods: $r->getMethods(),
-                path:    $r->getUri(),
-                handler: $r->getController(),
+                methods:  $r->getMethods(),          // ['GET'] — case-insensitive
+                path:     $r->getUri(),              // /api/users/{id}
+                handler:  $r->getController(),       // "Class@method", "Class", or [Class::class, 'method']
+                metadata: ['name' => $r->getName()], // optional: also 'wheres' for param constraints
             ),
             $this->router->getRoutes()
         );
@@ -543,11 +723,16 @@ $doc = ApexDocs::make($config)
 
 ### Filter Routes
 
-```php
-// Laravel — in a service provider or AppServiceProvider boot()
-use ApexDocs\Facades\ApexDocs;
+ApexDocs values are immutable: every fluent call returns a new instance. In
+Laravel, extend the container binding so the filter survives:
 
-ApexDocs::filterRoutes(fn ($route) => str_starts_with($route->path, '/api/v2'));
+```php
+// AppServiceProvider::boot()
+use ApexDocs\ApexDocs;
+
+$this->app->extend(ApexDocs::class, fn (ApexDocs $docs) => $docs->filterRoutes(
+    fn ($route) => str_starts_with($route->path, '/api/v2'),
+));
 ```
 
 ### Document Transformer
@@ -562,9 +747,10 @@ use ApexDocs\Spec\Document;
 
 class AddBuildMetaTransformer implements DocumentTransformerInterface
 {
-    public function transform(Document $document): Document
+    // Mutate in place and return nothing — the document is passed by handle.
+    public function transform(Document $document): void
     {
-        return $document->extend('x-build-sha', env('GIT_SHA', 'local'));
+        $document->extend('x-build-sha', env('GIT_SHA', 'local'));
     }
 }
 ```
@@ -586,13 +772,12 @@ namespace App\OpenApi;
 
 use ApexDocs\Contract\OperationTransformerInterface;
 use ApexDocs\Spec\Operation;
-use ApexDocs\Route\Route;
 
 class AddOwnerTagTransformer implements OperationTransformerInterface
 {
-    public function transform(Operation $operation, Route $route): Operation
+    public function transform(Operation $operation): void
     {
-        return $operation->extend('x-owner', 'backend-team');
+        $operation->extend('x-owner', 'backend-team');
     }
 }
 ```
@@ -608,34 +793,50 @@ Register in `config/apexdocs.php`:
 ### Programmatic / Fluent API
 
 ```php
-use ApexDocs\Facades\ApexDocs;
+use ApexDocs\ApexDocs;
 
 $doc = ApexDocs::make()
+    ->routes($routeCollection)
     ->filterRoutes(fn ($route) => ! str_contains($route->path, '/internal/'))
     ->transformDocument(fn ($doc) => $doc->extend('x-build', env('CI_COMMIT')))
     ->transformOperation(fn ($op, $route) => $op->extend('x-team', 'backend'))
     ->generate();
 ```
 
+Closure transformers receive the `Operation` and, for operation transformers,
+the `ApexDocs\Route\Route` it came from. Class-based transformers implement the
+interfaces above, which take the spec object alone.
+
+Inside Laravel the same thing, via the facade — note that each call returns a
+new instance, so the chain must end in `generate()`:
+
+```php
+use ApexDocs; // the facade alias registered by the service provider
+
+$doc = ApexDocs::transformDocument(fn ($doc) => $doc->extend('x-build', 'abc'))->generate();
+```
+
 ---
 
-## UI Options
+## The Documentation UI
 
-Five documentation UIs are supported. Change the default in config or switch live using the in-browser toolbar:
+There is one UI, rendered entirely by PHP: a sidebar endpoint tree, a command
+palette, schema browser, code samples in five languages, and try-it-out. It
+makes **no outbound request** — no CDN script, no web font, no remote
+stylesheet — so it works behind a strict CSP and on an air-gapped host.
 
-| Value | UI |
-|-------|----|
-| `scalar` | [Scalar](https://scalar.com) *(default)* |
-| `swagger` | Swagger UI |
-| `redoc` | ReDoc |
-| `stoplight` | Stoplight Elements |
-| `rapidoc` | RapiDoc |
+`ui.theme` takes `dark`, `light` or `auto`; `auto` tracks the operating system
+preference. The theme switches instantly through CSS custom properties. A
+`?theme=dark|light|auto` query parameter overrides it for one page load, which
+is what you want when linking someone to the docs from a light-themed app.
 
 ```php
 // config/apexdocs.php
 'ui' => [
-    'default'          => 'redoc',
-    'show_ui_switcher' => true,
+    'show_toolbar' => true,     // false hides the header bar entirely
+    'theme'        => 'dark',   // dark | light | auto
+    'custom_css'   => '.axi-path { font-weight: 600 }',
+    'try_it_out'   => true,
 ],
 ```
 
@@ -643,13 +844,20 @@ Five documentation UIs are supported. Change the default in config or switch liv
 
 ## Restricting Access
 
-By default, docs are visible only in `local` and `staging` environments.
+The docs routes are registered only in the environments you list. The default
+keeps your API surface out of production:
 
 ```php
 // config/apexdocs.php
 
-// Allow in production
+// Default — no docs routes exist at all outside these environments
+'environments' => ['local', 'staging'],
+
+// Allow in production too (then put real auth in front of them)
 'environments' => ['local', 'staging', 'production'],
+
+// Every environment
+'environments' => [],
 
 // Require authentication
 'middleware' => ['web', 'auth'],
@@ -658,16 +866,21 @@ By default, docs are visible only in `local` and `staging` environments.
 'middleware' => ['web', 'auth', 'role:developer'],
 ```
 
+The gate applies to the HTTP routes only — `php artisan apexdocs:generate` and
+the other commands work in every environment, so CI can still build the spec.
+
 ---
 
 ## Caching
 
-Caching is **disabled in `local`** by default and enabled in all other environments.
+Building the spec reflects every controller, DTO, and FormRequest in the
+application, so the result is cached everywhere except `local`.
 
 ```bash
 # .env
 APEXDOCS_CACHE_ENABLED=true
 APEXDOCS_CACHE_DRIVER=redis
+APEXDOCS_CACHE_TTL=3600
 ```
 
 Or in config:
@@ -675,9 +888,25 @@ Or in config:
 ```php
 'cache' => [
     'enabled' => true,
-    'driver'  => 'redis',   // any Laravel cache driver
+    'driver'  => 'redis',   // any store name from config/cache.php; null = default
     'ttl'     => 3600,
 ],
+```
+
+The cache holds the serialised document, so `/spec.json`, `/spec.yaml`, and every
+export share one build. Clear it after a deploy:
+
+```php
+app(\ApexDocs\Cache\SpecCache::class)->forget();
+```
+
+Outside Laravel, wire any PSR-16 cache yourself:
+
+```php
+use ApexDocs\Cache\SpecCache;
+
+$cache = new SpecCache($psr16, ttl: 3600);
+$doc   = $cache->get() ?? tap($apexDocs->generate(), fn ($d) => $cache->put('default', $d));
 ```
 
 ---
@@ -696,9 +925,10 @@ Or in config:
 │                  TypeInferrer, SchemaBuilder, ...            │
 │                                                              │
 │  Export:  JsonExporter · YamlExporter · PostmanExporter      │
-│           InsomniaExporter                                   │
+│           InsomniaExporter · BrunoExporter · SchemaExample    │
 │                                                              │
-│  Http:    PSR-15 Handler · UiRenderer (5 UIs, no templates)  │
+│  Http:    PSR-15 Handler · SpecPayload                       │
+│           UiRenderer (native UI, no templates)               │
 │  Cache:   PSR-16 SpecCache                                   │
 │  Routes:  Route value object · ArrayRouteCollection          │
 │                                                              │
@@ -719,7 +949,10 @@ Or in config:
 │    Console: generate · validate · export · diff · watch·mock │
 ├──────────────────────────────────────────────────────────────┤
 │  BRIDGE / Symfony                                            │
+│    ApexDocsBundle · ApexDocsExtension (container wiring)      │
 │    RouteCollection (SymfonyRoute → Route)                    │
+│    ValidationExtractor (#[MapRequestPayload] → schema)        │
+│    SecurityDetector (#[IsGranted] → bearer)                  │
 └──────────────────────────────────────────────────────────────┘
 ```
 

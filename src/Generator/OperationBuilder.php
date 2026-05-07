@@ -7,6 +7,7 @@ namespace ApexDocs\Generator;
 use ApexDocs\Attribute\BodyParam;
 use ApexDocs\Attribute\Deprecated;
 use ApexDocs\Attribute\Endpoint;
+use ApexDocs\Attribute\Example;
 use ApexDocs\Attribute\ExternalDocs;
 use ApexDocs\Attribute\Group;
 use ApexDocs\Attribute\Hidden;
@@ -22,6 +23,7 @@ use ApexDocs\Contract\SecurityDetectorInterface;
 use ApexDocs\Contract\ValidationExtractorInterface;
 use ApexDocs\Extractor\AttributeReader;
 use ApexDocs\Extractor\DocBlockReader;
+use ApexDocs\Extractor\JsonType;
 use ApexDocs\Extractor\ParameterExtractor;
 use ApexDocs\Extractor\ResponseExtractor;
 use ApexDocs\Extractor\SchemaBuilder;
@@ -38,6 +40,12 @@ use ReflectionMethod;
  */
 final class OperationBuilder
 {
+    /** @var array<string, string> tag name => description, collected while building */
+    private array $tagDescriptions = [];
+
+    /** @var array<string, int> operationIds handed out, for uniqueness */
+    private array $operationIds = [];
+
     public function __construct(
         private ParameterExtractor $parameterExtractor,
         private ResponseExtractor $responseExtractor,
@@ -49,17 +57,23 @@ final class OperationBuilder
     ) {}
 
     /**
-     * Returns null if the route should be skipped (hidden, unresolvable handler, etc.)
+     * Returns null if the route should be skipped (marked #[Hidden]).
+     *
+     * @param  string|null  $httpMethod  the verb this operation documents; defaults
+     *                                   to the route's primary method
      */
-    public function build(Route $route): ?Operation
+    public function build(Route $route, ?string $httpMethod = null): ?Operation
     {
+        $httpMethod = strtolower($httpMethod ?? $route->method());
         [$class, $method] = $route->resolveHandler();
 
         try {
             $refClass = new ReflectionClass($class);
             $refMethod = $refClass->getMethod($method);
         } catch (ReflectionException) {
-            return null;
+            // Closure or otherwise unreflectable handler: still document what
+            // the route itself tells us rather than dropping the endpoint.
+            return $this->buildFromRouteOnly($route, $httpMethod);
         }
 
         if (AttributeReader::has($refClass, Hidden::class) || AttributeReader::has($refMethod, Hidden::class)) {
@@ -68,20 +82,46 @@ final class OperationBuilder
 
         $op = new Operation;
 
-        $this->applyMetadata($op, $route, $refClass, $refMethod);
+        $this->applyMetadata($op, $route, $refClass, $refMethod, $httpMethod);
         $this->applyParameters($op, $route, $refClass, $refMethod);
-        $this->applyRequestBody($op, $route, $refClass, $refMethod);
-        $this->applyResponses($op, $route, $refClass, $refMethod);
-        $this->applyResponseHeaders($op, $refClass, $refMethod);
+        $this->applyRequestBody($op, $route, $refClass, $refMethod, $httpMethod);
+        $this->applyResponses($op, $route, $refClass, $refMethod, $httpMethod);
         $this->applySecurity($op, $route, $refClass, $refMethod);
-        $this->applyTransformers($op);
+        $this->applyTransformers($op, $route);
 
         return $op;
     }
 
-    private function applyMetadata(Operation $op, Route $route, ReflectionClass $class, ReflectionMethod $method): void
+    /**
+     * Minimal operation for handlers we cannot reflect (closure routes).
+     *
+     * Path parameters come from the same extractor the reflected path uses, so
+     * a closure route and a controller route describe `{id}` identically.
+     */
+    private function buildFromRouteOnly(Route $route, string $httpMethod): Operation
     {
-        $op->id($this->operationId($route));
+        $op = (new Operation)
+            ->id($this->operationId($route, $httpMethod))
+            ->tags([$this->tagFromPath($route)]);
+
+        foreach ($this->parameterExtractor->fromRoute($route) as $param) {
+            $op->addParameter($param);
+        }
+
+        $op->addResponse('200', ['description' => 'OK']);
+        $this->applyTransformers($op, $route);
+
+        return $op;
+    }
+
+    private function applyMetadata(
+        Operation $op,
+        Route $route,
+        ReflectionClass $class,
+        ReflectionMethod $method,
+        string $httpMethod,
+    ): void {
+        $op->id($this->operationId($route, $httpMethod));
 
         // Summary & description: #[Endpoint] > PHPDoc
         $endpointAttr = AttributeReader::first($method, Endpoint::class);
@@ -143,20 +183,28 @@ final class OperationBuilder
         }
     }
 
-    private function applyRequestBody(Operation $op, Route $route, ReflectionClass $class, ReflectionMethod $method): void
-    {
+    private function applyRequestBody(
+        Operation $op,
+        Route $route,
+        ReflectionClass $class,
+        ReflectionMethod $method,
+        string $httpMethod,
+    ): void {
+        $requestExamples = ResponseExtractor::normaliseExamples($this->examplesFor($method, 'request'));
+
         // 1. Explicit #[RequestBody] attribute — works in any framework
         $rbAttr = AttributeReader::first($method, RequestBodyAttr::class);
         if ($rbAttr !== null) {
             $schema = $this->schemaBuilder->fromClass($rbAttr->class);
+            $mediaType = trim($rbAttr->contentType) !== '' ? trim($rbAttr->contentType) : 'application/json';
             $body = [
                 'required' => $rbAttr->required,
-                'content' => [$rbAttr->contentType => ['schema' => $schema]],
+                'content' => [$mediaType => ['schema' => $schema]],
             ];
             if ($rbAttr->description !== '') {
                 $body['description'] = $rbAttr->description;
             }
-            $op->requestBody($body);
+            $op->requestBody($this->withExamples($body, $requestExamples));
 
             return;
         }
@@ -167,14 +215,13 @@ final class OperationBuilder
             AttributeReader::all($method, BodyParam::class),
         );
         if ($bodyParams) {
-            $op->requestBody($this->buildBodyFromParams($bodyParams));
+            $op->requestBody($this->withExamples($this->buildBodyFromParams($bodyParams), $requestExamples));
 
             return;
         }
 
         // 3. Framework-specific validation extractor (FormRequest, MapRequestPayload, etc.)
-        $writes = ['POST', 'PUT', 'PATCH'];
-        if (empty(array_intersect(array_map('strtoupper', $route->methods), $writes))) {
+        if (! in_array(strtoupper($httpMethod), ['POST', 'PUT', 'PATCH'], true)) {
             return;
         }
 
@@ -184,18 +231,48 @@ final class OperationBuilder
 
         $body = $this->validationExtractor->extract($method, $route);
         if ($body !== null) {
-            $op->requestBody($body);
+            $op->requestBody($this->withExamples($body, $requestExamples));
         }
     }
 
-    /** @param list<BodyParam> $params */
+    /**
+     * @param  array<string, mixed>  $body
+     * @param  array<string, array<string, mixed>>  $examples
+     * @return array<string, mixed>
+     */
+    private function withExamples(array $body, array $examples): array
+    {
+        if ($examples === [] || ! isset($body['content']) || ! is_array($body['content'])) {
+            return $body;
+        }
+
+        $contentType = isset($body['content']['application/json'])
+            ? 'application/json'
+            : (string) array_key_first($body['content']);
+
+        $body['content'][$contentType]['examples'] = $examples;
+
+        return $body;
+    }
+
+    /**
+     * @param  list<BodyParam>  $params
+     * @return array<string, mixed>
+     */
     private function buildBodyFromParams(array $params): array
     {
         $properties = [];
         $required = [];
 
         foreach ($params as $p) {
-            $prop = ['type' => $p->type];
+            if (trim($p->name) === '') {
+                continue;
+            }
+
+            $type = JsonType::normalize($p->type);
+            // OpenAPI 3.1 encodes nullability in the type array; `nullable: true`
+            // is 3.0-only and ignored by 3.1 tooling.
+            $prop = ['type' => $p->nullable ? [$type, 'null'] : $type];
             if ($p->description !== '') {
                 $prop['description'] = $p->description;
             }
@@ -208,8 +285,8 @@ final class OperationBuilder
             if ($p->enum !== null) {
                 $prop['enum'] = $p->enum;
             }
-            if ($p->nullable) {
-                $prop['nullable'] = true;
+            if ($type === 'array' && ! isset($prop['items'])) {
+                $prop['items'] = ['type' => 'string'];
             }
             $properties[$p->name] = $prop;
 
@@ -224,58 +301,107 @@ final class OperationBuilder
         }
 
         return [
-            'required' => (bool) $required,
+            'required' => $required !== [],
             'content' => ['application/json' => ['schema' => $schema]],
         ];
     }
 
-    private function applyResponses(Operation $op, Route $route, ReflectionClass $class, ReflectionMethod $method): void
-    {
-        $producesAttrs = AttributeReader::all($method, Produces::class);
-        $responses = $this->responseExtractor->extract($route, $class, $method);
+    private function applyResponses(
+        Operation $op,
+        Route $route,
+        ReflectionClass $class,
+        ReflectionMethod $method,
+        string $httpMethod,
+    ): void {
+        $responses = $this->responseExtractor->extract($route, $class, $method, $httpMethod);
+        $successStatus = $this->firstSuccessStatus($responses);
 
-        // If #[Produces] is set, replace content type in the 200 response
-        if ($producesAttrs) {
-            foreach ($producesAttrs as $produces) {
-                if (isset($responses['200']['content'])) {
-                    $existingSchema = $responses['200']['content']['application/json']['schema']
-                        ?? $responses['200']['content'][array_key_first($responses['200']['content'])]['schema']
-                        ?? [];
-
-                    unset($responses['200']['content']['application/json']);
-                    $responses['200']['content'][$produces->contentType] = ['schema' => $produces->schema ?: $existingSchema];
-                    if ($produces->description !== '' && $responses['200']['description'] === 'OK') {
-                        $responses['200']['description'] = $produces->description;
-                    }
-                } else {
-                    // No existing content — add the declared type
-                    $responses['200']['content'] = [
-                        $produces->contentType => [
-                            'schema' => $produces->schema ?: ['type' => 'string', 'format' => 'binary'],
-                        ],
-                    ];
-                }
-            }
-        }
+        $responses = $this->applyProduces($responses, $method, $successStatus);
+        $responses = $this->applyResponseHeaders($responses, $class, $method, $successStatus);
+        $responses = $this->applyResponseExamples($responses, $method, $successStatus);
 
         foreach ($responses as $status => $response) {
             $op->addResponse((string) $status, $response);
         }
     }
 
-    private function applyResponseHeaders(Operation $op, ReflectionClass $class, ReflectionMethod $method): void
+    /**
+     * @param  array<string, array<string, mixed>>  $responses
+     */
+    private function firstSuccessStatus(array $responses): ?string
+    {
+        foreach (array_keys($responses) as $status) {
+            if ((int) $status >= 200 && (int) $status < 300) {
+                return (string) $status;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * #[Produces] replaces the media type of the success response.
+     *
+     * @param  array<string, array<string, mixed>>  $responses
+     * @return array<string, array<string, mixed>>
+     */
+    private function applyProduces(array $responses, ReflectionMethod $method, ?string $status): array
+    {
+        $producesAttrs = AttributeReader::all($method, Produces::class);
+        if ($producesAttrs === [] || $status === null) {
+            return $responses;
+        }
+
+        $existing = $responses[$status]['content'] ?? [];
+        $inheritedSchema = [];
+        if (is_array($existing) && $existing !== []) {
+            $firstKey = (string) array_key_first($existing);
+            $inheritedSchema = $existing['application/json']['schema'] ?? $existing[$firstKey]['schema'] ?? [];
+        }
+
+        $content = [];
+        foreach ($producesAttrs as $produces) {
+            /** @var Produces $produces */
+            $mediaType = trim($produces->contentType);
+            if ($mediaType === '') {
+                // A media type is the map key; an empty one is unaddressable.
+                continue;
+            }
+            $content[$mediaType] = [
+                'schema' => $produces->schema ?: ($inheritedSchema ?: ['type' => 'string', 'format' => 'binary']),
+            ];
+            if ($produces->description !== '' && ($responses[$status]['description'] ?? 'OK') === 'OK') {
+                $responses[$status]['description'] = $produces->description;
+            }
+        }
+
+        if ($content === []) {
+            return $responses;
+        }
+
+        $responses[$status]['description'] ??= 'OK';
+        $responses[$status]['content'] = $content;
+
+        return $responses;
+    }
+
+    /**
+     * #[ResponseHeader] documents headers on the success response — where the
+     * OpenAPI Response Object expects them.
+     *
+     * @param  array<string, array<string, mixed>>  $responses
+     * @return array<string, array<string, mixed>>
+     */
+    private function applyResponseHeaders(array $responses, ReflectionClass $class, ReflectionMethod $method, ?string $status): array
     {
         $headers = array_merge(
             AttributeReader::all($class, ResponseHeader::class),
             AttributeReader::all($method, ResponseHeader::class),
         );
 
-        if (! $headers) {
-            return;
-        }
-
         $built = [];
         foreach ($headers as $h) {
+            /** @var ResponseHeader $h */
             $header = ['schema' => ['type' => $h->type]];
             if ($h->description !== '') {
                 $header['description'] = $h->description;
@@ -286,11 +412,89 @@ final class OperationBuilder
             if ($h->required) {
                 $header['required'] = true;
             }
+            if (trim($h->name) === '') {
+                continue;
+            }
             $built[$h->name] = $header;
         }
 
-        // Inject into the operation via extension (transformer can move them into a real response if needed)
-        $op->extend('response-headers', $built);
+        // A Sunset date is an HTTP header in its own right (RFC 8594).
+        $sunset = AttributeReader::first($method, SunsetDate::class)
+            ?? AttributeReader::first($class, SunsetDate::class);
+        if ($sunset !== null) {
+            $built['Sunset'] ??= [
+                'description' => 'Date this endpoint is scheduled for removal (RFC 8594).',
+                'schema' => ['type' => 'string'],
+                'example' => $sunset->date,
+            ];
+        }
+
+        if ($built === [] || $status === null) {
+            return $responses;
+        }
+
+        $responses[$status]['description'] ??= 'OK';
+        // Not array_merge: a header called "123" is a numeric-string key, and
+        // array_merge would renumber it — collapsing the map into a list.
+        $existingHeaders = is_array($responses[$status]['headers'] ?? null) ? $responses[$status]['headers'] : [];
+        $headerMap = [];
+        foreach ($built + $existingHeaders as $name => $header) {
+            $headerMap[(string) $name] = $existingHeaders[$name] ?? $header;
+        }
+        $responses[$status]['headers'] = $headerMap;
+
+        return $responses;
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $responses
+     * @return array<string, array<string, mixed>>
+     */
+    private function applyResponseExamples(array $responses, ReflectionMethod $method, ?string $status): array
+    {
+        $examples = $this->examplesFor($method, 'response');
+        if ($examples === [] || $status === null) {
+            return $responses;
+        }
+
+        $responses[$status]['description'] ??= 'OK';
+        if (! isset($responses[$status]['content'])) {
+            $responses[$status]['content'] = ['application/json' => ['schema' => ['type' => 'object']]];
+        }
+
+        $contentType = isset($responses[$status]['content']['application/json'])
+            ? 'application/json'
+            : (string) array_key_first($responses[$status]['content']);
+
+        $responses[$status]['content'][$contentType]['examples'] = array_merge(
+            $responses[$status]['content'][$contentType]['examples'] ?? [],
+            ResponseExtractor::normaliseExamples($examples),
+        );
+
+        return $responses;
+    }
+
+    /**
+     * #[Example] attributes targeting the request or the response.
+     *
+     * @return array<string, mixed> name => raw example value
+     */
+    private function examplesFor(ReflectionMethod $method, string $for): array
+    {
+        $examples = [];
+        foreach (AttributeReader::all($method, Example::class) as $example) {
+            /** @var Example $example */
+            if (strtolower($example->for) !== $for) {
+                continue;
+            }
+            $entry = ['value' => $example->value];
+            if ($example->summary !== '') {
+                $entry['summary'] = $example->summary;
+            }
+            $examples[$example->name] = $entry;
+        }
+
+        return $examples;
     }
 
     private function applySecurity(Operation $op, Route $route, ReflectionClass $class, ReflectionMethod $method): void
@@ -301,10 +505,11 @@ final class OperationBuilder
             return;
         }
 
-        $secAttrs = array_merge(
-            AttributeReader::all($class, Security::class),
-            AttributeReader::all($method, Security::class),
-        );
+        // Method-level #[Security] overrides the controller's declaration;
+        // several attributes at the same level are alternatives (OR).
+        $secAttrs = AttributeReader::all($method, Security::class)
+            ?: AttributeReader::all($class, Security::class);
+
         if ($secAttrs) {
             $op->security(array_map(
                 fn (Security $s) => [$s->scheme => $s->scopes],
@@ -322,46 +527,119 @@ final class OperationBuilder
         }
     }
 
-    private function applyTransformers(Operation $op): void
+    private function applyTransformers(Operation $op, Route $route): void
     {
         foreach ($this->transformers as $t) {
             if ($t instanceof OperationTransformerInterface) {
                 $t->transform($op);
             } else {
-                $t($op);
+                // Closures may declare a second parameter to receive the route.
+                $t($op, $route);
             }
         }
     }
 
+    /**
+     * Descriptions declared on #[Tag] / #[Group], keyed by tag name, so the
+     * document's tag list can carry them.
+     *
+     * @return array<string, string>
+     */
+    public function tagDescriptions(): array
+    {
+        return $this->tagDescriptions;
+    }
+
+    /** @return list<string> */
     private function resolveTags(Route $route, ReflectionClass $class, ReflectionMethod $method): array
     {
-        $methodTags = AttributeReader::all($method, Tag::class);
-        if ($methodTags) {
-            return [reset($methodTags)->name];
-        }
+        $tags = AttributeReader::all($method, Tag::class) ?: AttributeReader::all($class, Tag::class);
+        if ($tags) {
+            foreach ($tags as $tag) {
+                /** @var Tag $tag */
+                if ($tag->description !== '') {
+                    $this->tagDescriptions[$tag->name] ??= $tag->description;
+                }
+            }
 
-        $classTags = AttributeReader::all($class, Tag::class);
-        if ($classTags) {
-            return [reset($classTags)->name];
+            return array_values(array_unique(array_map(fn (Tag $t) => $t->name, $tags)));
         }
 
         $group = AttributeReader::first($class, Group::class);
         if ($group) {
+            if ($group->description !== '') {
+                $this->tagDescriptions[$group->name] ??= $group->description;
+            }
+
             return [$group->name];
         }
 
-        $name = preg_replace('/Controller$/', '', $class->getShortName());
+        $name = preg_replace('/Controller$/', '', $class->getShortName()) ?? '';
 
-        return [$name ?: 'General'];
+        return [$name !== '' ? $name : 'General'];
     }
 
-    private function operationId(Route $route): string
+    /**
+     * The first meaningful path segment, used to tag routes whose handler we
+     * cannot reflect.
+     */
+    private function tagFromPath(Route $route): string
     {
-        if ($route->name() !== '') {
-            return str_replace(['.', '-'], '_', $route->name());
+        foreach (explode('/', trim($route->normalizedPath(), '/')) as $segment) {
+            if ($segment !== '' && ! str_starts_with($segment, '{')) {
+                if (preg_match('/^v\d+$/i', $segment) === 1) {
+                    continue;
+                }
+
+                return ucfirst($segment);
+            }
         }
 
-        return strtolower($route->method()).'_'.
-            preg_replace('/[^a-z0-9]+/i', '_', trim($route->normalizedPath(), '/'));
+        return 'General';
+    }
+
+    private function operationId(Route $route, string $httpMethod): string
+    {
+        if ($route->name() !== '') {
+            $id = preg_replace('/[^A-Za-z0-9_]+/', '_', $route->name()) ?? $route->name();
+
+            // One named route can serve several verbs — keep the ids distinct.
+            $id = count($route->documentedMethods()) > 1
+                ? $httpMethod.'_'.$id
+                : $id;
+
+            return $this->uniqueId($id);
+        }
+
+        $id = $httpMethod.'_'.trim((string) preg_replace(
+            '/[^a-z0-9]+/i',
+            '_',
+            trim($route->normalizedPath(), '/'),
+        ), '_');
+
+        return $this->uniqueId($id);
+    }
+
+    /**
+     * `operationId` MUST be unique across the document, but squashing
+     * punctuation to `_` maps /api/a-b, /api/a.b and /api/a_b onto one id.
+     */
+    private function uniqueId(string $id): string
+    {
+        $id = $id !== '' ? $id : 'operation';
+
+        if (! isset($this->operationIds[$id])) {
+            $this->operationIds[$id] = 1;
+
+            return $id;
+        }
+
+        do {
+            $candidate = $id.'_'.(++$this->operationIds[$id]);
+        } while (isset($this->operationIds[$candidate]));
+
+        $this->operationIds[$candidate] = 1;
+
+        return $candidate;
     }
 }

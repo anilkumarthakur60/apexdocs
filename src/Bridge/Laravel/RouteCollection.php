@@ -24,24 +24,25 @@ final class RouteCollection implements RouteCollectionInterface
             /** @var \Illuminate\Routing\Route $route */
             $methods = array_filter(
                 $route->methods(),
-                fn ($m) => ! in_array($m, ['HEAD', 'OPTIONS'], true),
+                static fn ($m) => ! in_array($m, ['HEAD', 'OPTIONS'], true),
             );
 
-            if (empty($methods)) {
-                continue;
-            }
-
-            $handler = $this->resolveHandler($route);
-            if ($handler === null) {
+            if ($methods === []) {
                 continue;
             }
 
             $routes[] = new Route(
-                methods: array_map('strtoupper', array_values($methods)),
+                methods: array_values($methods),
                 path: '/'.ltrim($route->uri(), '/'),
-                handler: $handler,
-                middleware: $route->gatherMiddleware(),
-                metadata: ['name' => $route->getName() ?? ''],
+                // Closure routes have no class to reflect; they are still real
+                // endpoints, so they are documented from the route itself.
+                handler: $this->resolveHandler($route) ?? '',
+                middleware: $this->middleware($route),
+                metadata: [
+                    'name' => $route->getName() ?? '',
+                    'wheres' => $route->wheres ?? [],
+                    'domain' => $route->getDomain() ?? '',
+                ],
             );
         }
 
@@ -61,7 +62,29 @@ final class RouteCollection implements RouteCollectionInterface
             return $action['controller'];
         }
 
-        // Closure-based routes — skip
         return null;
+    }
+
+    /** @return list<string> */
+    private function middleware(\Illuminate\Routing\Route $route): array
+    {
+        try {
+            $middleware = $route->gatherMiddleware();
+        } catch (\Throwable) {
+            // gatherMiddleware() resolves the controller, which can fail for a
+            // route pointing at a class that no longer exists.
+            return [];
+        }
+
+        $out = [];
+        foreach ($middleware as $mw) {
+            if (is_string($mw)) {
+                $out[] = $mw;
+            } elseif (is_object($mw)) {
+                $out[] = $mw::class;
+            }
+        }
+
+        return array_values(array_unique($out));
     }
 }

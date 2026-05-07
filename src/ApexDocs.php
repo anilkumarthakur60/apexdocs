@@ -175,4 +175,17 @@ final class ApexDocs
     {
         return $this->config;
     }
+
+    public function getRouteCollection(): ?RouteCollectionInterface
+    {
+        return $this->routeCollection;
+    }
+
+    /**
+     * The route filter installed with {@see filterRoutes()}, if any.
+     */
+    public function getRouteFilter(): ?Closure
+    {
+        return $this->routeFilter;
+    }
 }

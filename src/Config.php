@@ -7,9 +7,18 @@ namespace ApexDocs;
 /**
  * Immutable configuration value object.
  * No framework dependency — just a plain PHP object.
+ *
+ * {@see fromArray()} reads the snake_case, nested shape published by the
+ * framework bridges; {@see with()} takes camelCase property names.
  */
 final class Config
 {
+    private const THEMES = ['dark', 'light', 'auto'];
+
+    private const BANNER_TYPES = ['info', 'warning', 'error'];
+
+    private const LANGUAGES = ['curl', 'js', 'python', 'php', 'go'];
+
     public function __construct(
         public readonly string $title = 'API',
         public readonly string $version = '1.0.0',
@@ -24,9 +33,8 @@ final class Config
         public readonly bool $cacheEnabled = false,
         public readonly int $cacheTtl = 3600,
 
-        /** UI renderer: 'apex' (native, no CDN) | 'scalar' | 'swagger' | 'redoc' | 'stoplight' | 'rapidoc' */
-        public readonly string $defaultUi = 'apex',
-        public readonly bool $showUiSwitcher = true,
+        /** Show the toolbar header (brand, search, theme, servers, export). */
+        public readonly bool $showToolbar = true,
 
         public readonly array $contact = [],
         public readonly array $license = [],
@@ -72,41 +80,59 @@ final class Config
     public static function fromArray(array $config): self
     {
         return new self(
-            title: $config['info']['title'] ?? $config['title'] ?? 'API',
-            version: $config['info']['version'] ?? $config['version'] ?? '1.0.0',
-            description: $config['info']['description'] ?? $config['description'] ?? '',
-            servers: $config['servers'] ?? [],
+            title: (string) ($config['info']['title'] ?? $config['title'] ?? 'API'),
+            version: (string) ($config['info']['version'] ?? $config['version'] ?? '1.0.0'),
+            description: (string) ($config['info']['description'] ?? $config['description'] ?? ''),
+            servers: (array) ($config['servers'] ?? []),
             pathPrefixes: isset($config['api_path_prefix'])
                 ? (array) $config['api_path_prefix']
-                : ($config['path_prefixes'] ?? ['api']),
-            excludePaths: $config['exclude_paths'] ?? [],
-            inferErrorResponses: $config['responses']['infer_error_responses'] ?? true,
-            includeValidationErrors: $config['responses']['include_validation_errors'] ?? true,
-            includePaginationMeta: $config['responses']['include_pagination_meta'] ?? true,
-            maxSchemaDepth: $config['responses']['max_depth'] ?? 6,
-            cacheEnabled: $config['cache']['enabled'] ?? false,
-            cacheTtl: $config['cache']['ttl'] ?? 3600,
-            defaultUi: $config['ui']['default'] ?? 'apex',
-            showUiSwitcher: $config['ui']['show_ui_switcher'] ?? true,
-            contact: array_filter($config['info']['contact'] ?? []),
-            license: array_filter($config['info']['license'] ?? []),
-            termsOfService: $config['info']['terms_of_service'] ?? '',
-            documentTransformers: $config['document_transformers'] ?? [],
-            operationTransformers: $config['operation_transformers'] ?? [],
-            securitySchemes: $config['security']['schemes'] ?? [],
-            autoDetectSecurity: $config['security']['auto_detect'] ?? true,
-            documentRateLimits: $config['rate_limits']['enabled'] ?? true,
-            webhookScanPaths: $config['webhooks']['scan_paths'] ?? [],
-            exportPath: $config['export']['default_path'] ?? sys_get_temp_dir().'/apexdocs',
-            specGroup: $config['spec_group'] ?? '',
-            theme: $config['ui']['theme'] ?? 'dark',
-            customLogo: $config['ui']['custom_logo'] ?? '',
-            customCss: $config['ui']['custom_css'] ?? '',
-            announcementBanner: $config['ui']['announcement_banner'] ?? '',
-            announcementBannerType: $config['ui']['announcement_banner_type'] ?? 'info',
-            tryItOutEnabled: $config['ui']['try_it_out'] ?? true,
-            defaultLanguage: $config['ui']['default_language'] ?? 'curl',
+                : (array) ($config['path_prefixes'] ?? ['api']),
+            excludePaths: (array) ($config['exclude_paths'] ?? []),
+            inferErrorResponses: (bool) ($config['responses']['infer_error_responses'] ?? true),
+            includeValidationErrors: (bool) ($config['responses']['include_validation_errors'] ?? true),
+            includePaginationMeta: (bool) ($config['responses']['include_pagination_meta'] ?? true),
+            maxSchemaDepth: max(1, (int) ($config['responses']['max_depth'] ?? 6)),
+            cacheEnabled: (bool) ($config['cache']['enabled'] ?? false),
+            cacheTtl: max(1, (int) ($config['cache']['ttl'] ?? 3600)),
+            showToolbar: (bool) ($config['ui']['show_toolbar'] ?? true),
+            contact: array_filter((array) ($config['info']['contact'] ?? [])),
+            license: array_filter((array) ($config['info']['license'] ?? [])),
+            termsOfService: (string) ($config['info']['terms_of_service'] ?? ''),
+            documentTransformers: (array) ($config['document_transformers'] ?? []),
+            operationTransformers: (array) ($config['operation_transformers'] ?? []),
+            securitySchemes: (array) ($config['security']['schemes'] ?? []),
+            autoDetectSecurity: (bool) ($config['security']['auto_detect'] ?? true),
+            documentRateLimits: (bool) ($config['rate_limits']['enabled'] ?? true),
+            webhookScanPaths: (array) ($config['webhooks']['scan_paths'] ?? []),
+            exportPath: (string) ($config['export']['default_path'] ?? ''),
+            specGroup: (string) ($config['spec_group'] ?? ''),
+            theme: self::oneOf($config['ui']['theme'] ?? null, self::THEMES, 'dark'),
+            customLogo: (string) ($config['ui']['custom_logo'] ?? ''),
+            customCss: (string) ($config['ui']['custom_css'] ?? ''),
+            announcementBanner: (string) ($config['ui']['announcement_banner'] ?? ''),
+            announcementBannerType: self::oneOf($config['ui']['announcement_banner_type'] ?? null, self::BANNER_TYPES, 'info'),
+            tryItOutEnabled: (bool) ($config['ui']['try_it_out'] ?? true),
+            defaultLanguage: self::oneOf($config['ui']['default_language'] ?? null, self::LANGUAGES, 'curl'),
         );
+    }
+
+    /**
+     * Coerce a value to one of the supported options. A typo in config should
+     * fall back to a working default, not render a broken docs page.
+     *
+     * @param  list<string>  $allowed
+     */
+    private static function oneOf(mixed $value, array $allowed, string $default): string
+    {
+        return is_string($value) && in_array(strtolower($value), $allowed, true)
+            ? strtolower($value)
+            : $default;
+    }
+
+    /** Where exports land when no path is given on the command line. */
+    public function exportPath(): string
+    {
+        return $this->exportPath !== '' ? $this->exportPath : sys_get_temp_dir().'/apexdocs';
     }
 
     public function with(array $overrides): self
@@ -124,8 +150,7 @@ final class Config
             maxSchemaDepth: $overrides['maxSchemaDepth'] ?? $this->maxSchemaDepth,
             cacheEnabled: $overrides['cacheEnabled'] ?? $this->cacheEnabled,
             cacheTtl: $overrides['cacheTtl'] ?? $this->cacheTtl,
-            defaultUi: $overrides['defaultUi'] ?? $this->defaultUi,
-            showUiSwitcher: $overrides['showUiSwitcher'] ?? $this->showUiSwitcher,
+            showToolbar: $overrides['showToolbar'] ?? $this->showToolbar,
             contact: $overrides['contact'] ?? $this->contact,
             license: $overrides['license'] ?? $this->license,
             termsOfService: $overrides['termsOfService'] ?? $this->termsOfService,

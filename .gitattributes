@@ -1,19 +1,20 @@
 * text=auto eol=lf
 
-# Files that ship in the package
-/src              export
-/resources        export
-/composer.json    export
-/LICENSE          export
-/README.md        export
-/CHANGELOG.md     export
+# Everything not listed below ships in the Composer dist: src/, resources/,
+# composer.json, LICENSE, README.md, CHANGELOG.md. (There is no "export"
+# attribute in git — only export-ignore — so the shipped set is defined by
+# omission.)
+/tests              export-ignore
+/.github            export-ignore
+/.editorconfig      export-ignore
+/.gitattributes     export-ignore
+/.gitignore         export-ignore
+/composer.lock      export-ignore
+/phpunit.xml.dist   export-ignore
+/CONTRIBUTING.md    export-ignore
+/CODE_OF_CONDUCT.md export-ignore
+/SECURITY.md        export-ignore
+/UPGRADING.md       export-ignore
 
-# Excluded from the dist tarball
-/tests            export-ignore
-/.github          export-ignore
-/.editorconfig    export-ignore
-/.gitattributes   export-ignore
-/.gitignore       export-ignore
-/CONTRIBUTING.md  export-ignore
-/SECURITY.md      export-ignore
-/UPGRADING.md     export-ignore
+# Dev-only: the UI rebuild record does not ship in the dist
+/docs               export-ignore

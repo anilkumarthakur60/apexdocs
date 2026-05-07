@@ -7,6 +7,7 @@ namespace ApexDocs\Extractor;
 use ReflectionIntersectionType;
 use ReflectionMethod;
 use ReflectionNamedType;
+use ReflectionType;
 use ReflectionUnionType;
 
 /**
@@ -16,6 +17,19 @@ use ReflectionUnionType;
  */
 final class TypeInferrer
 {
+    /**
+     * Generic wrappers whose value type is what actually appears in the JSON
+     * payload. Matched on the short name, case-insensitively, so userland
+     * subclasses (`UserCollection extends ResourceCollection`) work too.
+     */
+    private const ITERABLE_GENERICS = [
+        'array', 'list', 'non-empty-array', 'non-empty-list', 'iterable',
+        'traversable', 'generator', 'arrayobject', 'arrayiterator',
+        'collection', 'eloquentcollection', 'supportcollection', 'arraycollection',
+        'paginator', 'lengthawarepaginator', 'cursorpaginator', 'simplepaginator',
+        'resourcecollection', 'anonymousresourcecollection', 'collectionitem',
+    ];
+
     private function __construct() {}
 
     /**
@@ -26,7 +40,7 @@ final class TypeInferrer
     {
         // 1. PHPDoc @return (richer type info, handles generics)
         $docType = DocBlockReader::returnType($method->getDocComment());
-        if ($docType !== null) {
+        if ($docType !== null && $docType !== '') {
             return self::normalise($docType);
         }
 
@@ -36,54 +50,127 @@ final class TypeInferrer
             return null;
         }
 
-        return self::reflectionTypeString($reflType);
+        return self::normalise(self::reflectionTypeString($reflType));
     }
 
     /**
-     * Normalise generic/collection type strings to something SchemaBuilder understands.
+     * Normalise generic/collection type strings to something SchemaBuilder
+     * understands. `[]` marks a list, `{}` marks a string-keyed object map.
      *
      * Examples:
-     *   "Collection<int,User>"     → "User[]"
-     *   "array<string>"            → "string[]"
-     *   "list<App\Models\User>"    → "App\Models\User[]"
-     *   "\App\Models\User"         → "App\Models\User"
+     *   "Collection<int,User>"      → "User[]"
+     *   "Collection<User>"          → "User[]"
+     *   "array<string, User>"       → "User{}"
+     *   "list<App\Models\User>"     → "App\Models\User[]"
+     *   "array<int, array<int, T>>" → "T[][]"
+     *   "\App\Models\User"          → "App\Models\User"
      */
     public static function normalise(string $type): string
     {
-        $type = ltrim($type, '\\');
-
-        // Collection<K, V> / LengthAwarePaginator<V>
-        if (preg_match('/(?:Collection|Paginator|LengthAwarePaginator)<[^,>]+,\s*([^>]+)>/', $type, $m)) {
-            return self::normalise(trim($m[1])).'[]';
-        }
-        // array<V> / list<V>
-        if (preg_match('/(?:array|list)<([^>]+)>/', $type, $m)) {
-            return self::normalise(trim($m[1])).'[]';
+        $type = ltrim(trim($type), '\\');
+        if ($type === '') {
+            return $type;
         }
 
-        return $type;
+        // Unions/intersections: normalise each member independently.
+        foreach (['|', '&'] as $sep) {
+            $parts = self::splitTopLevel($type, $sep);
+            if (count($parts) > 1) {
+                return implode($sep, array_map([self::class, 'normalise'], $parts));
+            }
+        }
+
+        // Trim PHPStan/Psalm noise the schema layer has no use for.
+        $type = trim($type, '()');
+        if (str_ends_with($type, '[]')) {
+            return self::normalise(substr($type, 0, -2)).'[]';
+        }
+
+        $lt = strpos($type, '<');
+        if ($lt === false || ! str_ends_with($type, '>')) {
+            return $type;
+        }
+
+        $base = ltrim(substr($type, 0, $lt), '\\');
+        $args = array_values(array_filter(array_map(
+            'trim',
+            self::splitTopLevel(substr($type, $lt + 1, -1), ','),
+        ), static fn (string $a): bool => $a !== ''));
+
+        if ($args === []) {
+            return $base;
+        }
+
+        if (! in_array(strtolower(ClassName::short($base)), self::ITERABLE_GENERICS, true)) {
+            // Unknown generic wrapper — document the wrapper class itself
+            // rather than guessing at its shape.
+            return $base;
+        }
+
+        $value = self::normalise((string) end($args));
+
+        // array<string, T> is a JSON object keyed by string, not a list.
+        if (count($args) >= 2 && ! self::isIntegerKey($args[0])) {
+            return $value.'{}';
+        }
+
+        return $value.'[]';
     }
 
-    private static function reflectionTypeString(\ReflectionType $type): string
+    private static function isIntegerKey(string $key): bool
+    {
+        return in_array(strtolower(trim($key)), ['int', 'integer', 'array-key', 'positive-int', 'non-negative-int'], true);
+    }
+
+    /**
+     * Split on $sep, ignoring separators nested inside <>, (), or [].
+     *
+     * @return list<string>
+     */
+    private static function splitTopLevel(string $type, string $sep): array
+    {
+        $parts = [];
+        $buffer = '';
+        $depth = 0;
+        $len = strlen($type);
+
+        for ($i = 0; $i < $len; $i++) {
+            $char = $type[$i];
+            if ($char === '<' || $char === '(' || $char === '{') {
+                $depth++;
+            } elseif ($char === '>' || $char === ')' || $char === '}') {
+                $depth--;
+            }
+
+            if ($char === $sep && $depth <= 0) {
+                $parts[] = trim($buffer);
+                $buffer = '';
+
+                continue;
+            }
+            $buffer .= $char;
+        }
+        $parts[] = trim($buffer);
+
+        return array_values(array_filter($parts, static fn (string $p): bool => $p !== ''));
+    }
+
+    private static function reflectionTypeString(ReflectionType $type): string
     {
         if ($type instanceof ReflectionNamedType) {
-            return ($type->allowsNull() && $type->getName() !== 'null')
+            return ($type->allowsNull() && $type->getName() !== 'null' && $type->getName() !== 'mixed')
                 ? $type->getName().'|null'
                 : $type->getName();
         }
 
         if ($type instanceof ReflectionUnionType) {
-            return implode('|', array_map(
-                fn ($t) => $t->getName(),
-                $type->getTypes(),
-            ));
+            // PHP 8.2 DNF types put intersections inside unions, so members are
+            // not necessarily named types.
+            return implode('|', array_map([self::class, 'reflectionTypeString'], $type->getTypes()));
         }
 
         if ($type instanceof ReflectionIntersectionType) {
-            return implode('&', array_map(
-                fn ($t) => $t->getName(),
-                $type->getTypes(),
-            ));
+            return implode('&', array_map([self::class, 'reflectionTypeString'], $type->getTypes()));
         }
 
         return 'mixed';

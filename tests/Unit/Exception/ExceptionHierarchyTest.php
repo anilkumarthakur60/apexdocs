@@ -25,7 +25,7 @@ it('the MissingRouteCollectionException implements the ApexDocsException marker'
 it('all concrete exceptions can be caught via the marker interface', function () {
     $exceptions = [
         MissingRouteCollectionException::create(),
-        InvalidConfigException::forField('ui.default', 'unknown backend'),
+        InvalidConfigException::forField('ui.theme', 'must be dark, light or auto.'),
         SchemaBuildException::forClass('App\Models\Ghost'),
         ExporterException::writeFailed('/tmp/x.json'),
     ];
