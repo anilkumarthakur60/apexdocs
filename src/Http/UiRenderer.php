@@ -277,7 +277,8 @@ final class UiRenderer
                             <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/>
                             <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                         </svg>
-                        <input id="axui-filter" type="search" placeholder="Filter…" autocomplete="off">
+                        <input id="axui-filter" type="search" placeholder="Filter endpoints…" autocomplete="off">
+                        <kbd class="apex-kbd" style="font-size:9px;opacity:.35;pointer-events:none">/</kbd>
                     </div>
                 </div>
                 <div id="axui-sidebar-body">
@@ -286,6 +287,7 @@ final class UiRenderer
                         <span>Loading spec…</span>
                     </div>
                 </div>
+                <div id="axui-sidebar-footer"></div>
             </aside>
             <div id="axui-content">
                 <div id="axui-content-inner">
@@ -538,11 +540,7 @@ final class UiRenderer
 
         /* Sidebar groups & items */
         .axg{margin-bottom:2px}
-        .axg-header{display:flex;align-items:center;justify-content:space-between;padding:6px 12px 6px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);cursor:pointer;user-select:none;transition:color .15s}
-        .axg-header:hover{color:var(--t2)}
         .axg-count{font-size:10px;padding:1px 6px;border-radius:999px;background:var(--s2);color:var(--t3)}
-        .axg-arrow{font-size:10px;transition:transform .2s}
-        .axg.open .axg-arrow{transform:rotate(90deg)}
         .axg-items{display:none}.axg.open .axg-items{display:block}
         .axi{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 20px;cursor:pointer;border-radius:0;transition:background .12s;position:relative}
         .axi:hover{background:var(--s1)}
@@ -683,7 +681,105 @@ final class UiRenderer
         #apex-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(8px);background:#1e1e2a;border:1px solid rgba(99,102,241,.3);color:var(--t1);font-size:13px;font-weight:500;padding:8px 18px;border-radius:999px;box-shadow:0 8px 32px rgba(0,0,0,.4);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;white-space:nowrap;z-index:9000}
         #apex-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 
-        /* Responsive */
+        /* ── Sidebar group name ── */
+        .axg-header{display:flex;align-items:center;padding:6px 12px 6px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);cursor:pointer;user-select:none;transition:color .15s;gap:5px}
+        .axg-header:hover{color:var(--t2)}
+        .axg-name{flex:1}
+        .axg-arrow{font-size:9px;transition:transform .2s;flex-shrink:0}
+        .axg.open .axg-arrow{transform:rotate(90deg)}
+
+        /* ── Sidebar footer ── */
+        #axui-sidebar-footer{border-top:1px solid var(--border);padding:10px 14px;flex-shrink:0}
+        .axf-item{font-size:11px;color:var(--t3);margin-bottom:3px;display:flex;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .axf-link{color:var(--t3);text-decoration:none;transition:color .15s}.axf-link:hover{color:var(--accent)}
+
+        /* ── Deprecated dot in sidebar ── */
+        .axi-depr-dot{font-size:9px;font-weight:700;padding:0 3px;border-radius:3px;background:rgba(245,158,11,.1);color:var(--amber);border:1px solid rgba(245,158,11,.25);flex-shrink:0;line-height:1.4}
+
+        /* ── Webhook badge ── */
+        .ax-webhook-badge{font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;background:rgba(168,85,247,.1);color:var(--purple);border:1px solid rgba(168,85,247,.25);flex-shrink:0;letter-spacing:.02em}
+
+        /* ── Breadcrumb ── */
+        .ax-breadcrumb{display:flex;align-items:center;gap:5px;padding:0 0 16px;font-size:12px;flex-wrap:wrap}
+        .ax-breadcrumb-item{color:var(--t3)}
+        .ax-breadcrumb-link{color:var(--t2);cursor:pointer;transition:color .15s}.ax-breadcrumb-link:hover{color:var(--accent)}
+        .ax-breadcrumb-sep{color:var(--t3);opacity:.5}
+        .ax-breadcrumb-current{font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 5px;border-radius:4px;background:var(--s1);border:1px solid var(--border)}
+        .ax-breadcrumb-path{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t2)}
+
+        /* ── Security badges ── */
+        .ax-sec-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
+        .ax-sec-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:5px;font-size:11.5px;font-weight:500;background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);color:var(--amber)}
+        .ax-sec-open{background:rgba(74,222,128,.07);border-color:rgba(74,222,128,.2);color:var(--green)}
+        .ax-sec-scopes{font-size:10.5px;opacity:.7;margin-left:2px}
+
+        /* ── Permalink button ── */
+        .ax-permalink-btn{display:inline-flex;align-items:center;padding:2px;border-radius:4px;background:none;border:none;color:var(--t3);cursor:pointer;opacity:0;transition:opacity .15s,color .15s;margin-left:6px;vertical-align:middle}
+        .ax-op-path:hover .ax-permalink-btn,.ax-op-header:hover .ax-permalink-btn{opacity:1}
+        .ax-permalink-btn:hover{color:var(--accent)}
+
+        /* ── Ext docs link ── */
+        .ax-ext-docs-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--accent);text-decoration:none;margin-bottom:16px;padding:4px 8px;border-radius:5px;background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.15);transition:background .15s}
+        .ax-ext-docs-link:hover{background:rgba(99,102,241,.14)}
+
+        /* ── Schema collapse button ── */
+        .ax-schema-collapse-btn{cursor:pointer;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;border-radius:3px;background:var(--s2);color:var(--t3);font-size:8px;flex-shrink:0;border:none;transition:all .12s;vertical-align:middle}
+        .ax-schema-collapse-btn:hover{background:var(--s3);color:var(--t1)}
+
+        /* ── $ref expanded/collapsible ── */
+        .ax-ref-wrap{display:flex;flex-direction:column;gap:4px}
+        .ax-ref-badge{cursor:default}
+        .ax-ref-expanded{margin-top:4px}
+
+        /* ── oneOf/anyOf ── */
+        .ax-oneof-wrap{display:flex;flex-direction:column;gap:4px}
+        .ax-oneof-label{font-size:11px;color:var(--t3);font-weight:600;margin-bottom:2px}
+        .ax-oneof-item{border-left:2px solid var(--border);padding-left:10px}
+        .ax-oneof-sep{margin-top:4px;padding-top:4px}
+
+        /* ── Schema description ── */
+        .ax-schema-desc{font-size:12px;color:var(--t3);padding:8px 12px;border-bottom:1px solid var(--border);font-style:italic}
+
+        /* ── Response content-type tabs ── */
+        .ax-resp-ct-tabs{display:flex;gap:4px;margin-bottom:8px;flex-wrap:wrap}
+        .ax-resp-ct-btn{padding:2px 8px;border-radius:4px;font-size:11px;cursor:pointer;background:var(--s1);border:1px solid var(--border);color:var(--t3);transition:all .1s;font-family:inherit}
+        .ax-resp-ct-btn.active{color:var(--t1);background:var(--s2);border-color:var(--border-s)}
+
+        /* ── Panel section title ── */
+        .ax-panel-section-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:10px;margin-top:20px;display:flex;align-items:center;gap:6px}
+        .ax-panel-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
+
+        /* ── Code copy button ── */
+        .ax-code-copy-btn{margin-top:6px;padding:4px 10px;border-radius:6px;background:var(--s1);border:1px solid var(--border);color:var(--t2);font-size:11px;cursor:pointer;transition:all .12s;font-family:inherit}
+        .ax-code-copy-btn:hover{background:var(--s2);color:var(--t1);border-color:var(--border-s)}
+
+        /* ── Try-it-out auth type selector ── */
+        .ax-try-auth-wrap{display:flex;gap:6px;align-items:stretch;margin-bottom:8px}
+        .ax-try-auth-type{flex:0 0 auto;padding:7px 8px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);color:var(--t2);font-size:12px;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none}
+        .ax-try-auth-type:focus{border-color:rgba(99,102,241,.5)}
+
+        /* ── Response headers accordion ── */
+        .ax-res-headers{border-bottom:1px solid var(--border)}
+        .ax-res-headers summary{list-style:none;cursor:pointer;outline:none;transition:background .12s}
+        .ax-res-headers summary:hover{background:var(--s1)}
+        .ax-res-headers[open] summary{background:var(--s1)}
+
+        /* ── Error state ── */
+        .ax-error-state{padding:28px 16px;text-align:center}
+        .ax-error-icon{font-size:28px;margin-bottom:8px;opacity:.6}
+        .ax-error-title{font-size:14px;font-weight:600;color:var(--red);margin-bottom:4px}
+        .ax-error-msg{font-size:12px;color:var(--t3)}
+
+        /* ── Welcome screen improvements ── */
+        .axw-stat-icon{color:var(--t3);flex-shrink:0;margin-right:2px}
+        .axw-server-dot.active{background:var(--green)}
+        .axw-contact-block{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px;margin-bottom:16px}
+        .axw-meta-item{font-size:12px;color:var(--t3)}
+        .axw-stats{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
+        .axw-stat{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--s1);border:1px solid var(--border);border-radius:10px;flex:1;min-width:100px;transition:border-color .15s}
+        .axw-stat:hover{border-color:var(--border-s)}
+
+        /* ── Responsive ── */
         @media(max-width:1100px){#axui-panel{display:none}}
         @media(max-width:820px){#axui-sidebar{width:220px}}
         @media(max-width:680px){#axui-sidebar{display:none}.apex-tabs-wrap{display:none}}
@@ -711,6 +807,7 @@ final class UiRenderer
             });
             window.addEventListener('resize',function(){var a=tabsEl.querySelector('.apex-tab.active');if(a){bg.style.transition='none';moveBg(a);requestAnimationFrame(function(){bg.style.transition=''});}});
         }
+        /* ── NOTE: axg-header CSS override (remove old inline rule if present) ── */
 
         /* ── Loading bar ── */
         var prog=document.getElementById('apex-progress');
@@ -847,9 +944,11 @@ final class UiRenderer
 
         /* ── Global keyboard shortcuts ── */
         document.addEventListener('keydown',function(e){
-            if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.isComposing)return;
+            var inField=e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.isContentEditable||e.isComposing;
             if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();palOpen();return;}
             if(e.key==='Escape'){apexPaletteClose();return;}
+            if(inField)return;
+            if(e.key==='/'){e.preventDefault();var f=document.getElementById('axui-filter');if(f){f.focus();f.select();}return;}
             if(e.ctrlKey||e.metaKey||e.altKey)return;
             var uis=['apex','scalar','swagger','redoc','stoplight','rapidoc'];
             var n=parseInt(e.key);if(n>=1&&n<=6){var t=document.querySelector('.apex-tab[data-ui="'+uis[n-1]+'"]');if(t)t.click();}
@@ -858,17 +957,29 @@ final class UiRenderer
         /* ── Native Apex UI ── */
         if(APEX_CFG.activeUi==='apex'){
             var METHODS=['get','post','put','patch','delete','head','options'];
+            var LANGS=['curl','js','python','php','go'];
+            var LANG_LABELS={curl:'cURL',js:'JavaScript',python:'Python',php:'PHP',go:'Go'};
             var _server=localStorage.getItem('apex-env')||'';
             var _activeOpKey=null;
+            var _schemaIds=0;
 
             function init(){
                 loadSpec(function(spec){
                     _server=_server||(spec.servers&&spec.servers[0]&&spec.servers[0].url)||'';
-                    renderSidebar(spec);renderWelcome(spec);
+                    renderSidebar(spec);
+                    renderWelcome(spec);
+                    renderSidebarFooter(spec);
                     var hash=location.hash.slice(1);if(hash)navigateHash(hash,spec);
                     var filter=document.getElementById('axui-filter');
-                    if(filter){filter.addEventListener('input',function(){filterSidebar(filter.value,spec);});}
+                    if(filter){filter.addEventListener('input',function(){renderSidebar(spec,filter.value);});}
                 });
+                // Error state if fetch fails
+                setTimeout(function(){
+                    var body=document.getElementById('axui-sidebar-body');
+                    if(body&&body.querySelector('.axui-loading-state')){
+                        body.innerHTML='<div class="ax-error-state"><div class="ax-error-icon">⚠</div><div class="ax-error-title">Failed to load spec</div><div class="ax-error-msg">Check network or spec URL</div></div>';
+                    }
+                },10000);
             }
 
             window._axui={setServer:function(url){_server=url;}};
@@ -887,277 +998,461 @@ final class UiRenderer
 
             function renderSidebar(spec,filter){
                 var body=document.getElementById('axui-sidebar-body');if(!body)return;
-                var groups=groupByTag(spec);var q=(filter||'').toLowerCase();
-                var html='<div class="axs-overview"><div class="axs-api-title">'+escH(spec.info&&spec.info.title||'API')+'</div>'+(spec.info&&spec.info.description?'<div class="axs-api-desc">'+escH(spec.info.description)+'</div>':'')+'</div>';
+                var groups=groupByTag(spec);var q=(filter||'').toLowerCase().trim();
+                var html='<div class="axs-overview">'
+                    +'<div class="axs-api-title">'+escH(spec.info&&spec.info.title||'API')+'</div>'
+                    +(spec.info&&spec.info.description?'<div class="axs-api-desc">'+escH(spec.info.description)+'</div>':'')
+                    +'</div>';
+                var anyResult=false;
                 for(var tag in groups){
                     var items=groups[tag];
-                    if(q)items=items.filter(function(i){return i.path.toLowerCase().includes(q)||i.method.toLowerCase().includes(q)||(i.op.summary||'').toLowerCase().includes(q);});
+                    if(q)items=items.filter(function(i){return i.path.toLowerCase().includes(q)||i.method.toLowerCase().includes(q)||(i.op.summary||'').toLowerCase().includes(q)||(i.op.operationId||'').toLowerCase().includes(q);});
                     if(!items.length)continue;
-                    var open=(q||tag===Object.keys(groups)[0])?'open':'';
-                    html+='<div class="axg '+open+'" id="axg-'+escH(tag)+'">'
+                    anyResult=true;
+                    var hasActive=items.some(function(i){return i.key===_activeOpKey;});
+                    var open=(q||tag===Object.keys(groups)[0]||hasActive)?' open':'';
+                    html+='<div class="axg'+open+'" id="axg-'+escH(tag)+'">'
                         +'<div class="axg-header" onclick="axToggleGroup(this)">'
-                        +'<span>▶</span><span style="margin-left:6px">'+escH(tag)+'</span>'
+                        +'<span class="axg-arrow">▶</span>'
+                        +'<span class="axg-name">'+escH(tag)+'</span>'
                         +'<span class="axg-count">'+items.length+'</span>'
                         +'</div><div class="axg-items">';
                     items.forEach(function(i){
                         var dep=i.op.deprecated?' axi-depr':'';
-                        html+='<div class="axi'+(i.key===_activeOpKey?' active':'')+dep+'" data-key="'+escH(i.key)+'" onclick="axNav('+JSON.stringify(i.key)+','+JSON.stringify(i.path)+','+JSON.stringify(i.method)+')">'
+                        html+='<div class="axi'+(i.key===_activeOpKey?' active':'')+dep+'" data-key="'+escH(i.key)+'" data-path="'+escH(i.path)+'" data-method="'+escH(i.method)+'" onclick="axNavEl(this)">'
                             +'<span class="axm axm-'+i.method+'">'+i.method.toUpperCase()+'</span>'
-                            +'<span class="axi-path">'+escH(i.path)+'</span></div>';
+                            +'<span class="axi-path">'+escH(i.path)+'</span>'
+                            +(i.op.deprecated?'<span class="axi-depr-dot">D</span>':'')
+                            +'</div>';
                     });
                     html+='</div></div>';
                 }
+                // Webhooks section
+                var wh=spec.webhooks||{};var whKeys=Object.keys(wh);
+                if(whKeys.length&&!q){
+                    var whActive=_activeOpKey&&_activeOpKey.startsWith('webhook__');
+                    html+='<div class="axg'+(whActive?' open':'')+'" id="axg-__webhooks__">'
+                        +'<div class="axg-header" onclick="axToggleGroup(this)">'
+                        +'<span class="axg-arrow">▶</span>'
+                        +'<span class="axg-name">Webhooks</span>'
+                        +'<span class="axg-count">'+whKeys.length+'</span>'
+                        +'</div><div class="axg-items">';
+                    whKeys.forEach(function(wname){
+                        var wop=wh[wname];
+                        for(var wm in wop){
+                            if(!METHODS.includes(wm))continue;
+                            html+='<div class="axi" data-key="webhook__'+escH(wname)+'__'+escH(wm)+'" data-wname="'+escH(wname)+'" data-wmethod="'+escH(wm)+'" onclick="axNavWhEl(this)">'
+                                +'<span class="axm axm-'+wm+'">'+wm.toUpperCase()+'</span>'
+                                +'<span class="axi-path">'+escH(wname)+'</span>'
+                                +'<span class="ax-webhook-badge">wh</span>'
+                                +'</div>';
+                        }
+                    });
+                    html+='</div></div>';
+                }
+                if(q&&!anyResult)html+='<div class="ax-empty">No results for "<strong>'+escH(q)+'</strong>"</div>';
                 body.innerHTML=html;
             }
 
-            function filterSidebar(q,spec){renderSidebar(spec,q);}
+            function renderSidebarFooter(spec){
+                var footer=document.getElementById('axui-sidebar-footer');if(!footer)return;
+                var info=spec.info||{};var items=[];
+                if(info.contact){
+                    var c=info.contact;var lbl=escH(c.name||c.email||c.url||'Contact');
+                    if(c.email)items.push('<div class="axf-item"><a href="mailto:'+escH(c.email)+'" class="axf-link">'+lbl+'</a></div>');
+                    else if(c.url)items.push('<div class="axf-item"><a href="'+escH(c.url)+'" class="axf-link" target="_blank" rel="noreferrer">'+lbl+'</a></div>');
+                }
+                if(info.license){
+                    var l=info.license;var lname=escH(l.name||l.identifier||'License');
+                    items.push('<div class="axf-item">'+(l.url?'<a href="'+escH(l.url)+'" class="axf-link" target="_blank" rel="noreferrer">'+lname+'</a>':lname)+'</div>');
+                }
+                if(info.termsOfService)items.push('<div class="axf-item"><a href="'+escH(info.termsOfService)+'" class="axf-link" target="_blank" rel="noreferrer">Terms of Service</a></div>');
+                footer.innerHTML=items.join('');
+            }
 
             window.axToggleGroup=function(el){el.closest('.axg').classList.toggle('open');};
+            window.axNavEl=function(el){var g=el.closest('.axg');if(g)g.classList.add('open');axNav(el.dataset.key,el.dataset.path,el.dataset.method);};
+            window.axNavWhEl=function(el){var g=el.closest('.axg');if(g)g.classList.add('open');axNavWebhook(el.dataset.wname,el.dataset.wmethod);};
 
             window.axNav=function(key,path,method){
                 _activeOpKey=key;
                 var spec=_specCache;if(!spec)return;
                 var op=spec.paths&&spec.paths[path]&&spec.paths[path][method];if(!op)return;
-                renderSidebar(spec);renderOperation(path,method,op,spec);
+                renderSidebar(spec);
+                renderOperation(path,method,op,spec,false);
                 history.replaceState(null,'','#op_'+(op.operationId||key));
+                var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
+            };
+
+            window.axNavWebhook=function(name,method){
+                _activeOpKey='webhook__'+name+'__'+method;
+                var spec=_specCache;if(!spec)return;
+                var op=spec.webhooks&&spec.webhooks[name]&&spec.webhooks[name][method];if(!op)return;
+                renderSidebar(spec);
+                renderOperation(name,method,op,spec,true);
+                history.replaceState(null,'','#wh_'+name+'_'+method);
+                var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
             };
 
             function navigateHash(hash,spec){
-                if(!hash.startsWith('op_'))return;
-                var id=hash.slice(3);
-                for(var path in spec.paths||{}){
-                    for(var m in spec.paths[path]){
-                        var op=spec.paths[path][m];
-                        if((op.operationId||m+'__'+path)===id||m+'__'+path===id){
-                            axNav(m+'__'+path,path,m);return;
+                if(hash.startsWith('op_')){
+                    var id=hash.slice(3);
+                    for(var path in spec.paths||{}){
+                        for(var m in spec.paths[path]){
+                            var op=spec.paths[path][m];
+                            if((op.operationId||m+'__'+path)===id||m+'__'+path===id){axNav(m+'__'+path,path,m);return;}
                         }
                     }
+                }
+                if(hash.startsWith('wh_')){
+                    var p2=hash.slice(3).split('_');if(p2.length>=2)axNavWebhook(p2[0],p2[1]);
                 }
             }
 
             function renderWelcome(spec){
                 var info=spec.info||{};var paths=spec.paths||{};
-                var opCount=0,tagSet=new Set();
-                for(var p in paths)for(var m in paths[p])if(METHODS.includes(m)){opCount++;(paths[p][m].tags||['General']).forEach(function(t){tagSet.add(t);});}
+                var opCount=0;var tagSet=new Set();var deprCount=0;
+                for(var p in paths)for(var m in paths[p])if(METHODS.includes(m)){opCount++;if(paths[p][m].deprecated)deprCount++;(paths[p][m].tags||['General']).forEach(function(t){tagSet.add(t);});}
                 var schemaCount=Object.keys((spec.components&&spec.components.schemas)||{}).length;
-                var servers=(spec.servers||[]).map(function(s,i){return '<div class="axw-server"><span class="axw-server-dot"></span>'+escH(s.url)+(s.description?'<span style="margin-left:8px;color:var(--t3);font-size:11px">'+escH(s.description)+'</span>':'')+'</div>';}).join('');
+                var whCount=Object.keys(spec.webhooks||{}).length;
+                var svgEp='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><path d="M1 4h14M1 8h14M1 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+                var svgGr='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>';
+                var svgSc='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+                var svgWh='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><path d="M3 13c0-3 2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/></svg>';
+                var stats='<div class="axw-stats">'
+                    +'<div class="axw-stat">'+svgEp+'<div><div class="axw-stat-n">'+opCount+'</div><div class="axw-stat-l">Endpoints</div></div></div>'
+                    +'<div class="axw-stat">'+svgGr+'<div><div class="axw-stat-n">'+tagSet.size+'</div><div class="axw-stat-l">Groups</div></div></div>'
+                    +(schemaCount?'<div class="axw-stat">'+svgSc+'<div><div class="axw-stat-n">'+schemaCount+'</div><div class="axw-stat-l">Schemas</div></div></div>':'')
+                    +(whCount?'<div class="axw-stat">'+svgWh+'<div><div class="axw-stat-n">'+whCount+'</div><div class="axw-stat-l">Webhooks</div></div></div>':'')
+                    +'</div>';
+                var servers=(spec.servers||[]).map(function(s,i){
+                    var active=(_activeEnv===s.url||(!_activeEnv&&i===0));
+                    return '<div class="axw-server"><span class="axw-server-dot'+(active?' active':'')+'"></span>'+escH(s.url)+(s.description?'<span style="margin-left:8px;color:var(--t3);font-size:11px">'+escH(s.description)+'</span>':'')+'</div>';
+                }).join('');
+                var metaHtml='';
+                if(info.contact){
+                    var c=info.contact;var lbl=escH(c.name||c.email||c.url||'Contact');
+                    if(c.email)metaHtml+='<div class="axw-meta-item">Contact: <a href="mailto:'+escH(c.email)+'" style="color:var(--accent);text-decoration:none">'+lbl+'</a></div>';
+                    else if(c.url)metaHtml+='<div class="axw-meta-item">Contact: <a href="'+escH(c.url)+'" target="_blank" style="color:var(--accent);text-decoration:none">'+lbl+'</a></div>';
+                }
+                if(info.license){var l=info.license;var ln=escH(l.name||l.identifier||'License');metaHtml+='<div class="axw-meta-item">License: '+(l.url?'<a href="'+escH(l.url)+'" target="_blank" style="color:var(--accent);text-decoration:none">'+ln+'</a>':ln)+'</div>';}
+                if(info.termsOfService)metaHtml+='<div class="axw-meta-item"><a href="'+escH(info.termsOfService)+'" target="_blank" style="color:var(--accent);text-decoration:none">Terms of Service</a></div>';
                 document.getElementById('axui-welcome').innerHTML=
                     '<div class="axw-title">'+escH(info.title||'API')+'</div>'
-                    +'<div class="axw-meta"><span class="axw-version">v'+escH(info.version||'1.0')+'</span><span class="axw-openapi">'+escH(spec.openapi||'OpenAPI')+'</span></div>'
+                    +'<div class="axw-meta"><span class="axw-version">v'+escH(info.version||'1.0')+'</span><span class="axw-openapi">'+escH(spec.openapi||'OpenAPI')+'</span>'+(deprCount?'<span style="font-size:11px;color:var(--amber);padding:2px 6px;border-radius:4px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)">'+deprCount+' deprecated</span>':'')+'</div>'
                     +(info.description?'<div class="axw-desc">'+escH(info.description)+'</div>':'')
-                    +'<div class="axw-stats">'
-                    +'<div class="axw-stat"><div><div class="axw-stat-n">'+opCount+'</div><div class="axw-stat-l">Endpoints</div></div></div>'
-                    +'<div class="axw-stat"><div><div class="axw-stat-n">'+tagSet.size+'</div><div class="axw-stat-l">Groups</div></div></div>'
-                    +(schemaCount?'<div class="axw-stat"><div><div class="axw-stat-n">'+schemaCount+'</div><div class="axw-stat-l">Schemas</div></div></div>':'')
-                    +'</div>'
+                    +stats
+                    +(metaHtml?'<div class="axw-contact-block">'+metaHtml+'</div>':'')
                     +(servers?'<div class="axw-servers"><div class="axw-servers-title">Servers</div>'+servers+'</div>':'')
                     +'<div class="axw-hint">Select an endpoint from the sidebar, or press <kbd style="padding:2px 6px;border-radius:4px;background:var(--s2);border:1px solid var(--border);font-family:inherit">⌘K</kbd> to search</div>';
             }
 
-            function renderOperation(path,method,op,spec){
+            function renderOperation(path,method,op,spec,isWebhook){
                 var wrap=document.getElementById('axui-content-inner');if(!wrap)return;
+                _schemaIds=0;
                 var dep=op.deprecated?'<span class="ax-depr-badge">deprecated</span>':'';
-                var extDocsHtml=op.externalDocs?'<a href="'+escH(op.externalDocs.url)+'" target="_blank" rel="noreferrer" style="font-size:12px;color:var(--accent);text-decoration:none;display:inline-flex;align-items:center;gap:4px;margin-bottom:16px">'+escH(op.externalDocs.description||'External Docs')+' ↗</a>':'';
-                var html='<div id="axui-welcome" style="display:none"></div>'
+                var tag=(op.tags||['General'])[0];
+                // Breadcrumb
+                var bc='<div class="ax-breadcrumb">'
+                    +(isWebhook
+                        ?'<span class="ax-breadcrumb-item">Webhooks</span>'
+                        :'<span class="ax-breadcrumb-item ax-breadcrumb-link" onclick="axGoWelcome()">'+escH(tag)+'</span>')
+                    +'<span class="ax-breadcrumb-sep">›</span>'
+                    +'<span class="ax-breadcrumb-current">'+method.toUpperCase()+'</span>'
+                    +'<span class="ax-breadcrumb-sep">›</span>'
+                    +'<span class="ax-breadcrumb-path">'+escH(path)+'</span>'
+                    +'</div>';
+                // Security
+                var secHtml='';
+                if(op.security!==undefined){
+                    if(!op.security.length){
+                        secHtml='<div class="ax-sec-badges"><span class="ax-sec-badge ax-sec-open">No authentication required</span></div>';
+                    } else {
+                        var badges='';
+                        op.security.forEach(function(s){Object.keys(s).forEach(function(sn){var sc=s[sn];badges+='<span class="ax-sec-badge">'+escH(sn)+(sc&&sc.length?'<span class="ax-sec-scopes"> ['+escH(sc.join(', '))+']</span>':'')+'</span>';});});
+                        secHtml='<div class="ax-sec-badges">'+badges+'</div>';
+                    }
+                }
+                // External docs
+                var extHtml=op.externalDocs?'<a href="'+escH(op.externalDocs.url)+'" target="_blank" rel="noreferrer" class="ax-ext-docs-link">'+escH(op.externalDocs.description||'External Docs')+' ↗</a>':'';
+                // Permalink
+                var opId=op.operationId||(isWebhook?'wh_':'op_')+method+'__'+path;
+                var plBtn='<button class="ax-permalink-btn" onclick="axCopyPermalink(\''+escH(opId)+'\')" title="Copy permalink"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M7 9a3 3 0 0 0 4.5.3l2-2A3 3 0 0 0 9.2 3L8.1 4.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 7a3 3 0 0 0-4.5-.3l-2 2A3 3 0 0 0 6.8 13l1.1-1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>';
+                var html=bc
                     +'<div class="ax-op-header">'
                     +'<span class="axm axm-'+method+'">'+method.toUpperCase()+'</span>'
-                    +'<div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(path)+dep+'</div>'
+                    +'<div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(path)+dep+plBtn+'</div>'
                     +(op.summary?'<div class="ax-op-summary">'+escH(op.summary)+'</div>':'')
                     +'</div></div>'
                     +(op.description?'<div class="ax-op-desc">'+escH(op.description)+'</div>':'')
-                    +extDocsHtml;
-
+                    +secHtml+extHtml;
+                // Parameters
                 var params=(op.parameters||[]);
                 if(params.length){
                     html+='<div class="ax-section"><div class="ax-section-title">Parameters</div>'
                         +'<table class="ax-params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>';
                     params.forEach(function(p){
-                        html+='<tr>'
-                            +'<td class="ax-param-name">'+escH(p.name)+'</td>'
+                        var sc=p.schema||{};var t=sc.type||(sc['$ref']?sc['$ref'].split('/').pop():'string');
+                        var enums=sc.enum?'<div class="ax-enum-wrap">'+sc.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div>':'';
+                        html+='<tr><td class="ax-param-name">'+escH(p.name)+(p.deprecated?'<sup style="color:var(--amber);font-size:9px"> dep</sup>':'')+'</td>'
                             +'<td><span class="ax-in-badge">'+escH(p.in)+'</span></td>'
-                            +'<td><span class="ax-type-badge">'+escH((p.schema&&p.schema.type)||'string')+'</span></td>'
-                            +'<td>'+(p.required?'<span class="ax-req-badge">required</span>':'')+'</td>'
-                            +'<td style="color:var(--t3)">'+escH(p.description||'')+'</td>'
-                            +'</tr>';
+                            +'<td><span class="ax-type-badge">'+escH(t)+(sc.format?'<span style="opacity:.6"> ('+escH(sc.format)+')</span>':'')+'</span></td>'
+                            +'<td>'+(p.required?'<span class="ax-req-badge">req</span>':'<span style="color:var(--t3);font-size:11px">opt</span>')+'</td>'
+                            +'<td style="color:var(--t3)">'+escH(p.description||'')+enums+'</td></tr>';
                     });
                     html+='</tbody></table></div>';
                 }
-
+                // Request body
                 if(op.requestBody){
-                    html+='<div class="ax-section"><div class="ax-section-title">Request Body'+(op.requestBody.required?'':' (optional)')+'</div>';
-                    var ct=op.requestBody.content||{};
-                    for(var mime in ct){
-                        html+='<div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-family:monospace">'+escH(mime)+'</div>'
-                            +renderSchema(ct[mime].schema||{},spec,0);
-                        break;
+                    var ct=op.requestBody.content||{};var ctKeys=Object.keys(ct);
+                    html+='<div class="ax-section"><div class="ax-section-title">Request Body'+(op.requestBody.required?'':' <span style="font-size:10px;font-weight:400;color:var(--t3)">(optional)</span>')+'</div>';
+                    if(op.requestBody.description)html+='<div style="font-size:13px;color:var(--t2);margin-bottom:10px">'+escH(op.requestBody.description)+'</div>';
+                    if(ctKeys.length>1){
+                        html+='<div class="ax-resp-ct-tabs">';
+                        ctKeys.forEach(function(mime,i){html+='<button class="ax-resp-ct-btn'+(i===0?' active':'')+'" onclick="axSwitchReqCt(this,\''+escH(mime)+'\')">'+escH(mime)+'</button>';});
+                        html+='</div>';
                     }
+                    ctKeys.forEach(function(mime,i){
+                        html+='<div class="ax-req-ct-panel" data-mime="'+escH(mime)+'" style="'+(i>0?'display:none':'')+'">'
+                            +(ctKeys.length<=1?'<div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-family:monospace">'+escH(mime)+'</div>':'')
+                            +renderSchema(ct[mime].schema||{},spec,0)+'</div>';
+                    });
                     html+='</div>';
                 }
-
+                // Responses
                 if(op.responses){
                     html+='<div class="ax-section"><div class="ax-section-title">Responses</div>';
-                    for(var status in op.responses){
+                    var rKeys=Object.keys(op.responses);
+                    rKeys.forEach(function(status,ri){
                         var resp=op.responses[status];var sc=parseInt(status);
                         var cls=sc<300?'axs-2xx':sc<400?'axs-3xx':sc<500?'axs-4xx':'axs-5xx';
                         var icon=sc<300?'✓':sc<400?'→':'✕';
-                        html+='<div class="ax-resp" id="ax-resp-'+escH(status)+'">'
+                        var isFirst=ri===0;
+                        html+='<div class="ax-resp'+(isFirst?' open':'')+'" id="ax-resp-'+escH(status)+'">'
                             +'<div class="ax-resp-header" onclick="axToggleResp(this)">'
                             +'<span class="ax-resp-status '+cls+'">'+icon+' '+escH(status)+'</span>'
                             +'<span class="ax-resp-desc">'+escH(resp.description||'')+'</span>'
                             +'<span class="ax-resp-arrow">▶</span>'
                             +'</div>'
-                            +'<div class="ax-resp-body" style="display:none">';
-                        var respCt=resp.content||{};
-                        for(var rm in respCt){
-                            html+=renderSchema(respCt[rm].schema||{},spec,0);break;
+                            +'<div class="ax-resp-body" style="'+(isFirst?'':'display:none')+'">';
+                        var rc=resp.content||{};var rck=Object.keys(rc);
+                        if(rck.length>1){
+                            html+='<div class="ax-resp-ct-tabs">';
+                            rck.forEach(function(mime,i){html+='<button class="ax-resp-ct-btn'+(i===0?' active':'')+'" onclick="axSwitchRespCt(this,\'ax-resp-'+escH(status)+'\',\''+escH(mime)+'\')">'+escH(mime)+'</button>';});
+                            html+='</div>';
                         }
+                        rck.forEach(function(mime,i){html+='<div class="ax-resp-ct-panel" data-mime="'+escH(mime)+'" style="'+(i>0?'display:none':'')+'">'+renderSchema(rc[mime].schema||{},spec,0)+'</div>';});
                         html+='</div></div>';
-                    }
+                    });
                     html+='</div>';
                 }
-
                 wrap.innerHTML=html;
                 renderPanel(path,method,op,spec);
             }
 
+            window.axSwitchReqCt=function(btn,mime){
+                var sec=btn.closest('.ax-section');
+                sec.querySelectorAll('.ax-req-ct-panel').forEach(function(el){el.style.display=el.dataset.mime===mime?'':'none';});
+                btn.closest('.ax-resp-ct-tabs').querySelectorAll('.ax-resp-ct-btn').forEach(function(b){b.classList.toggle('active',b===btn);});
+            };
+            window.axSwitchRespCt=function(btn,respId,mime){
+                var r=document.getElementById(respId);if(!r)return;
+                r.querySelectorAll('.ax-resp-ct-panel').forEach(function(el){el.style.display=el.dataset.mime===mime?'':'none';});
+                btn.closest('.ax-resp-ct-tabs').querySelectorAll('.ax-resp-ct-btn').forEach(function(b){b.classList.toggle('active',b===btn);});
+            };
             window.axToggleResp=function(el){
-                var body=el.nextElementSibling;
-                var open=body.style.display==='block';
-                body.style.display=open?'none':'block';
-                el.querySelector('.ax-resp-arrow').style.transform=open?'':'rotate(90deg)';
+                var resp=el.closest('.ax-resp');var body=el.nextElementSibling;
+                var open=resp.classList.toggle('open');
+                body.style.display=open?'':'none';
+            };
+            window.axGoWelcome=function(){
+                _activeOpKey=null;
+                if(_specCache){renderSidebar(_specCache);renderWelcome(_specCache);}
+                var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
+                history.replaceState(null,'',location.pathname);
+            };
+            window.axCopyPermalink=function(id){
+                var url=location.origin+location.pathname+'#op_'+id;
+                if(navigator.clipboard)navigator.clipboard.writeText(url).then(function(){toast('Permalink copied');});
+                else{fb(url);toast('Permalink copied');}
             };
 
             function resolveRef(ref,spec){
                 if(!ref||!ref.startsWith('#/'))return null;
                 var parts=ref.slice(2).split('/');var cur=spec;
-                for(var i=0;i<parts.length;i++){cur=cur[parts[i]];if(!cur)return null;}
+                for(var i=0;i<parts.length;i++){cur=cur[parts[i]];if(cur==null)return null;}
                 return cur;
             }
 
             function renderSchema(schema,spec,depth){
                 if(!schema)return '';
                 if(schema['$ref']){
-                    var name=schema['$ref'].split('/').pop();
+                    var refName=schema['$ref'].split('/').pop();
                     var resolved=depth<3?resolveRef(schema['$ref'],spec):null;
-                    if(resolved&&depth<3)return renderSchema(resolved,spec,depth+1);
-                    return '<span class="ax-type-badge" style="cursor:pointer">'+escH(name)+'</span>';
+                    if(resolved&&depth<3){
+                        var sid='axs'+(++_schemaIds);
+                        return '<div class="ax-ref-wrap">'
+                            +'<button class="ax-schema-collapse-btn" data-schema="'+sid+'" onclick="axToggleSchema(\''+sid+'\')">▼</button>'
+                            +'<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>'
+                            +'<div id="'+sid+'" class="ax-ref-expanded">'+renderSchema(resolved,spec,depth+1)+'</div>'
+                            +'</div>';
+                    }
+                    return '<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>';
                 }
-                if(schema.allOf){return '<div class="ax-schema-obj"><div class="ax-allof-label">allOf</div>'+schema.allOf.map(function(s){return renderSchema(s,spec,depth+1);}).join('')+'</div>';}
-                if(schema.oneOf){return '<div style="font-size:12px;color:var(--t3);margin-bottom:6px">One of:</div>'+schema.oneOf.map(function(s,i){return (i>0?'<div style="font-size:11px;color:var(--t3);padding:2px 0">or</div>':'')+renderSchema(s,spec,depth+1);}).join('');}
-                if(schema.anyOf){return '<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Any of:</div>'+schema.anyOf.map(function(s){return renderSchema(s,spec,depth+1);}).join('');}
+                if(schema.allOf)return '<div class="ax-schema-obj"><div class="ax-allof-label">allOf</div>'+schema.allOf.map(function(s){return renderSchema(s,spec,depth+1);}).join('')+'</div>';
+                if(schema.oneOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">One of:</div>'+schema.oneOf.map(function(s,i){return '<div class="ax-oneof-item'+(i>0?' ax-oneof-sep':'')+'">'+(i>0?'<div style="font-size:10px;color:var(--t3);margin:2px 0">or</div>':'')+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
+                if(schema.anyOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">Any of:</div>'+schema.anyOf.map(function(s){return '<div class="ax-oneof-item">'+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
                 var type=schema.type||(schema.properties?'object':'any');
                 if(type==='object'||schema.properties){
                     if(depth>=3)return '<span class="ax-type-badge">object {…}</span>';
-                    var props=schema.properties||{},req=schema.required||[];
-                    if(!Object.keys(props).length)return '<span class="ax-type-badge">object {}</span>';
+                    var props=schema.properties||{};var req=schema.required||[];var propKeys=Object.keys(props);
+                    if(!propKeys.length)return '<span class="ax-type-badge">object {}</span>'+(schema.additionalProperties?'<span style="font-size:11px;color:var(--t3);margin-left:6px">+ extra fields</span>':'');
                     var html='<div class="ax-schema-obj">';
-                    for(var pn in props){
-                        var pv=props[pn];var pt=pv.type||(pv['$ref']?pv['$ref'].split('/').pop():'any');
-                        html+='<div class="ax-prop-row"><span class="ax-prop-name">'+escH(pn)+'</span>'
-                            +'<span class="ax-prop-type ax-type-badge">'+escH(pt)+(pv.format?'<span style="opacity:.6"> ('+escH(pv.format)+')</span>':'')+'</span>'
+                    if(schema.description)html+='<div class="ax-schema-desc">'+escH(schema.description)+'</div>';
+                    propKeys.forEach(function(pn){
+                        var pv=props[pn];var pt=pv.type||(pv['$ref']?pv['$ref'].split('/').pop():(pv.properties?'object':'any'));
+                        var isNested=(pv.type==='object'||pv.properties)&&depth<2;
+                        var nestedId=isNested?'axs'+(++_schemaIds):'';
+                        html+='<div class="ax-prop-row">'
+                            +(isNested?'<button class="ax-schema-collapse-btn" data-schema="'+nestedId+'" onclick="axToggleSchema(\''+nestedId+'\')">▼</button>':'')
+                            +'<span class="ax-prop-name">'+escH(pn)+'</span>'
+                            +'<span class="ax-prop-type ax-type-badge">'+escH(pt)+(pv.format?'<span style="opacity:.6"> ('+escH(pv.format)+')</span>':'')+(pv.nullable?'<span style="opacity:.6"> | null</span>':'')+'</span>'
                             +(req.includes(pn)?'<span class="ax-req-badge ax-prop-req">req</span>':'')
-                            +(pv.description||pv.enum?'<span class="ax-prop-desc">'+(pv.description?escH(pv.description):'')
-                                +(pv.enum?'<div class="ax-enum-wrap">'+pv.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div>':'')
-                                +'</span>':'')
+                            +(pv.description?'<span class="ax-prop-desc">'+escH(pv.description)+'</span>':'')
                             +'</div>';
-                        if((pv.type==='object'||pv.properties)&&depth<2){
-                            html+='<div class="ax-prop-nested">'+renderSchema(pv,spec,depth+1)+'</div>';
-                        }
-                    }
+                        if(pv.enum)html+='<div style="padding:4px 12px 6px 12px"><div class="ax-enum-wrap">'+pv.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div></div>';
+                        if(isNested)html+='<div id="'+nestedId+'" class="ax-prop-nested">'+renderSchema(pv,spec,depth+1)+'</div>';
+                    });
                     return html+'</div>';
                 }
-                if(type==='array')return '<span class="ax-type-badge">array</span> of '+renderSchema(schema.items||{},spec,depth);
+                if(type==='array')return '<span class="ax-type-badge">array</span><span style="font-size:11px;color:var(--t3);margin:0 4px">of</span>'+renderSchema(schema.items||{},spec,depth);
                 if(schema.enum)return '<div class="ax-enum-wrap">'+schema.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div>';
-                return '<span class="ax-type-badge">'+escH(type)+(schema.format?' ('+escH(schema.format)+')':'')+'</span>';
+                return '<span class="ax-type-badge">'+escH(type)+(schema.format?'<span style="opacity:.6"> ('+escH(schema.format)+')</span>':'')+'</span>';
             }
 
-            /* ── Right panel: code samples + try-it ── */
-            var LANGS=['curl','js','python','php'];
+            window.axToggleSchema=function(id){
+                var el=document.getElementById(id);var btn=document.querySelector('[data-schema="'+id+'"]');if(!el)return;
+                var open=el.style.display!=='none';
+                el.style.display=open?'none':'';
+                if(btn)btn.textContent=open?'▶':'▼';
+            };
+
+            /* ── Right panel ── */
             var _activeLang=APEX_CFG.defaultLanguage||'curl';
 
             function renderPanel(path,method,op,spec){
                 var panel=document.getElementById('axui-panel-inner');if(!panel)return;
-                var serverUrl=_server;
-                var tabs=LANGS.map(function(l){return '<button class="ax-lang-btn'+(l===_activeLang?' active':'')+'" onclick="axLang(\''+l+'\')">'+{curl:'cURL',js:'JavaScript',python:'Python',php:'PHP'}[l]+'</button>';}).join('');
-                var codeHtml='<div class="ax-lang-tabs">'+tabs+'</div><div id="ax-code-wrap"></div>';
+                var tabs=LANGS.map(function(l){return '<button class="ax-lang-btn'+(l===_activeLang?' active':'')+'" onclick="axLang(\''+l+'\')">'+LANG_LABELS[l]+'</button>';}).join('');
+                var codeHtml='<div class="ax-panel-section-title">Code Sample</div><div class="ax-lang-tabs">'+tabs+'</div><div id="ax-code-wrap"></div>';
                 var tryHtml='';
                 if(APEX_CFG.tryItOut){
-                    var paramInputs='';
-                    (op.parameters||[]).forEach(function(p){
-                        paramInputs+='<label class="ax-try-label">'+escH(p.name)+' <span style="color:var(--t3);font-weight:400">('+escH(p.in)+')</span></label>'
-                            +'<input class="ax-try-input" id="axi-'+escH(p.name)+'" placeholder="'+escH(p.example!=null?String(p.example):p.name)+'" value="'+escH(p.example!=null?String(p.example):'')+'"><br style="margin-bottom:8px">';
-                    });
+                    var params=op.parameters||[];
+                    var pathParams=params.filter(function(p){return p.in==='path';});
+                    var queryParams=params.filter(function(p){return p.in==='query';});
+                    var headerParams=params.filter(function(p){return p.in==='header';});
                     var hasBody=['post','put','patch'].includes(method);
-                    var bodyHtml='';
+                    var hasSec=op.security===undefined||op.security.length>0;
+                    tryHtml='<div class="ax-try-section"><div class="ax-panel-section-title">Try it out</div>'
+                        +'<div style="font-size:11px;color:var(--t3);margin-bottom:10px;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escH(_server)+'">'+escH(_server||'(no server)')+'</div>';
+                    if(hasSec){
+                        tryHtml+='<label class="ax-try-label">Authorization</label>'
+                            +'<div class="ax-try-auth-wrap">'
+                            +'<select id="axi-auth-type" class="ax-try-auth-type" onchange="axAuthTypeChange()">'
+                            +'<option value="bearer">Bearer</option>'
+                            +'<option value="basic">Basic</option>'
+                            +'<option value="apikey">API Key</option>'
+                            +'</select>'
+                            +'<input class="ax-try-input" id="axi-auth" type="password" placeholder="Token…" style="flex:1">'
+                            +'</div>';
+                    }
+                    function paramFields(list,prefix){
+                        var h='';
+                        list.forEach(function(p){
+                            h+='<label class="ax-try-label" style="font-size:11px;color:var(--t3)">'+escH(p.name)+(p.required?' <span style="color:var(--red)">*</span>':'')+'</label>'
+                                +'<input class="ax-try-input" id="'+(prefix||'axi-')+escH(p.name)+'" placeholder="'+escH(p.example!=null?String(p.example):'')+'"><div style="margin-bottom:4px"></div>';
+                        });
+                        return h;
+                    }
+                    if(pathParams.length)tryHtml+='<div class="ax-try-label" style="margin-top:8px;color:var(--t3)">Path</div>'+paramFields(pathParams,'axi-');
+                    if(queryParams.length)tryHtml+='<div class="ax-try-label" style="margin-top:8px;color:var(--t3)">Query</div>'+paramFields(queryParams,'axi-');
+                    if(headerParams.length)tryHtml+='<div class="ax-try-label" style="margin-top:8px;color:var(--t3)">Headers</div>'+paramFields(headerParams,'axi-h-');
                     if(hasBody&&op.requestBody){
                         var ct=op.requestBody.content||{};var ex='{}';
-                        if(ct['application/json']&&ct['application/json'].schema){
-                            ex=JSON.stringify(buildExample(ct['application/json'].schema,spec),null,2);
-                        }
-                        bodyHtml='<label class="ax-try-label">Request Body</label><textarea class="ax-try-input ax-try-textarea" id="axi-body">'+escH(ex)+'</textarea>';
+                        if(ct['application/json']&&ct['application/json'].schema)ex=JSON.stringify(buildExample(ct['application/json'].schema,spec),null,2);
+                        tryHtml+='<label class="ax-try-label" style="margin-top:8px">Request Body</label><textarea class="ax-try-input ax-try-textarea" id="axi-body">'+escH(ex)+'</textarea>';
                     }
-                    tryHtml='<div class="ax-try-section">'
-                        +'<label class="ax-try-label" style="display:flex;align-items:center;gap:6px">Server <span style="font-family:monospace;font-size:11px;color:var(--t3)">'+escH(serverUrl)+'</span></label>'
-                        +'<label class="ax-try-label">Authorization</label><input class="ax-try-input" id="axi-auth" type="password" placeholder="Bearer token…">'
-                        +(paramInputs?'<br style="margin-top:8px">'+paramInputs:'')
-                        +bodyHtml
-                        +'<button class="ax-try-send" id="axi-send" onclick="axSend(\''+escH(serverUrl)+'\',\''+escH(path)+'\',\''+escH(method)+'\')">Send Request</button>'
-                        +'<div id="axi-result"></div>'
-                        +'</div>';
+                    tryHtml+='<button class="ax-try-send" id="axi-send" onclick="axSend(\''+escH(_server)+'\',\''+escH(path)+'\',\''+escH(method)+'\')">Send Request</button><div id="axi-result"></div></div>';
                 }
                 panel.innerHTML=codeHtml+tryHtml;
-                renderCode(path,method,op,spec,serverUrl);
+                renderCode(path,method,op,spec,_server);
             }
+
+            window.axAuthTypeChange=function(){
+                var t=document.getElementById('axi-auth-type');var i=document.getElementById('axi-auth');if(!t||!i)return;
+                var ph={bearer:'Token…',basic:'user:password',apikey:'API key…'};
+                i.placeholder=ph[t.value]||'Token…';i.type=t.value==='basic'?'text':'password';
+            };
 
             window.axLang=function(lang){
                 _activeLang=lang;
-                document.querySelectorAll('.ax-lang-btn').forEach(function(b){b.classList.toggle('active',b.textContent.toLowerCase()===lang||({curl:'curl',js:'javascript',python:'python',php:'php'}[lang]&&b.textContent.toLowerCase()===({curl:'curl',js:'javascript',python:'python',php:'php'}[lang])));});
+                document.querySelectorAll('.ax-lang-btn').forEach(function(b){b.classList.toggle('active',b.textContent===LANG_LABELS[lang]);});
                 var spec=_specCache;if(!spec)return;
                 var key=_activeOpKey;if(!key)return;
-                var parts=key.split('__');var method=parts[0];var path=parts.slice(1).join('__');
-                var op=spec.paths&&spec.paths[path]&&spec.paths[path][method];
-                if(op)renderCode(path,method,op,spec,_server);
+                var parts=key.split('__');var m=parts[0];var p=parts.slice(1).join('__');
+                var op=spec.paths&&spec.paths[p]&&spec.paths[p][m];
+                if(op)renderCode(p,m,op,spec,_server);
             };
 
             function renderCode(path,method,op,spec,server){
                 var wrap=document.getElementById('ax-code-wrap');if(!wrap)return;
                 var code=genCode(_activeLang,server||'http://localhost',path,method,op,spec);
                 wrap.innerHTML='<pre class="ax-code">'+hlJson(escH(code))+'</pre>'
-                    +'<button onclick="apexCopyCode(this)" style="margin-top:6px;padding:4px 10px;border-radius:6px;background:var(--s1);border:1px solid var(--border);color:var(--t2);font-size:11px;cursor:pointer;transition:all .12s" '
-                    +'data-code="'+escH(code)+'">Copy</button>';
+                    +'<button onclick="apexCopyCode(this)" class="ax-code-copy-btn" data-code="'+escH(code)+'">Copy</button>';
             }
 
-            window.apexCopyCode=function(btn){fb(btn.dataset.code);btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1800);};
+            window.apexCopyCode=function(btn){
+                fb(btn.dataset.code);btn.textContent='Copied!';btn.style.color='var(--green)';
+                setTimeout(function(){btn.textContent='Copy';btn.style.color='';},1800);
+            };
 
             function genCode(lang,server,path,method,op,spec){
                 var url=server+path;var hasBody=['post','put','patch'].includes(method);
-                var ct=(op.requestBody&&op.requestBody.content)||{};
-                var bodyObj=null;
-                if(hasBody&&ct['application/json']&&ct['application/json'].schema){bodyObj=buildExample(ct['application/json'].schema,spec);}
-                var hasSec=op.security&&op.security.length;
+                var ct=(op.requestBody&&op.requestBody.content)||{};var bodyObj=null;
+                if(hasBody&&ct['application/json']&&ct['application/json'].schema)bodyObj=buildExample(ct['application/json'].schema,spec);
+                var hasSec=op.security===undefined||(op.security&&op.security.length>0);
                 switch(lang){
-                    case 'curl':
-                        var c='curl -X '+method.toUpperCase()+' \\\n  \''+url+'\'';
-                        c+='\\\n  -H \'Accept: application/json\'';
-                        if(hasSec)c+='\\\n  -H \'Authorization: Bearer {your_token}\'';
-                        if(bodyObj){c+='\\\n  -H \'Content-Type: application/json\'';c+='\\\n  -d \''+JSON.stringify(bodyObj,null,2)+'\'';}
+                    case 'curl':{
+                        var c="curl -X "+method.toUpperCase()+" \\\n  '"+url+"'";
+                        c+=" \\\n  -H 'Accept: application/json'";
+                        if(hasSec)c+=" \\\n  -H 'Authorization: Bearer {your_token}'";
+                        if(bodyObj){c+=" \\\n  -H 'Content-Type: application/json'";c+=" \\\n  -d '"+JSON.stringify(bodyObj,null,2)+"'";}
                         return c;
-                    case 'js':
+                    }
+                    case 'js':{
                         var o="const response = await fetch('"+url+"', {\n  method: '"+method.toUpperCase()+"',\n  headers: {\n    'Accept': 'application/json',";
                         if(hasSec)o+="\n    'Authorization': 'Bearer {your_token}',";
                         if(bodyObj)o+="\n    'Content-Type': 'application/json',";
-                        o+="\n  },"+(bodyObj?"\n  body: JSON.stringify("+JSON.stringify(bodyObj,null,2)+")":'');
-                        return o+"\n});\nconst data = await response.json();";
-                    case 'python':
-                        var py="import requests\n\nresponse = requests."+method.toLowerCase()+"(\n    '"+url+"',\n    headers={\n        'Accept': 'application/json',";
-                        if(hasSec)py+="\n        'Authorization': 'Bearer {your_token}',";
-                        py+="\n    },"+(bodyObj?"\n    json="+JSON.stringify(bodyObj,null,2):'');
+                        o+="\n  }"+(bodyObj?",\n  body: JSON.stringify("+JSON.stringify(bodyObj,null,2)+")":"")+"\n});\nconst data = await response.json();";
+                        return o;
+                    }
+                    case 'python':{
+                        var py="import requests\n\nresponse = requests."+method.toLowerCase()+"(\n    '"+url+"',\n    headers={'Accept': 'application/json'"+(hasSec?",'Authorization': 'Bearer {your_token}'":"")+"},"+(bodyObj?"\n    json="+JSON.stringify(bodyObj,null,2):"");
                         return py+"\n)\ndata = response.json()";
-                    case 'php':
-                        var php="$client = new \\GuzzleHttp\\Client();\n\n$response = $client->"+method.toLowerCase()+"('"+url+"', [\n    'headers' => [\n        'Accept' => 'application/json',";
-                        if(hasSec)php+="\n        'Authorization' => 'Bearer {your_token}',";
-                        php+="\n    ],"+(bodyObj?"\n    'json' => "+JSON.stringify(bodyObj,null,2):'');
-                        return php+"\n]);\n\n$data = json_decode((string) $response->getBody(), true);";
+                    }
+                    case 'php':{
+                        var php="$response = (new \\GuzzleHttp\\Client())\n    ->"+method.toLowerCase()+"('"+url+"', [\n        'headers' => ['Accept' => 'application/json'"+(hasSec?", 'Authorization' => 'Bearer {your_token}'"  :"")+"],"+(bodyObj?"\n        'json' => "+JSON.stringify(bodyObj,null,2):"");
+                        return php+"\n    ]);\n$data = json_decode((string) $response->getBody(), true);";
+                    }
+                    case 'go':{
+                        var go="package main\n\nimport (\n\t\"fmt\"\n\t\"io\"\n\t\"net/http\"\n"+(bodyObj?"\t\"bytes\"\n\t\"encoding/json\"\n":"")+"\n)\n\nfunc main() {\n";
+                        if(bodyObj){go+="\tpayload, _ := json.Marshal("+JSON.stringify(bodyObj)+")\n";go+="\treq, _ := http.NewRequest(\""+method.toUpperCase()+"\", \""+url+"\", bytes.NewBuffer(payload))\n";}
+                        else go+="\treq, _ := http.NewRequest(\""+method.toUpperCase()+"\", \""+url+"\", nil)\n";
+                        go+="\treq.Header.Set(\"Accept\", \"application/json\")\n";
+                        if(hasSec)go+="\treq.Header.Set(\"Authorization\", \"Bearer {your_token}\")\n";
+                        if(bodyObj)go+="\treq.Header.Set(\"Content-Type\", \"application/json\")\n";
+                        go+="\tclient := &http.Client{}\n\tresp, err := client.Do(req)\n\tif err != nil { panic(err) }\n\tdefer resp.Body.Close()\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}";
+                        return go;
+                    }
                     default: return '// '+lang;
                 }
             }
@@ -1179,33 +1474,45 @@ final class UiRenderer
             window.axSend=function(server,path,method){
                 var btn=document.getElementById('axi-send'),result=document.getElementById('axi-result');
                 if(!btn||!result)return;
+                var authType=document.getElementById('axi-auth-type');
                 var auth=document.getElementById('axi-auth');
                 var body=document.getElementById('axi-body');
                 var url=server+path;
-                var params=((_specCache&&_specCache.paths&&_specCache.paths[path]&&_specCache.paths[path][method]&&_specCache.paths[path][method].parameters)||[]);
-                params.forEach(function(p){
+                var specParams=(_specCache&&_specCache.paths&&_specCache.paths[path]&&_specCache.paths[path][method]&&_specCache.paths[path][method].parameters)||[];
+                specParams.forEach(function(p){
                     var el=document.getElementById('axi-'+p.name);if(!el||!el.value)return;
                     if(p.in==='path')url=url.replace('{'+p.name+'}',encodeURIComponent(el.value));
                 });
-                var qp=params.filter(function(p){return p.in==='query';}).map(function(p){var el=document.getElementById('axi-'+p.name);return el&&el.value?p.name+'='+encodeURIComponent(el.value):'';}).filter(Boolean).join('&');
+                var qp=specParams.filter(function(p){return p.in==='query';}).map(function(p){var el=document.getElementById('axi-'+p.name);return el&&el.value?p.name+'='+encodeURIComponent(el.value):'';}).filter(Boolean).join('&');
                 if(qp)url+='?'+qp;
                 var headers={'Accept':'application/json'};
-                if(auth&&auth.value)headers['Authorization']='Bearer '+auth.value;
-                if(body&&body.value)headers['Content-Type']='application/json';
+                if(auth&&auth.value){
+                    var at=authType?authType.value:'bearer';
+                    if(at==='bearer')headers['Authorization']='Bearer '+auth.value;
+                    else if(at==='basic')headers['Authorization']='Basic '+btoa(auth.value);
+                    else if(at==='apikey')headers['X-API-Key']=auth.value;
+                }
+                specParams.filter(function(p){return p.in==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headers[p.name]=el.value;});
+                var hasBodyMethod=!['get','head'].includes(method);
+                if(body&&body.value&&hasBodyMethod)headers['Content-Type']='application/json';
                 var opts={method:method.toUpperCase(),headers:headers};
-                if(body&&body.value&&!['get','head'].includes(method))opts.body=body.value;
+                if(body&&body.value&&hasBodyMethod)opts.body=body.value;
                 btn.disabled=true;btn.textContent='Sending…';
                 var t0=Date.now();
-                result.innerHTML='<div class="axui-loading-state"><div class="axui-spinner"></div><span>Waiting…</span></div>';
+                result.innerHTML='<div class="axui-loading-state"><div class="axui-spinner"></div><span>Waiting for response…</span></div>';
                 fetch(url,opts).then(function(r){
                     var ms=Date.now()-t0;var sc=r.status;
                     var cls=sc<300?'ax-res-s-ok':sc<400?'ax-res-s-info':sc<500?'ax-res-s-warn':'ax-res-s-err';
+                    var hdrLines='';r.headers.forEach(function(v,n){hdrLines+=escH(n)+': '+escH(v)+'\n';});
                     return r.text().then(function(raw){
                         var fmt=raw;try{fmt=JSON.stringify(JSON.parse(raw),null,2);}catch(e){}
-                        result.innerHTML='<div class="ax-res-panel"><div class="ax-res-status-bar"><span class="'+cls+'">'+sc+' '+escH(r.statusText)+'</span><span class="ax-res-ms">'+ms+'ms</span></div><div class="ax-res-body"><pre class="ax-res-pre">'+hlJson(escH(fmt))+'</pre></div></div>';
+                        result.innerHTML='<div class="ax-res-panel">'
+                            +'<div class="ax-res-status-bar"><span class="'+cls+'">'+sc+' '+escH(r.statusText)+'</span><span class="ax-res-ms">'+ms+'ms</span></div>'
+                            +(hdrLines?'<details class="ax-res-headers"><summary style="font-size:11px;color:var(--t3);padding:6px 10px;cursor:pointer;user-select:none">Response headers</summary><pre style="padding:4px 10px 8px;font-size:11px;color:var(--t3);overflow-x:auto">'+hdrLines+'</pre></details>':'')
+                            +'<div class="ax-res-body"><pre class="ax-res-pre">'+hlJson(escH(fmt))+'</pre></div></div>';
                     });
                 }).catch(function(err){
-                    result.innerHTML='<div class="ax-res-panel"><div class="ax-res-status-bar"><span class="ax-res-s-err">Network Error: '+escH(err.message)+'</span></div></div>';
+                    result.innerHTML='<div class="ax-res-panel"><div class="ax-res-status-bar"><span class="ax-res-s-err">Network Error: '+escH(err.message)+'</span></div><div class="ax-res-body" style="font-size:12px;color:var(--t3);padding:8px">Check CORS headers or verify the server is reachable.</div></div>';
                 }).finally(function(){btn.disabled=false;btn.textContent='Send Request';});
             };
 
