@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ApexDocs\Bridge\Laravel\Console\Commands;
 
 use ApexDocs\ApexDocs;
+use ApexDocs\Export\BrunoExporter;
 use ApexDocs\Export\InsomniaExporter;
 use ApexDocs\Export\JsonExporter;
 use ApexDocs\Export\PostmanExporter;
@@ -14,7 +15,7 @@ use Illuminate\Console\Command;
 class ExportCommand extends Command
 {
     protected $signature = 'apexdocs:export
-        {format          : openapi-json | openapi-yaml | postman | insomnia}
+        {format          : openapi-json | openapi-yaml | postman | insomnia | bruno}
         {--output=       : Output file path}';
 
     protected $description = 'Export the API spec in various formats';
@@ -25,6 +26,7 @@ class ExportCommand extends Command
         YamlExporter $yaml,
         PostmanExporter $postman,
         InsomniaExporter $insomnia,
+        BrunoExporter $bruno,
     ): int {
         $doc = $apexDocs->generate();
         $format = $this->argument('format');
@@ -36,10 +38,11 @@ class ExportCommand extends Command
             'openapi-yaml' => $yaml->toFile($doc, $out ?: "{$base}/openapi.yaml"),
             'postman' => $postman->toFile($doc, $out ?: "{$base}/postman.json"),
             'insomnia' => $insomnia->toFile($doc, $out ?: "{$base}/insomnia.json"),
+            'bruno' => $bruno->toFile($doc, $out ?: "{$base}/bruno.json"),
             default => $this->error("Unknown format: {$format}"),
         };
 
-        if (in_array($format, ['openapi-json', 'openapi-yaml', 'postman', 'insomnia'], true)) {
+        if (in_array($format, ['openapi-json', 'openapi-yaml', 'postman', 'insomnia', 'bruno'], true)) {
             $this->info("<fg=green>✓</> Exported {$format}.");
         }
 

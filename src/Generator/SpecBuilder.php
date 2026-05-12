@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace ApexDocs\Generator;
 
+use ApexDocs\Attribute\ApiGroup;
 use ApexDocs\Config;
 use ApexDocs\Contract\DocumentTransformerInterface;
 use ApexDocs\Contract\OperationTransformerInterface;
 use ApexDocs\Contract\RouteCollectionInterface;
 use ApexDocs\Contract\SecurityDetectorInterface;
 use ApexDocs\Contract\ValidationExtractorInterface;
+use ApexDocs\Extractor\AttributeReader;
+use ApexDocs\Extractor\ComponentRegistry;
 use ApexDocs\Extractor\ParameterExtractor;
 use ApexDocs\Extractor\ResponseExtractor;
 use ApexDocs\Extractor\SchemaBuilder;
@@ -17,6 +20,8 @@ use ApexDocs\Extractor\WebhookScanner;
 use ApexDocs\Route\Route;
 use ApexDocs\Spec\Document;
 use Closure;
+use ReflectionClass;
+use ReflectionException;
 
 /**
  * Orchestrates the full OpenAPI document build.
@@ -27,6 +32,8 @@ final class SpecBuilder
     private OperationBuilder $operationBuilder;
 
     private WebhookScanner $webhookScanner;
+
+    private ComponentRegistry $componentRegistry;
 
     /** @param list<DocumentTransformerInterface|Closure>  $documentTransformers */
     /** @param list<OperationTransformerInterface|Closure> $operationTransformers */
@@ -40,11 +47,13 @@ final class SpecBuilder
         private array $webhooks,
         private ?Closure $routeFilter,
     ) {
-        $schemaBuilder = new SchemaBuilder($this->config->maxSchemaDepth);
+        $this->componentRegistry = new ComponentRegistry;
+        $schemaBuilder = new SchemaBuilder($this->config->maxSchemaDepth, $this->componentRegistry);
 
         $this->operationBuilder = new OperationBuilder(
             parameterExtractor: new ParameterExtractor,
             responseExtractor: new ResponseExtractor($schemaBuilder),
+            schemaBuilder: $schemaBuilder,
             validationExtractor: $this->validationExtractor,
             securityDetector: $this->securityDetector,
             transformers: $this->operationTransformers,
@@ -62,6 +71,7 @@ final class SpecBuilder
         $this->addSecuritySchemes($doc);
         $this->addPaths($doc);
         $this->addWebhooks($doc);
+        $this->addRegisteredSchemas($doc);
         $this->addStandardComponents($doc);
         $this->applyDocumentTransformers($doc);
 
@@ -100,12 +110,10 @@ final class SpecBuilder
 
     private function addSecuritySchemes(Document $doc): void
     {
-        // From config
         foreach ($this->config->securitySchemes as $name => $scheme) {
             $doc->components()->addSecurityScheme($name, $scheme);
         }
 
-        // From framework bridge
         if ($this->securityDetector !== null && $this->config->autoDetectSecurity) {
             foreach ($this->securityDetector->schemes() as $name => $scheme) {
                 $doc->components()->addSecurityScheme($name, $scheme);
@@ -138,14 +146,25 @@ final class SpecBuilder
 
     private function addWebhooks(Document $doc): void
     {
-        // Manually registered
         foreach ($this->webhooks as $name => $spec) {
             $doc->addWebhook($name, $spec);
         }
 
-        // Auto-scanned #[Webhook] classes
         foreach ($this->webhookScanner->scan() as $name => $spec) {
             $doc->addWebhook($name, $spec);
+        }
+    }
+
+    /**
+     * Flush all class schemas collected during the build into components/schemas.
+     * This is what makes $ref pointers in operations resolve correctly.
+     */
+    private function addRegisteredSchemas(Document $doc): void
+    {
+        foreach ($this->componentRegistry->all() as $name => $schema) {
+            if (! $doc->components()->hasSchema($name)) {
+                $doc->components()->addSchema($name, $schema);
+            }
         }
     }
 
@@ -153,7 +172,6 @@ final class SpecBuilder
     {
         $c = $doc->components();
 
-        // Standard schemas
         $c->addSchema('ValidationError', [
             'type' => 'object',
             'properties' => [
@@ -174,11 +192,11 @@ final class SpecBuilder
             'type' => 'object',
             'properties' => [
                 'current_page' => ['type' => 'integer'],
-                'from' => ['type' => 'integer', 'nullable' => true],
-                'last_page' => ['type' => 'integer'],
-                'per_page' => ['type' => 'integer'],
-                'to' => ['type' => 'integer', 'nullable' => true],
-                'total' => ['type' => 'integer'],
+                'from'         => ['type' => 'integer', 'nullable' => true],
+                'last_page'    => ['type' => 'integer'],
+                'per_page'     => ['type' => 'integer'],
+                'to'           => ['type' => 'integer', 'nullable' => true],
+                'total'        => ['type' => 'integer'],
             ],
         ]);
 
@@ -186,13 +204,12 @@ final class SpecBuilder
             'type' => 'object',
             'properties' => [
                 'first' => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
-                'last' => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
-                'prev' => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
-                'next' => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
+                'last'  => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
+                'prev'  => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
+                'next'  => ['type' => 'string', 'format' => 'uri', 'nullable' => true],
             ],
         ]);
 
-        // Standard responses
         $c->addResponse('ValidationError', [
             'description' => 'Validation Error',
             'content' => ['application/json' => ['schema' => ['$ref' => '#/components/schemas/ValidationError']]],
@@ -206,8 +223,8 @@ final class SpecBuilder
         $c->addResponse('TooManyRequests', [
             'description' => 'Too Many Requests',
             'headers' => [
-                'Retry-After' => ['schema' => ['type' => 'integer']],
-                'X-RateLimit-Limit' => ['schema' => ['type' => 'integer']],
+                'Retry-After'          => ['schema' => ['type' => 'integer']],
+                'X-RateLimit-Limit'    => ['schema' => ['type' => 'integer']],
                 'X-RateLimit-Remaining' => ['schema' => ['type' => 'integer']],
             ],
             'content' => ['application/json' => ['schema' => ['type' => 'object', 'properties' => ['message' => ['type' => 'string']]]]],
@@ -258,7 +275,38 @@ final class SpecBuilder
             return true;
         });
 
-        // Custom filter
+        // Filter by #[ApiGroup] when specGroup is configured
+        if ($this->config->specGroup !== '') {
+            $group = $this->config->specGroup;
+            $routes = array_filter($routes, function (Route $route) use ($group) {
+                [$class, $method] = $route->resolveHandler();
+                try {
+                    $refClass = new ReflectionClass($class);
+                    $refMethod = $refClass->getMethod($method);
+                } catch (ReflectionException) {
+                    return false;
+                }
+
+                $classGroups = AttributeReader::all($refClass, ApiGroup::class);
+                $methodGroups = AttributeReader::all($refMethod, ApiGroup::class);
+                $allGroups = array_merge($classGroups, $methodGroups);
+
+                // No #[ApiGroup] on the route → always include
+                if (empty($allGroups)) {
+                    return true;
+                }
+
+                foreach ($allGroups as $g) {
+                    if ($g->name === $group) {
+                        return true;
+                    }
+                }
+
+                return false;
+            });
+        }
+
+        // Custom user-supplied filter
         if ($this->routeFilter !== null) {
             $filter = $this->routeFilter;
             $routes = array_filter($routes, fn (Route $r) => (bool) $filter($r));

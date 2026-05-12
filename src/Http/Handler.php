@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace ApexDocs\Http;
 
 use ApexDocs\ApexDocs;
+use ApexDocs\Export\BrunoExporter;
 use ApexDocs\Export\InsomniaExporter;
 use ApexDocs\Export\JsonExporter;
 use ApexDocs\Export\PostmanExporter;
@@ -25,6 +26,7 @@ use Psr\Http\Server\RequestHandlerInterface;
  *   GET /spec.yaml → OpenAPI YAML
  *   GET /postman   → Postman Collection JSON (download)
  *   GET /insomnia  → Insomnia Export JSON (download)
+ *   GET /bruno     → Bruno Collection JSON (download)
  */
 final class Handler implements RequestHandlerInterface
 {
@@ -44,6 +46,7 @@ final class Handler implements RequestHandlerInterface
             str_ends_with($path, '/spec.yaml') => $this->yamlSpec(),
             str_ends_with($path, '/postman') => $this->postman(),
             str_ends_with($path, '/insomnia') => $this->insomnia(),
+            str_ends_with($path, '/bruno') => $this->bruno(),
             default => $this->ui($request),
         };
     }
@@ -83,6 +86,16 @@ final class Handler implements RequestHandlerInterface
         $doc = $this->apexDocs->generate();
         $json = (new InsomniaExporter)->toString($doc);
         $name = 'insomnia-collection.json';
+
+        return $this->respond($json, 'application/json')
+            ->withHeader('Content-Disposition', "attachment; filename=\"{$name}\"");
+    }
+
+    private function bruno(): ResponseInterface
+    {
+        $doc = $this->apexDocs->generate();
+        $json = (new BrunoExporter)->toString($doc);
+        $name = 'bruno-collection.json';
 
         return $this->respond($json, 'application/json')
             ->withHeader('Content-Disposition', "attachment; filename=\"{$name}\"");

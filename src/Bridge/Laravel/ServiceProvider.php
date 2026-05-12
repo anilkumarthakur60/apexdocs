@@ -15,6 +15,7 @@ use ApexDocs\Config;
 use ApexDocs\Contract\RouteCollectionInterface;
 use ApexDocs\Contract\SecurityDetectorInterface;
 use ApexDocs\Contract\ValidationExtractorInterface;
+use ApexDocs\Export\BrunoExporter;
 use ApexDocs\Export\InsomniaExporter;
 use ApexDocs\Export\JsonExporter;
 use ApexDocs\Export\PostmanExporter;
@@ -52,6 +53,7 @@ class ServiceProvider extends LaravelServiceProvider
         $this->app->bind(YamlExporter::class);
         $this->app->bind(PostmanExporter::class);
         $this->app->bind(InsomniaExporter::class);
+        $this->app->bind(BrunoExporter::class);
         $this->app->bind(UiRenderer::class);
     }
 
@@ -76,7 +78,7 @@ class ServiceProvider extends LaravelServiceProvider
         }
 
         $middleware = config('apexdocs.middleware', ['web']);
-        $basePath = config('apexdocs.ui.path', 'docs/api');
+        $basePath = config('apexdocs.ui.path', 'documentation/api');
 
         /** @var Router $router */
         $router = $this->app->make(Router::class);
@@ -87,6 +89,7 @@ class ServiceProvider extends LaravelServiceProvider
             $router->get($basePath.'/spec.yaml', [DocsController::class, 'yaml'])->name('apexdocs.yaml');
             $router->get($basePath.'/postman', [DocsController::class, 'postman'])->name('apexdocs.postman');
             $router->get($basePath.'/insomnia', [DocsController::class, 'insomnia'])->name('apexdocs.insomnia');
+            $router->get($basePath.'/bruno', [DocsController::class, 'bruno'])->name('apexdocs.bruno');
         });
     }
 

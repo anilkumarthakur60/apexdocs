@@ -1,0 +1,62 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+nbproject/
+.project
+.buildpath
+.settings/
+
+# PHP dependencies
+/vendor/
+
+# Composer
+composer.phar
+auth.json
+
+# Testing & coverage
+/.phpunit.result.cache
+/.phpunit.cache/
+/coverage/
+coverage.xml
+clover.xml
+junit.xml
+.pest/
+
+# PHPStan
+/.phpstan.result.cache
+/phpstan.result.cache
+
+# Pint / code formatting
+.pint.cache
+
+# Laravel (testbench / local app)
+/database/database.sqlite
+/database/*.sqlite
+.env
+.env.*
+!.env.example
+/storage/
+/bootstrap/cache/
+
+# Build artifacts
+/build/
+/dist/
+*.phar
+
+# Logs
+*.log
+/logs/
+
+# OS
+Thumbs.db
+ehthumbs.db
+Desktop.ini

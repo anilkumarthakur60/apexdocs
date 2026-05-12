@@ -18,7 +18,7 @@ return [
 
     'ui' => [
         'default' => env('APEXDOCS_UI', 'scalar'),
-        'path' => 'docs/api',
+        'path' => 'documentation/api',
         'show_ui_switcher' => true,
     ],
 
@@ -46,7 +46,7 @@ return [
     ],
 
     'cache' => [
-        'enabled' => env('APEXDOCS_CACHE', ! app()->environment('local')),
+        'enabled' => env('APEXDOCS_CACHE', env('APP_ENV', 'production') !== 'local'),
         'driver' => env('APEXDOCS_CACHE_DRIVER', 'file'),
         'ttl' => env('APEXDOCS_CACHE_TTL', 3600),
     ],

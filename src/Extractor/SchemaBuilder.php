@@ -4,23 +4,31 @@ declare(strict_types=1);
 
 namespace ApexDocs\Extractor;
 
+use ApexDocs\Attribute\Schema as SchemaAttribute;
 use ReflectionClass;
 use ReflectionNamedType;
+use ReflectionProperty;
 
 /**
  * Converts PHP type strings into OpenAPI schema arrays.
  * Pure PHP — no framework dependency.
+ *
+ * When a ComponentRegistry is attached, every class schema is registered once
+ * and subsequent references return $ref pointers instead of inlining the schema.
  */
 final class SchemaBuilder
 {
-    /** @var array<string, true>  prevent infinite recursion */
+    /** @var array<string, true> prevent infinite recursion during build */
     private array $building = [];
 
     private int $maxDepth;
 
-    public function __construct(int $maxDepth = 6)
+    private ?ComponentRegistry $registry;
+
+    public function __construct(int $maxDepth = 6, ?ComponentRegistry $registry = null)
     {
         $this->maxDepth = $maxDepth;
+        $this->registry = $registry;
     }
 
     // ── Public API ────────────────────────────────────────────────────────────
@@ -31,30 +39,40 @@ final class SchemaBuilder
         $type = ltrim($type, '\\');
 
         return match (true) {
-            $type === 'void', $type === 'never' => [],
-            $type === 'mixed' => [],
-            $type === 'null' => ['type' => 'null'],
-            $type === 'bool', $type === 'boolean' => ['type' => 'boolean'],
-            $type === 'int',  $type === 'integer' => ['type' => 'integer'],
-            $type === 'float', $type === 'double', $type === 'number' => ['type' => 'number', 'format' => 'float'],
-            $type === 'string' => ['type' => 'string'],
-            $type === 'array' => ['type' => 'array', 'items' => new \stdClass],
-            str_ends_with($type, '[]') => $this->arrayOf(substr($type, 0, -2), $depth),
-            str_contains($type, '|') => $this->union($type, $depth),
+            $type === 'void', $type === 'never'    => [],
+            $type === 'mixed'                      => [],
+            $type === 'null'                       => ['type' => 'null'],
+            $type === 'bool', $type === 'boolean'  => ['type' => 'boolean'],
+            $type === 'int', $type === 'integer'   => ['type' => 'integer'],
+            $type === 'float', $type === 'double', $type === 'number'
+                                                   => ['type' => 'number', 'format' => 'float'],
+            $type === 'string'                     => ['type' => 'string'],
+            $type === 'array'                      => ['type' => 'array', 'items' => new \stdClass],
+            str_ends_with($type, '[]')             => $this->arrayOf(substr($type, 0, -2), $depth),
+            str_contains($type, '&')               => $this->intersection($type, $depth),
+            str_contains($type, '|')               => $this->union($type, $depth),
             class_exists($type) || interface_exists($type) => $this->fromClass($type, $depth),
-            default => ['type' => 'string'],
+            default                                => ['type' => 'string'],
         };
     }
 
     /** @return array<string, mixed> */
     public function fromClass(string $class, int $depth = 0): array
     {
-        if ($depth >= $this->maxDepth) {
-            return ['type' => 'object'];
+        $name = $this->schemaName($class);
+
+        // Already registered in registry → return $ref immediately
+        if ($this->registry?->has($class)) {
+            return ['$ref' => $this->registry->refFor($class)];
         }
 
+        // Circular reference mid-build → return $ref (schema will be complete on unwind)
         if (isset($this->building[$class])) {
-            return ['$ref' => '#/components/schemas/'.$this->schemaName($class)];
+            return ['$ref' => '#/components/schemas/'.$name];
+        }
+
+        if ($depth >= $this->maxDepth) {
+            return ['type' => 'object'];
         }
 
         $this->building[$class] = true;
@@ -62,16 +80,25 @@ final class SchemaBuilder
         try {
             $ref = new ReflectionClass($class);
         } catch (\ReflectionException) {
-            return ['type' => 'object'];
-        } finally {
             unset($this->building[$class]);
+
+            return ['type' => 'object'];
         }
 
-        if ($ref->isEnum()) {
-            return $this->fromEnum($class);
+        $schema = $ref->isEnum() ? $this->fromEnum($class) : $this->fromReflection($ref, $depth);
+
+        // Apply #[Schema] metadata from the class itself
+        $schema = $this->applySchemaAttribute($ref, $schema);
+
+        unset($this->building[$class]);
+
+        if ($this->registry !== null) {
+            $this->registry->register($class, $name, $schema);
+
+            return ['$ref' => '#/components/schemas/'.$name];
         }
 
-        return $this->fromReflection($ref, $depth);
+        return $schema;
     }
 
     public function schemaName(string $class): string
@@ -105,12 +132,18 @@ final class SchemaBuilder
 
     private function fromReflection(ReflectionClass $ref, int $depth): array
     {
-        $schema = ['type' => 'object', 'properties' => []];
+        $ownProperties = [];
+        $required = [];
 
-        foreach ($ref->getProperties(\ReflectionProperty::IS_PUBLIC) as $prop) {
+        foreach ($ref->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
+            // Only own properties — parent properties handled via allOf
+            if ($prop->getDeclaringClass()->getName() !== $ref->getName()) {
+                continue;
+            }
+
             $propType = $prop->getType();
             if (! ($propType instanceof ReflectionNamedType)) {
-                $schema['properties'][$prop->getName()] = [];
+                $ownProperties[$prop->getName()] = [];
 
                 continue;
             }
@@ -119,7 +152,79 @@ final class SchemaBuilder
             if ($propType->allowsNull()) {
                 $s['nullable'] = true;
             }
-            $schema['properties'][$prop->getName()] = $s;
+            $ownProperties[$prop->getName()] = $s;
+
+            // A property is required when it is non-nullable and has no default value,
+            // or is readonly (must be supplied at construction time).
+            if ($this->isRequired($prop, $propType)) {
+                $required[] = $prop->getName();
+            }
+        }
+
+        $ownSchema = ['type' => 'object', 'properties' => $ownProperties];
+        if ($required) {
+            $ownSchema['required'] = $required;
+        }
+
+        // Schema inheritance: if the class has a non-abstract parent with public
+        // properties, model it as allOf so the parent schema is reused via $ref.
+        $parent = $ref->getParentClass();
+        if ($parent !== false && ! $this->isPhpBuiltin($parent->getName()) && $parent->getProperties(ReflectionProperty::IS_PUBLIC)) {
+            $parentSchema = $this->fromClass($parent->getName(), $depth + 1);
+
+            return ['allOf' => [$parentSchema, $ownSchema]];
+        }
+
+        return $ownSchema;
+    }
+
+    private function isRequired(ReflectionProperty $prop, ReflectionNamedType $type): bool
+    {
+        if ($prop->isReadOnly()) {
+            return true;
+        }
+
+        if ($type->allowsNull()) {
+            return false;
+        }
+
+        return ! $prop->hasDefaultValue();
+    }
+
+    private function isPhpBuiltin(string $class): bool
+    {
+        try {
+            return (new ReflectionClass($class))->isInternal();
+        } catch (\ReflectionException) {
+            return false;
+        }
+    }
+
+    /** @param array<string, mixed> $schema */
+    private function applySchemaAttribute(ReflectionClass $ref, array $schema): array
+    {
+        $attrs = $ref->getAttributes(SchemaAttribute::class);
+        if (! $attrs) {
+            return $schema;
+        }
+
+        /** @var SchemaAttribute $meta */
+        $meta = $attrs[0]->newInstance();
+
+        if ($meta->title !== '') {
+            $schema['title'] = $meta->title;
+        }
+        if ($meta->description !== '') {
+            $schema['description'] = $meta->description;
+        }
+        if ($meta->example !== null) {
+            $schema['example'] = $meta->example;
+        }
+        if ($meta->deprecated) {
+            $schema['deprecated'] = true;
+        }
+        if ($meta->externalDocs) {
+            $schema['externalDocs'] = $meta->externalDocs;
         }
 
         return $schema;
@@ -146,6 +251,18 @@ final class SchemaBuilder
         }
 
         return $schema;
+    }
+
+    private function intersection(string $type, int $depth): array
+    {
+        $parts = array_map('trim', explode('&', $type));
+
+        // Single part after split → treat as plain class
+        if (count($parts) === 1) {
+            return $this->fromTypeString($parts[0], $depth);
+        }
+
+        return ['allOf' => array_map(fn ($t) => $this->fromTypeString($t, $depth), $parts)];
     }
 
     private function arrayOf(string $itemType, int $depth): array
