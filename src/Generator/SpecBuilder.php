@@ -99,13 +99,15 @@ final class SpecBuilder
             foreach ($this->config->servers as $s) {
                 $doc->addServer($s['url'] ?? '', $s['description'] ?? '');
             }
-        } else {
-            $doc->addServer(
-                isset($_SERVER['HTTP_HOST'])
-                    ? (isset($_SERVER['HTTPS']) ? 'https' : 'http').'://'.$_SERVER['HTTP_HOST']
-                    : 'http://localhost',
-            );
+
+            return;
         }
+
+        // No servers configured — fall back to a constant default.
+        // The builder is a pure function of Config; never derive from $_SERVER
+        // (host header injection: attacker-controlled values would land in the
+        // cached spec served to every consumer).
+        $doc->addServer('http://localhost');
     }
 
     private function addSecuritySchemes(Document $doc): void

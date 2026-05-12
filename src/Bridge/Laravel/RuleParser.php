@@ -58,7 +58,8 @@ final class RuleParser
         $schema = ['type' => $type];
 
         if (in_array('nullable', $list, true)) {
-            $schema['nullable'] = true;
+            // OpenAPI 3.1: nullable encoded as a type-array, not the deprecated `nullable` keyword.
+            $schema['type'] = [$type, 'null'];
         }
 
         // String-specific

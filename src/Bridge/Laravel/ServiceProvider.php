@@ -31,7 +31,19 @@ class ServiceProvider extends LaravelServiceProvider
         $this->mergeConfigFrom(__DIR__.'/config/apexdocs.php', 'apexdocs');
 
         // Bindings
-        $this->app->singleton(Config::class, fn ($app) => Config::fromArray($app['config']->get('apexdocs', [])));
+        $this->app->singleton(Config::class, function ($app) {
+            $cfg = $app['config']->get('apexdocs', []);
+            // Inject app.url as the default server when the user hasn't set one.
+            // We read from trusted Laravel config — never from $_SERVER.
+            if (empty($cfg['servers'])) {
+                $appUrl = $app['config']->get('app.url');
+                if (is_string($appUrl) && $appUrl !== '') {
+                    $cfg['servers'] = [['url' => rtrim($appUrl, '/'), 'description' => $app['config']->get('app.env', 'production')]];
+                }
+            }
+
+            return Config::fromArray($cfg);
+        });
 
         $this->app->singleton(RouteCollectionInterface::class, fn ($app) => new RouteCollection($app->make(Router::class)));
 

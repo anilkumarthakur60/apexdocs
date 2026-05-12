@@ -1847,7 +1847,9 @@ final class UiRenderer
                 if(schema.allOf)return '<div class="ax-schema-obj"><div class="ax-allof-label">allOf</div>'+schema.allOf.map(function(s){return renderSchema(s,spec,depth+1);}).join('')+'</div>';
                 if(schema.oneOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">One of:</div>'+schema.oneOf.map(function(s,i){return '<div class="ax-oneof-item'+(i>0?' ax-oneof-sep':'')+'">'+(i>0?'<div style="font-size:10px;color:var(--t3);margin:2px 0">or</div>':'')+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
                 if(schema.anyOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">Any of:</div>'+schema.anyOf.map(function(s){return '<div class="ax-oneof-item">'+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
-                var type=schema.type||(schema.properties?'object':'any');
+                var type=schema.type;
+                if(Array.isArray(type)){type=type.filter(function(t){return t!=='null';})[0]||'any';}
+                type=type||(schema.properties?'object':'any');
                 if(type==='object'||schema.properties){
                     if(depth>=3)return '<span class="ax-type-badge">object {…}</span>';
                     var props=schema.properties||{};var req=schema.required||[];var propKeys=Object.keys(props);
@@ -1855,8 +1857,12 @@ final class UiRenderer
                     var html='<div class="ax-schema-obj">';
                     if(schema.description)html+='<div class="ax-schema-desc">'+escH(schema.description)+'</div>';
                     propKeys.forEach(function(pn){
-                        var pv=props[pn];var pt=pv.type||(pv['$ref']?pv['$ref'].split('/').pop():(pv.properties?'object':'any'));
-                        var isNested=(pv.type==='object'||pv.properties)&&depth<2;
+                        var pv=props[pn];
+                        /* OpenAPI 3.1 type-arrays: strip null and display the primary type */
+                        var rawType=pv.type;
+                        if(Array.isArray(rawType)){rawType=rawType.filter(function(t){return t!=='null';})[0]||'any';}
+                        var pt=rawType||(pv['$ref']?pv['$ref'].split('/').pop():(pv.properties?'object':'any'));
+                        var isNested=(rawType==='object'||pv.properties)&&depth<2;
                         var nestedId=isNested?'axs'+(++_schemaIds):'';
                         var isReq=req.indexOf(pn)!==-1;
                         html+='<div class="ax-prop-row">'
@@ -2033,7 +2039,9 @@ final class UiRenderer
                 if(schema['$ref']){var r=resolveRef(schema['$ref'],spec);return r?buildExample(r,spec,depth+1):null;}
                 if(schema.example!=null)return schema.example;
                 if(schema.allOf)return buildExample(schema.allOf[0],spec,depth+1);
-                var t=schema.type||(schema.properties?'object':'any');
+                var t=schema.type;
+                if(Array.isArray(t)){t=t.filter(function(x){return x!=='null';})[0]||'any';}
+                t=t||(schema.properties?'object':'any');
                 switch(t){
                     case 'object':{var o={};for(var k in schema.properties||{})o[k]=buildExample(schema.properties[k],spec,depth+1);return o;}
                     case 'array':return [buildExample(schema.items||{},spec,depth+1)];

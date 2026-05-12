@@ -183,7 +183,14 @@ final class PostmanExporter
             return $schema['example'];
         }
 
-        return match ($schema['type'] ?? 'object') {
+        $type = $schema['type'] ?? 'object';
+        // OpenAPI 3.1 nullable form: type is an array containing 'null'.
+        if (is_array($type)) {
+            $primary = array_values(array_filter($type, static fn ($t) => $t !== 'null'));
+            $type = $primary[0] ?? 'object';
+        }
+
+        return match ($type) {
             'object' => (object) array_map(fn ($v) => $this->exampleFromSchema($v), $schema['properties'] ?? []),
             'array' => [$this->exampleFromSchema($schema['items'] ?? [])],
             'integer' => 1,

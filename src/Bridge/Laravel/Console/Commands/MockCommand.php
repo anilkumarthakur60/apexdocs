@@ -86,7 +86,9 @@ class MockCommand extends Command
                 return apexdocs_example(\$t, \$spec);
             }
             if (isset(\$s['example'])) return \$s['example'];
-            return match (\$s['type'] ?? 'object') {
+            \$t = \$s['type'] ?? 'object';
+            if (is_array(\$t)) { \$f = array_values(array_filter(\$t, fn(\$x) => \$x !== 'null')); \$t = \$f[0] ?? 'object'; }
+            return match (\$t) {
                 'object'  => (object) array_map(fn(\$v) => apexdocs_example(\$v, \$spec), \$s['properties'] ?? ['id' => ['type'=>'integer']]),
                 'array'   => [apexdocs_example(\$s['items'] ?? ['type'=>'string'], \$spec)],
                 'integer' => 1, 'number' => 1.0, 'boolean' => true, 'null' => null,

@@ -150,7 +150,7 @@ final class SchemaBuilder
 
             $s = $this->fromTypeString($propType->getName(), $depth + 1);
             if ($propType->allowsNull()) {
-                $s['nullable'] = true;
+                $s = self::asNullable($s);
             }
             $ownProperties[$prop->getName()] = $s;
 
@@ -238,19 +238,55 @@ final class SchemaBuilder
 
         if (count($parts) === 1) {
             $s = $this->fromTypeString($parts[0], $depth);
-            if ($nullable) {
-                $s['nullable'] = true;
-            }
 
-            return $s;
+            return $nullable ? self::asNullable($s) : $s;
         }
 
         $schema = ['oneOf' => array_map(fn ($t) => $this->fromTypeString($t, $depth), $parts)];
-        if ($nullable) {
-            $schema['nullable'] = true;
+
+        return $nullable ? self::asNullable($schema) : $schema;
+    }
+
+    /**
+     * Encode a schema as nullable per the spec's declared OpenAPI version.
+     * OpenAPI 3.1 uses `type: [..., 'null']`; older 3.0 specs use `nullable: true`.
+     * For primitive-typed schemas we use the 3.1 form; for $ref or composite schemas
+     * (oneOf/allOf/anyOf) we wrap with `oneOf` so the null branch is explicit.
+     *
+     * @param  array<string, mixed>  $schema
+     * @return array<string, mixed>
+     */
+    public static function asNullable(array $schema): array
+    {
+        if (isset($schema['$ref'])) {
+            return ['oneOf' => [$schema, ['type' => 'null']]];
         }
 
-        return $schema;
+        if (isset($schema['oneOf']) || isset($schema['anyOf']) || isset($schema['allOf'])) {
+            $key = isset($schema['oneOf']) ? 'oneOf' : (isset($schema['anyOf']) ? 'anyOf' : 'allOf');
+            $schema[$key][] = ['type' => 'null'];
+
+            return $schema;
+        }
+
+        if (isset($schema['type'])) {
+            $type = $schema['type'];
+            if (is_array($type)) {
+                if (! in_array('null', $type, true)) {
+                    $type[] = 'null';
+                }
+                $schema['type'] = $type;
+
+                return $schema;
+            }
+
+            $schema['type'] = [$type, 'null'];
+
+            return $schema;
+        }
+
+        // No type / $ref to anchor onto — fall back to the union form.
+        return ['oneOf' => [$schema, ['type' => 'null']]];
     }
 
     private function intersection(string $type, int $depth): array
