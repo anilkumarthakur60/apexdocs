@@ -178,17 +178,63 @@ final class SchemaBuilder
         return $ownSchema;
     }
 
+    /**
+     * Is the property required in the JSON representation?
+     *
+     * Required precisely when a JSON payload omitting it would be invalid:
+     *
+     *   - Has a default value → optional. Whether the default lives on the
+     *     property itself or on the constructor-promoted parameter, missing
+     *     keys are filled in.
+     *   - Allows null and no default → still required to be PRESENT in the
+     *     payload (clients send `null` explicitly), but only for readonly
+     *     props. Mutable nullable props with no default are treated as
+     *     optional — the conventional Eloquent/DTO read.
+     *   - Non-nullable, no default → required.
+     *
+     * PHP quirk: ReflectionProperty::hasDefaultValue() returns false for
+     * promoted constructor parameters even when the parameter declares a
+     * default. We probe the matching constructor parameter to recover the
+     * truth.
+     */
     private function isRequired(ReflectionProperty $prop, ReflectionNamedType $type): bool
     {
-        if ($prop->isReadOnly()) {
-            return true;
-        }
-
-        if ($type->allowsNull()) {
+        if ($this->propertyHasDefault($prop)) {
             return false;
         }
 
-        return ! $prop->hasDefaultValue();
+        if ($type->allowsNull()) {
+            return $prop->isReadOnly();
+        }
+
+        return true;
+    }
+
+    private function propertyHasDefault(ReflectionProperty $prop): bool
+    {
+        if ($prop->hasDefaultValue()) {
+            return true;
+        }
+
+        if (! $prop->isPromoted()) {
+            return false;
+        }
+
+        try {
+            $ctor = $prop->getDeclaringClass()->getConstructor();
+            if ($ctor === null) {
+                return false;
+            }
+            foreach ($ctor->getParameters() as $param) {
+                if ($param->getName() === $prop->getName()) {
+                    return $param->isDefaultValueAvailable();
+                }
+            }
+        } catch (\ReflectionException) {
+            return false;
+        }
+
+        return false;
     }
 
     private function isPhpBuiltin(string $class): bool

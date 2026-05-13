@@ -35,10 +35,11 @@ test('array with typed items', function () {
     expect($schema['properties']['tags']['items']['type'])->toBe('string');
 });
 
-test('nullable is marked on schema', function () {
+test('nullable is encoded as OpenAPI 3.1 type-array', function () {
     $p = new RuleParser;
     $schema = $p->toSchema(['bio' => 'nullable|string']);
-    expect($schema['properties']['bio']['nullable'])->toBeTrue();
+    expect($schema['properties']['bio']['type'])->toBe(['string', 'null'])
+        ->and($schema['properties']['bio'])->not->toHaveKey('nullable');
 });
 
 test('nullable fields not in required list', function () {

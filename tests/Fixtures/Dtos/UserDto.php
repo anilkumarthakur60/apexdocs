@@ -12,7 +12,7 @@ final class UserDto
     public function __construct(
         public readonly int $id,
         public readonly string $name,
-        public readonly ?string $email,
+        public readonly ?string $email = null,
         public readonly bool $isAdmin = false,
     ) {}
 }

@@ -11,10 +11,31 @@ use ReflectionMethod;
 use ReflectionNamedType;
 
 /**
- * Laravel bridge: extracts request body schema from FormRequest::rules().
+ * Laravel bridge: extracts a request-body schema from FormRequest::rules().
+ *
+ * Documentation-time, not request-time. Anything we instantiate is purely so
+ * we can call rules() — we do NOT want side effects from real request
+ * handling. So:
+ *
+ *  - We bypass the constructor (`newInstanceWithoutConstructor`) — avoids
+ *    HTTP context, route resolution, and DB access that the FormRequest base
+ *    class normally wires up.
+ *  - We wire a container only if the method exists; we never call validate()
+ *    or authorize().
+ *  - We suppress notices/warnings around the rules() call: app code often
+ *    references `$this->user()`, `$this->route('id')`, etc. — which raise
+ *    deprecations against a constructorless instance. They're noise here,
+ *    not actionable.
+ *  - Anything that throws — including \Error — is treated as "rules
+ *    unavailable" and the route is documented without a body schema.
+ *  - Schemas are cached per-class for the lifetime of the process so big
+ *    controllers don't re-instantiate the same FormRequest dozens of times.
  */
 final class ValidationExtractor implements ValidationExtractorInterface
 {
+    /** @var array<class-string, array<string, mixed>|null> */
+    private array $cache = [];
+
     public function __construct(private RuleParser $parser) {}
 
     public function extract(ReflectionMethod $handler, Route $route): ?array
@@ -24,14 +45,21 @@ final class ValidationExtractor implements ValidationExtractorInterface
             return null;
         }
 
-        try {
-            $ref = new \ReflectionClass($formRequestClass);
-            $instance = $ref->newInstanceWithoutConstructor();
-            if (method_exists($instance, 'setContainer')) {
-                $instance->setContainer(app());
-            }
-            $rules = method_exists($instance, 'rules') ? $instance->rules() : [];
-        } catch (\Throwable) {
+        if (array_key_exists($formRequestClass, $this->cache)) {
+            return $this->cache[$formRequestClass];
+        }
+
+        return $this->cache[$formRequestClass] = $this->buildBody($formRequestClass);
+    }
+
+    /**
+     * @param  class-string  $formRequestClass
+     * @return array<string, mixed>|null
+     */
+    private function buildBody(string $formRequestClass): ?array
+    {
+        $rules = $this->safeReadRules($formRequestClass);
+        if ($rules === null || $rules === []) {
             return null;
         }
 
@@ -54,6 +82,52 @@ final class ValidationExtractor implements ValidationExtractorInterface
         return $body;
     }
 
+    /**
+     * Invoke FormRequest::rules() with maximum tolerance. Returns the rules
+     * array on success, null on any failure (we do not let documentation
+     * generation be killed by a misbehaving FormRequest).
+     *
+     * @param  class-string  $class
+     * @return array<string, mixed>|null
+     */
+    private function safeReadRules(string $class): ?array
+    {
+        try {
+            $ref = new \ReflectionClass($class);
+        } catch (\ReflectionException) {
+            return null;
+        }
+
+        if (! $ref->hasMethod('rules')) {
+            return null;
+        }
+
+        $rulesMethod = $ref->getMethod('rules');
+        if ($rulesMethod->getNumberOfRequiredParameters() > 0) {
+            // `rules(Foo $x)` — we can't fabricate $x safely. Skip.
+            return null;
+        }
+
+        $previousLevel = error_reporting(0);
+        try {
+            $instance = $ref->newInstanceWithoutConstructor();
+            if (method_exists($instance, 'setContainer') && function_exists('app')) {
+                try {
+                    $instance->setContainer(app());
+                } catch (\Throwable) {
+                    // ignore — container wiring is best-effort
+                }
+            }
+            $rules = $rulesMethod->invoke($instance);
+        } catch (\Throwable) {
+            return null;
+        } finally {
+            error_reporting($previousLevel);
+        }
+
+        return is_array($rules) ? $rules : null;
+    }
+
     private function findFormRequest(ReflectionMethod $method): ?string
     {
         foreach ($method->getParameters() as $param) {
@@ -74,10 +148,13 @@ final class ValidationExtractor implements ValidationExtractorInterface
         return null;
     }
 
+    /**
+     * @param  array<string, mixed>  $rules
+     */
     private function hasFileRule(array $rules): bool
     {
         foreach ($rules as $rule) {
-            $str = is_array($rule) ? implode('|', $rule) : (string) $rule;
+            $str = is_array($rule) ? implode('|', array_map('strval', $rule)) : (string) $rule;
             if (preg_match('/\b(file|image|mimes|mimetypes)\b/i', $str)) {
                 return true;
             }

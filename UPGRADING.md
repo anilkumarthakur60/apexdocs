@@ -26,6 +26,25 @@ follow strict SemVer with no breaking changes in minor releases.
    `\LogicException` here will need updating; code that catches `\Throwable`
    keeps working.
 
+4. **`DocsController` constructor slimmed.** The Laravel `DocsController` no
+   longer accepts the five exporter instances — they are constructed inside
+   `ApexDocs\Http\SpecPayload`. If you extended `DocsController` and passed
+   custom exporters via constructor, switch to subclassing `SpecPayload` or
+   override the controller methods to return a custom payload.
+
+5. **`SpecCache::get()` now returns a full Document.** Previously it
+   reconstructed only `paths` / `summary` and dropped everything else.
+   Code paths that relied on the old lossy behaviour (e.g. asserting absence
+   of `info`) will see complete documents. Use `SpecCache::getArray()` if
+   you only need the raw array form.
+
+6. **`apexdocs:mock` ships a sidecar router.** The command now executes
+   `php -S host:port resources/mock/server.php` rather than a temp file
+   written into `sys_get_temp_dir()`. The path inside the package must be
+   reachable — if you publish the package via `composer create-project` or
+   a custom installer that strips `resources/`, the command will emit
+   "Mock router script missing". Keep `resources/` in your distribution.
+
 ### `composer.json` changes
 
 - `nikic/php-parser` was never used internally and has been removed. If your

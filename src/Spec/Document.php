@@ -35,6 +35,49 @@ final class Document implements JsonSerializable
         $this->components = new Components;
     }
 
+    /**
+     * Faithfully reconstruct a Document from its array form (as produced by
+     * {@see toArray()}). Used by {@see \ApexDocs\Cache\SpecCache} so cached
+     * specs round-trip every section — not just paths.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public static function fromArray(array $data): self
+    {
+        $doc = new self;
+        if (isset($data['openapi']) && is_string($data['openapi'])) {
+            $doc->openapi = $data['openapi'];
+        }
+        if (isset($data['info']) && is_array($data['info'])) {
+            $doc->info = $data['info'];
+        }
+        if (isset($data['servers']) && is_array($data['servers'])) {
+            $doc->servers = $data['servers'];
+        }
+        if (isset($data['paths']) && is_array($data['paths'])) {
+            $doc->paths = $data['paths'];
+        }
+        if (isset($data['webhooks']) && is_array($data['webhooks'])) {
+            $doc->webhooks = $data['webhooks'];
+        }
+        if (isset($data['components']) && is_array($data['components'])) {
+            $doc->components = Components::fromArray($data['components']);
+        }
+        if (isset($data['security']) && is_array($data['security'])) {
+            $doc->security = $data['security'];
+        }
+        if (isset($data['tags']) && is_array($data['tags'])) {
+            $doc->tags = $data['tags'];
+        }
+        foreach ($data as $k => $v) {
+            if (is_string($k) && str_starts_with($k, 'x-')) {
+                $doc->extensions[$k] = $v;
+            }
+        }
+
+        return $doc;
+    }
+
     // ── Info ──────────────────────────────────────────────────────────────────
 
     public function info(string $title, string $version, string $description = ''): self

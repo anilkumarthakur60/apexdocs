@@ -1,0 +1,19 @@
+* text=auto eol=lf
+
+# Files that ship in the package
+/src              export
+/resources        export
+/composer.json    export
+/LICENSE          export
+/README.md        export
+/CHANGELOG.md     export
+
+# Excluded from the dist tarball
+/tests            export-ignore
+/.github          export-ignore
+/.editorconfig    export-ignore
+/.gitattributes   export-ignore
+/.gitignore       export-ignore
+/CONTRIBUTING.md  export-ignore
+/SECURITY.md      export-ignore
+/UPGRADING.md     export-ignore
