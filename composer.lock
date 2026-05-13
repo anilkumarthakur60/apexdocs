@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "7f53365af9a58feaa67baf61abb91d39",
+    "content-hash": "97827657ac7c98ef4feaccf97c2704c3",
     "packages": [
         {
             "name": "phpstan/phpdoc-parser",

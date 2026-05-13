@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ApexDocs\Bridge\Laravel;
 
 use ApexDocs\ApexDocs;
-use Illuminate\Support\Facades\Facade;
+use Illuminate\Support\Facades\Facade as LaravelFacade;
 
 /**
  * @method static \ApexDocs\Spec\Document generate()
@@ -18,7 +18,7 @@ use Illuminate\Support\Facades\Facade;
  *
  * @see ApexDocs
  */
-class Facade extends Facade
+class Facade extends LaravelFacade
 {
     protected static function getFacadeAccessor(): string
     {

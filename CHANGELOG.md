@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+_No unreleased changes yet._
+
+## [0.1.0] - 2026-05-13
+
 ### Added
 
 - Native Apex UI: persistent auth token (per-spec localStorage), rich response
@@ -85,6 +89,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `phpstan/phpstan` and `laravel/pint` dev dependencies — Pest is the project's
   only quality tool per maintainer decision.
 
-## [0.1.0]
+Initial public release on Packagist.
 
-Initial release.
+[Unreleased]: https://github.com/anilkumarthakur60/apexdocs/compare/0.1.0...HEAD
+[0.1.0]:      https://github.com/anilkumarthakur60/apexdocs/releases/tag/0.1.0

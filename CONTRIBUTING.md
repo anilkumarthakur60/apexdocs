@@ -6,7 +6,7 @@ agnostic, and pleasant to use — please keep changes aligned with that.
 ## Getting set up
 
 ```bash
-git clone https://github.com/apexdocs/apexdocs
+git clone https://github.com/anilkumarthakur60/apexdocs
 cd apexdocs
 composer install
 vendor/bin/pest

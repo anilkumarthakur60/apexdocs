@@ -5,7 +5,12 @@
     "license": "MIT",
     "type": "library",
     "authors": [
-        {"name": "ApexDocs Contributors", "email": "hello@apexdocs.dev"}
+        {
+            "name":     "Anil Kumar Thakur",
+            "email":    "anilkumarthakur60@gmail.com",
+            "homepage": "https://github.com/anilkumarthakur60",
+            "role":     "Maintainer"
+        }
     ],
 
     "require": {
@@ -43,6 +48,9 @@
     },
 
     "extra": {
+        "branch-alias": {
+            "dev-main": "0.x-dev"
+        },
         "laravel": {
             "providers": ["ApexDocs\\Bridge\\Laravel\\ServiceProvider"],
             "aliases":   {"ApexDocs": "ApexDocs\\Bridge\\Laravel\\Facade"}
@@ -62,7 +70,8 @@
         "test-coverage": "vendor/bin/pest --coverage"
     },
     "support": {
-        "issues": "https://github.com/apexdocs/apexdocs/issues",
-        "source": "https://github.com/apexdocs/apexdocs"
+        "issues": "https://github.com/anilkumarthakur60/apexdocs/issues",
+        "source": "https://github.com/anilkumarthakur60/apexdocs",
+        "docs":   "https://github.com/anilkumarthakur60/apexdocs#readme"
     }
 }
