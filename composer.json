@@ -28,7 +28,11 @@
         "pestphp/pest-plugin-laravel": "^3.0 || ^4.0",
         "laravel/framework": "^11.0 || ^12.0",
         "orchestra/testbench": "^9.0 || ^10.0",
-        "nyholm/psr7": "^1.8"
+        "nyholm/psr7": "^1.8",
+        "symfony/config": "^6.4 || ^7.0",
+        "symfony/dependency-injection": "^6.4 || ^7.0",
+        "symfony/http-kernel": "^6.4 || ^7.0",
+        "symfony/routing": "^6.4 || ^7.0"
     },
 
     "suggest": {
@@ -67,11 +71,29 @@
     "prefer-stable": true,
     "scripts": {
         "test":          "vendor/bin/pest",
-        "test-coverage": "vendor/bin/pest --coverage"
+        "test-coverage": "vendor/bin/pest --coverage",
+        "test-filter":   "vendor/bin/pest --filter",
+        "security":      "@composer audit --no-dev --locked --abandoned=report",
+        "lint":          "find src tests -name '*.php' -print0 | xargs -0 -n1 php -l",
+        "ci":            ["@lint", "@test", "@security"]
+    },
+    "scripts-descriptions": {
+        "test":          "Run the full Pest suite.",
+        "test-coverage": "Run the suite with HTML+text coverage output.",
+        "test-filter":   "Run a subset of tests matching a substring.",
+        "security":      "Check runtime deps for known CVEs (requires composer.lock).",
+        "lint":          "PHP syntax-check every file in src/ and tests/.",
+        "ci":            "Lint + Test + Security audit. What CI runs."
     },
     "support": {
         "issues": "https://github.com/anilkumarthakur60/apexdocs/issues",
         "source": "https://github.com/anilkumarthakur60/apexdocs",
         "docs":   "https://github.com/anilkumarthakur60/apexdocs#readme"
-    }
+    },
+    "funding": [
+        {
+            "type": "github",
+            "url":  "https://github.com/sponsors/anilkumarthakur60"
+        }
+    ]
 }

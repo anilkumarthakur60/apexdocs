@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # Composer dependencies — opens a PR weekly when a runtime or dev dep updates.
+  - package-ecosystem: composer
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - php
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      php-deps:
+        patterns:
+          - '*'
+
+  # GitHub Actions versions — small, but worth keeping current for security.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: Asia/Kolkata
+    open-pull-requests-limit: 3
+    labels:
+      - dependencies
+      - github-actions
+    commit-message:
+      prefix: chore
+      include: scope

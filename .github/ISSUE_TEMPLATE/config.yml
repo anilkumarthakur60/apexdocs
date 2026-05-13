@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security issue
+    url: https://github.com/anilkumarthakur60/apexdocs/security/advisories/new
+    about: Report a vulnerability privately. Do NOT file a public issue.
+  - name: Question or discussion
+    url: https://github.com/anilkumarthakur60/apexdocs/discussions
+    about: Ask a question or start a discussion. Bugs and features only in issues, please.
