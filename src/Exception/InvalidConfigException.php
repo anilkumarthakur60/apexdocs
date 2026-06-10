@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ApexDocs\Exception;
 
 /**
- * Thrown when a {@see \ApexDocs\Config} value is rejected by validation —
+ * Thrown when a {@see \ApexDocs\Config} value is rejected by validation 
  * e.g. unknown UI backend, malformed SemVer version, unreadable export path.
  */
 final class InvalidConfigException extends ApexDocsRuntimeException

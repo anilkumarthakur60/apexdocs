@@ -1,4 +1,4 @@
-# Schemas & types — how PHP becomes JSON Schema
+# Schemas & types  how PHP becomes JSON Schema
 
 `SchemaBuilder` (with a `ComponentRegistry`) turns classes and type strings into OpenAPI 3.1 /
 JSON Schema 2020-12. `maxDepth` = `responses.max_depth` (default 6, min 1).
@@ -7,7 +7,7 @@ JSON Schema 2020-12. `maxDepth` = `responses.max_depth` (default 6, min 1).
 
 | PHP / PHPDoc | Schema |
 |---|---|
-| `void`, `never`, `mixed`, `''` | `{}` (no constraint) — for a return type this means **no inferred 200 content** |
+| `void`, `never`, `mixed`, `''` | `{}` (no constraint)  for a return type this means **no inferred 200 content** |
 | `null` | `{type: null}` |
 | `bool`, `true`, `false` | `{type: boolean}` |
 | `int` | `{type: integer}` |
@@ -68,7 +68,7 @@ a class with no useful public properties → `{type: object}`.
 Dotted keys nest (`address.city` → object property), `field.*` → `items`. Type inference from
 rules: `integer|int|digits|digits_between` → integer; `numeric|decimal` → number;
 `boolean|bool|accepted|declined` → boolean; `array|list` → array; else string.
-`nullable` → `type: [T, "null"]`; `required` (and `required_*`? no — only plain `required`,
+`nullable` → `type: [T, "null"]`; `required` (and `required_*`? no  only plain `required`,
 `present`, `filled`? see laravel.md) → `required[]`; `in:a,b` (and `Rule::in`, `Rule::enum`) → `enum`
 cast to the type; `file|image|mimes|mimetypes` → `{type: string, format: binary}` and a second
 `multipart/form-data` media type.

@@ -22,7 +22,7 @@ use Closure;
 
 /**
  * Orchestrates the full OpenAPI document build.
- * No framework dependencies — accepts interfaces for framework-specific parts.
+ * No framework dependencies  accepts interfaces for framework-specific parts.
  */
 final class SpecBuilder
 {
@@ -63,7 +63,7 @@ final class SpecBuilder
             validationExtractor: $this->validationExtractor,
             // Auto-detection off means the detector's scheme definitions are
             // never published, so its per-route requirements must not be either
-            // — an operation naming an undeclared scheme is invalid.
+            //  an operation naming an undeclared scheme is invalid.
             securityDetector: $this->config->autoDetectSecurity ? $this->securityDetector : null,
             transformers: array_merge(
                 $this->operationTransformers,
@@ -130,7 +130,7 @@ final class SpecBuilder
             return;
         }
 
-        // No servers configured — fall back to a constant default.
+        // No servers configured  fall back to a constant default.
         // The builder is a pure function of Config; never derive from $_SERVER
         // (host header injection: attacker-controlled values would land in the
         // cached spec served to every consumer).
@@ -166,7 +166,7 @@ final class SpecBuilder
 
             // A route with no methods at all is treated as GET (Symfony's
             // "any method" form); a route whose only verbs cannot appear in a
-            // Path Item Object — PROPFIND, PURGE — is skipped rather than
+            // Path Item Object  PROPFIND, PURGE  is skipped rather than
             // relabelled as something it does not answer.
             $methods = $route->documentedMethods();
             if ($methods === []) {
@@ -177,7 +177,7 @@ final class SpecBuilder
             }
 
             // One route may answer several verbs (Laravel's match/any, a Symfony
-            // route with no method requirement) — each becomes its own operation.
+            // route with no method requirement)  each becomes its own operation.
             foreach ($methods as $httpMethod) {
                 if ($doc->hasOperation($path, $httpMethod)) {
                     continue;
@@ -241,7 +241,7 @@ final class SpecBuilder
         $c = $doc->components();
 
         $add = function (string $name, array $schema) use ($c): void {
-            // A user DTO that already claimed this name wins — never clobber it.
+            // A user DTO that already claimed this name wins  never clobber it.
             if (! $c->hasSchema($name)) {
                 $c->addSchema($name, $schema);
             }

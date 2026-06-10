@@ -1,4 +1,4 @@
-# Configuration — every key
+# Configuration  every key
 
 Three faces of the same object: Laravel `config/apexdocs.php` (snake_case nested array →
 `Config::fromArray`), Symfony `apex_docs:` YAML tree (same shape), and `ApexDocs\Config`
@@ -18,7 +18,7 @@ back to the default.
 | `exclude_paths` | `excludePaths` | `[]` | glob (`fnmatch`) or **anchored** regex, tested with and without leading `/` |
 | `spec_group` | `specGroup` | `''` | see `#[ApiGroup]` |
 | `servers` [{url, description, variables}] | `servers` | `[]` | Laravel: `APP_URL` injected when empty |
-| `ui.path` (Laravel only) | — | `documentation/api` | docs base path; the six docs URLs are auto-added to `exclude_paths` |
+| `ui.path` (Laravel only) |  | `documentation/api` | docs base path; the six docs URLs are auto-added to `exclude_paths` |
 | `ui.show_toolbar` | `showToolbar` | `true` | header bar |
 | `ui.theme` | `theme` | `dark` | `dark\|light\|auto`; `?theme=` overrides per request |
 | `ui.custom_logo` | `customLogo` | `''` | URL |
@@ -35,10 +35,10 @@ back to the default.
 | `rate_limits.enabled` | `documentRateLimits` | `true` | 429 for `throttle`/`rate` middleware |
 | `webhooks.scan_paths` | `webhookScanPaths` | `[]` | absolute directories |
 | `cache.enabled` | `cacheEnabled` | Laravel: `APP_ENV !== 'local'`; core `false` | Laravel `DocsController` only (commands never cache) |
-| `cache.driver` (Laravel) | — | `null` | store name from `config/cache.php` |
+| `cache.driver` (Laravel) |  | `null` | store name from `config/cache.php` |
 | `cache.ttl` | `cacheTtl` | `3600` | seconds |
-| `middleware` (Laravel) | — | `['web']` | on the six docs routes |
-| `environments` (Laravel) | — | `['local','staging']` | docs routes registered only here; `[]` = everywhere |
+| `middleware` (Laravel) |  | `['web']` | on the six docs routes |
+| `environments` (Laravel) |  | `['local','staging']` | docs routes registered only here; `[]` = everywhere |
 | `export.default_path` | `exportPath` | `storage_path('apexdocs')` / `sys_get_temp_dir().'/apexdocs'` | `apexdocs:export` without `--output` |
 | `document_transformers`, `operation_transformers` | `documentTransformers`, `operationTransformers` | `[]` | class names (or objects) implementing the interfaces; unknown class → `InvalidConfigException` |
 

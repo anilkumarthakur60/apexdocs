@@ -26,7 +26,7 @@ final class Route
     public readonly string $handler;
 
     /**
-     * @param  list<string>  $methods  HTTP methods: ['GET'], ['post','head'] — normalised to uppercase
+     * @param  list<string>  $methods  HTTP methods: ['GET'], ['post','head']  normalised to uppercase
      * @param  string  $path  URI pattern: /api/users/{id}
      * @param  string|array{0: string, 1?: string}  $handler  "FQCN@method", "FQCN", or [FQCN::class, 'method']
      * @param  list<string>  $middleware  Raw middleware names/signatures
@@ -45,7 +45,7 @@ final class Route
         ));
 
         // A Path Item key must be rooted. Bridges already pass "/…", but a
-        // hand-built route may not — and an unrooted or numeric path also turns
+        // hand-built route may not  and an unrooted or numeric path also turns
         // the paths map into a JSON array once PHP coerces the array key.
         $this->path = '/'.ltrim($path, '/');
 
@@ -66,7 +66,7 @@ final class Route
     /**
      * Every method that deserves its own operation in the spec. A router may
      * register one route for several verbs (Laravel's `match`/`any`, a Symfony
-     * route with no method requirement) — each becomes its own operation.
+     * route with no method requirement)  each becomes its own operation.
      *
      * HEAD and OPTIONS are dropped because routers add them implicitly, and
      * anything a Path Item Object cannot hold (PROPFIND, PURGE, …) is dropped
@@ -93,7 +93,7 @@ final class Route
      *
      * Deliberately wider than \w: a template variable the spec sees but no
      * parameter describes makes the document invalid, so anything between the
-     * braces counts — unicode names, dots, dashes.
+     * braces counts  unicode names, dots, dashes.
      *
      * @return list<string>
      */
@@ -111,7 +111,7 @@ final class Route
                 continue;
             }
             // Exact, or a parameterised form of the same middleware ("auth:api",
-            // "throttle:60,1") — never a different middleware that merely shares
+            // "throttle:60,1")  never a different middleware that merely shares
             // a prefix ("authorize" must not match "auth").
             if ($mw === $name || str_starts_with($mw, $name.':')) {
                 return true;

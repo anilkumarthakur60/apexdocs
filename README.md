@@ -8,7 +8,7 @@
 
 **Framework-agnostic OpenAPI 3.1 documentation generator for PHP 8.2+.**
 
-Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or any PHP project — bring your own route collection.
+Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or any PHP project  bring your own route collection.
 
 ---
 
@@ -43,7 +43,7 @@ Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or a
 - Any **PSR-7/PSR-15** framework via the built-in HTTP handler
 - Auto-detects **Sanctum**, **Passport**, and **JWT** security from middleware
 - Extracts request schemas from Laravel **FormRequest** rules
-- Serves interactive docs from a **native, CDN-free UI** — sidebar, command palette, try-it-out, code samples, zero outbound requests
+- Serves interactive docs from a **native, CDN-free UI**  sidebar, command palette, try-it-out, code samples, zero outbound requests
 - Exports to **Postman Collection v2.1**, **Insomnia**, and **Bruno**
 - Breaking change detection, watch mode, and mock server
 - **AI-assistant ready**: ships a skill, a subagent and an **MCP server** so Claude Code, Cursor, Copilot and Codex can inspect and improve the generated spec
@@ -57,7 +57,7 @@ Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or a
 - Symfony 6.4, 7, or 8 (for the Symfony bridge)
 
 The core depends only on `phpstan/phpdoc-parser`, `symfony/yaml` (6.4 through
-8), and the PSR interfaces for caching and HTTP messages — no framework.
+8), and the PSR interfaces for caching and HTTP messages  no framework.
 
 ---
 
@@ -116,13 +116,13 @@ After installing, visit these URLs:
 No configuration is required. Routes with the `api` prefix are included automatically.
 
 By default the docs are registered only in the `local` and `staging`
-environments — see [Restricting Access](#restricting-access).
+environments  see [Restricting Access](#restricting-access).
 
 ---
 
 ## Configuration (Laravel)
 
-`config/apexdocs.php` — all options with their defaults:
+`config/apexdocs.php`  all options with their defaults:
 
 ```php
 return [
@@ -193,7 +193,7 @@ return [
         ],
     ],
 
-    // Building the spec reflects every controller — cache it outside local dev.
+    // Building the spec reflects every controller  cache it outside local dev.
     'cache' => [
         'enabled' => env('APEXDOCS_CACHE_ENABLED', env('APP_ENV', 'production') !== 'local'),
         'driver'  => env('APEXDOCS_CACHE_DRIVER'),   // any store from config/cache.php
@@ -416,7 +416,7 @@ parameter.
 ### Generate
 
 ```bash
-# Print JSON to stdout — nothing else goes to stdout, so redirection is safe
+# Print JSON to stdout  nothing else goes to stdout, so redirection is safe
 php artisan apexdocs:generate > public/openapi.json
 
 # YAML format
@@ -495,7 +495,7 @@ any request to get a different documented response instead.
 ## AI Assistants (Skills, Agents & MCP)
 
 Let AI coding agents work with the generated documentation instead of guessing at it. One
-command installs a **skill** (how apexdocs works — every attribute, inference rule, config key),
+command installs a **skill** (how apexdocs works  every attribute, inference rule, config key),
 a **subagent** (a documentation specialist), an instructions block for `CLAUDE.md` / `AGENTS.md`,
 and registers the **MCP server**:
 
@@ -587,7 +587,7 @@ apex_docs:
 
 The bundle registers `ApexDocs\ApexDocs` as a public service, wired to Symfony's
 router, `#[MapRequestPayload]` bodies, and `#[IsGranted]` security. It does not
-register a docs route — mount the PSR-15 handler (below) or write a thin
+register a docs route  mount the PSR-15 handler (below) or write a thin
 controller:
 
 ```php
@@ -675,7 +675,7 @@ class MyFrameworkRouteCollection implements RouteCollectionInterface
     {
         return array_map(
             fn ($r) => new Route(
-                methods:  $r->getMethods(),          // ['GET'] — case-insensitive
+                methods:  $r->getMethods(),          // ['GET']  case-insensitive
                 path:     $r->getUri(),              // /api/users/{id}
                 handler:  $r->getController(),       // "Class@method", "Class", or [Class::class, 'method']
                 metadata: ['name' => $r->getName()], // optional: also 'wheres' for param constraints
@@ -747,7 +747,7 @@ use ApexDocs\Spec\Document;
 
 class AddBuildMetaTransformer implements DocumentTransformerInterface
 {
-    // Mutate in place and return nothing — the document is passed by handle.
+    // Mutate in place and return nothing  the document is passed by handle.
     public function transform(Document $document): void
     {
         $document->extend('x-build-sha', env('GIT_SHA', 'local'));
@@ -807,7 +807,7 @@ Closure transformers receive the `Operation` and, for operation transformers,
 the `ApexDocs\Route\Route` it came from. Class-based transformers implement the
 interfaces above, which take the spec object alone.
 
-Inside Laravel the same thing, via the facade — note that each call returns a
+Inside Laravel the same thing, via the facade  note that each call returns a
 new instance, so the chain must end in `generate()`:
 
 ```php
@@ -822,8 +822,8 @@ $doc = ApexDocs::transformDocument(fn ($doc) => $doc->extend('x-build', 'abc'))-
 
 There is one UI, rendered entirely by PHP: a sidebar endpoint tree, a command
 palette, schema browser, code samples in five languages, and try-it-out. It
-makes **no outbound request** — no CDN script, no web font, no remote
-stylesheet — so it works behind a strict CSP and on an air-gapped host.
+makes **no outbound request**  no CDN script, no web font, no remote
+stylesheet  so it works behind a strict CSP and on an air-gapped host.
 
 `ui.theme` takes `dark`, `light` or `auto`; `auto` tracks the operating system
 preference. The theme switches instantly through CSS custom properties. A
@@ -850,7 +850,7 @@ keeps your API surface out of production:
 ```php
 // config/apexdocs.php
 
-// Default — no docs routes exist at all outside these environments
+// Default  no docs routes exist at all outside these environments
 'environments' => ['local', 'staging'],
 
 // Allow in production too (then put real auth in front of them)
@@ -866,7 +866,7 @@ keeps your API surface out of production:
 'middleware' => ['web', 'auth', 'role:developer'],
 ```
 
-The gate applies to the HTTP routes only — `php artisan apexdocs:generate` and
+The gate applies to the HTTP routes only  `php artisan apexdocs:generate` and
 the other commands work in every environment, so CI can still build the spec.
 
 ---

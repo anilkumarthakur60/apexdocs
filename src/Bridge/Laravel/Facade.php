@@ -19,7 +19,7 @@ use Illuminate\Support\Facades\Facade as LaravelFacade;
  * @method static \ApexDocs\ApexDocs withConfig(\ApexDocs\Config|array $config)
  * @method static \ApexDocs\Config getConfig()
  *
- * Note: ApexDocs is immutable — every fluent method returns a NEW instance.
+ * Note: ApexDocs is immutable  every fluent method returns a NEW instance.
  * `ApexDocs::filterRoutes(...)` on its own therefore changes nothing; chain the
  * call through to ->generate(), or rebind the container singleton:
  *

@@ -39,7 +39,7 @@ class ServiceProvider extends LaravelServiceProvider
         $this->app->singleton(Config::class, function ($app) {
             $cfg = $app['config']->get('apexdocs', []);
             // Inject app.url as the default server when the user hasn't set one.
-            // We read from trusted Laravel config — never from $_SERVER.
+            // We read from trusted Laravel config  never from $_SERVER.
             if (empty($cfg['servers'])) {
                 $appUrl = $app['config']->get('app.url');
                 if (is_string($appUrl) && $appUrl !== '') {
@@ -48,7 +48,7 @@ class ServiceProvider extends LaravelServiceProvider
             }
 
             // Never document the documentation itself. These are the exact six
-            // routes registered below — listing them literally, rather than as a
+            // routes registered below  listing them literally, rather than as a
             // `path/*` pattern, means a docs path like "api" cannot swallow the
             // whole spec.
             $docsPath = trim((string) $app['config']->get('apexdocs.ui.path', 'documentation/api'), '/');

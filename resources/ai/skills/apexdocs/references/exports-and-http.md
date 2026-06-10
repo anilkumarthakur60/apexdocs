@@ -9,7 +9,7 @@
 | `PostmanExporter` | `toArray` / `toString` | ✓ | Collection v2.1; folders per tag; example bodies from schemas |
 | `InsomniaExporter` | `toArray` / `toString` | ✓ | Insomnia export v4 |
 | `BrunoExporter` | `toArray` / `toString` | ✓ | Bruno collection JSON |
-| `SchemaExample` | `build(array $schema, int $depth = 0)` | — | example value for any schema (used by mock server & exporters) |
+| `SchemaExample` | `build(array $schema, int $depth = 0)` |  | example value for any schema (used by mock server & exporters) |
 
 `toFile` creates parent directories; failures throw `ExporterException::writeFailed`.
 

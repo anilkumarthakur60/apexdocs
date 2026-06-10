@@ -32,7 +32,7 @@ Public: `ApexDocs\Config` (factory `fromArray`), `RouteCollectionInterface` → 
 → `SecurityDetector`, `UiRenderer`, the five exporters, and `ApexDocs\ApexDocs` (built by
 `apex_docs.factory` so the immutable chain is captured). Private: `ComponentRegistry`, `SchemaBuilder`.
 
-No docs route is registered — mount `ApexDocs\Http\Handler` (PSR-15) or write a controller that
+No docs route is registered  mount `ApexDocs\Http\Handler` (PSR-15) or write a controller that
 returns `SpecPayload::json($apexDocs)->body` with its `contentType` (see standalone.md).
 
 ## Route conversion

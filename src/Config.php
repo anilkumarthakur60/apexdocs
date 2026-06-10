@@ -6,7 +6,7 @@ namespace ApexDocs;
 
 /**
  * Immutable configuration value object.
- * No framework dependency — just a plain PHP object.
+ * No framework dependency  just a plain PHP object.
  *
  * {@see fromArray()} reads the snake_case, nested shape published by the
  * framework bridges; {@see with()} takes camelCase property names.
@@ -67,7 +67,7 @@ final class Config
          */
         public readonly string $announcementBanner = '',
 
-        /** 'info' | 'warning' | 'error' — controls the banner colour. */
+        /** 'info' | 'warning' | 'error'  controls the banner colour. */
         public readonly string $announcementBannerType = 'info',
 
         /** Enable the Try-It-Out panel in the native Apex UI. */

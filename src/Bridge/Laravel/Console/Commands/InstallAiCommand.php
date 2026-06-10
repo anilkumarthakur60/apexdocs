@@ -145,7 +145,7 @@ class InstallAiCommand extends Command
             if ($this->files->get($to) === $content) {
                 return;
             }
-            $this->components->warn("Skipped {$this->relative($to)} (differs locally — use --force to overwrite)");
+            $this->components->warn("Skipped {$this->relative($to)} (differs locally  use --force to overwrite)");
 
             return;
         }
@@ -181,7 +181,7 @@ class InstallAiCommand extends Command
         if ($this->files->exists($path)) {
             $decoded = json_decode($this->files->get($path), true);
             if (! is_array($decoded)) {
-                $this->components->warn("Skipped {$this->relative($path)} (not valid JSON — add the server manually, see resources/ai/mcp.json)");
+                $this->components->warn("Skipped {$this->relative($path)} (not valid JSON  add the server manually, see resources/ai/mcp.json)");
 
                 return;
             }

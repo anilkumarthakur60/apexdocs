@@ -23,7 +23,7 @@ class SnapshotCommand extends Command
 
     public function handle(ApexDocs $apexDocs): int
     {
-        // stdout carries the JSON and nothing else — the parent parses it.
+        // stdout carries the JSON and nothing else  the parent parses it.
         $this->output->writeln((string) json_encode(
             Snapshot::fromApexDocs($apexDocs)->toArray(),
             JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE,

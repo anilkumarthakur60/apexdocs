@@ -27,7 +27,7 @@ trait CollectionExport
                 continue;
             }
             foreach ($methods as $method => $op) {
-                // A path item also holds `parameters`, `summary`, `$ref` — only
+                // A path item also holds `parameters`, `summary`, `$ref`  only
                 // the verb keys are operations.
                 if (! is_string($method) || ! in_array(strtolower($method), self::HTTP_METHODS, true) || ! is_array($op)) {
                     continue;
@@ -124,7 +124,7 @@ trait CollectionExport
         $properties = is_array($schema['properties'] ?? null) ? $schema['properties'] : [];
 
         if ($properties === [] && is_object($built)) {
-            // $ref or allOf — fall back to the generated keys with no metadata.
+            // $ref or allOf  fall back to the generated keys with no metadata.
             foreach (array_keys((array) $built) as $key) {
                 $properties[(string) $key] = [];
             }

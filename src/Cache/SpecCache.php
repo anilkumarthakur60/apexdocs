@@ -13,8 +13,8 @@ use Psr\SimpleCache\CacheInterface;
  * The concrete CacheInterface implementation is injected by the framework
  * bridge (e.g. Laravel's `cache.psr16`). Specs are stored as plain arrays
  * and round-tripped through {@see Document::fromArray()} on read so every
- * section — info, servers, components, tags, webhooks, security,
- * extensions — survives a cache hit.
+ * section  info, servers, components, tags, webhooks, security,
+ * extensions  survives a cache hit.
  */
 final class SpecCache
 {
@@ -36,7 +36,7 @@ final class SpecCache
 
     /**
      * Read the cached spec without materialising a {@see Document}. Cheaper
-     * for HTTP handlers that just need to serialise — they can stream the
+     * for HTTP handlers that just need to serialise  they can stream the
      * cached array directly through JSON/YAML exporters.
      *
      * @return array<string, mixed>|null

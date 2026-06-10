@@ -7,7 +7,7 @@ namespace ApexDocs\Mcp;
 /**
  * Runs a command that prints a JSON snapshot ({@see Snapshot::toArray()}) to
  * stdout and parses it. Every call is a fresh PHP process, so the snapshot
- * always reflects the code on disk — the property a long-lived MCP server
+ * always reflects the code on disk  the property a long-lived MCP server
  * cannot get any other way.
  */
 final class SubprocessSnapshotProvider implements SnapshotProviderInterface

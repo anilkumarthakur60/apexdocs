@@ -15,7 +15,7 @@ use ApexDocs\Route\Route;
  * the reason a route is *not* documented), and the effective configuration.
  *
  * Built in-process by {@see fromApexDocs()} and serialisable to JSON so a
- * fresh PHP process can produce it — a long-lived server cannot reload
+ * fresh PHP process can produce it  a long-lived server cannot reload
  * changed classes, so the Laravel bridge regenerates it in a subprocess.
  */
 final class Snapshot

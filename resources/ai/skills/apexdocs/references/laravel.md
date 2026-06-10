@@ -7,7 +7,7 @@ Auto-discovered `ServiceProvider` (+ facade alias `ApexDocs`). Requires Laravel 
 | Abstract | Concrete |
 |---|---|
 | `ApexDocs\Config` | `Config::fromArray(config('apexdocs'))` + `APP_URL` server when `servers` empty + the six docs URLs appended to `exclude_paths` |
-| `RouteCollectionInterface` | `RouteCollection(Router)` — every route except HEAD/OPTIONS-only; handler from `uses`/`controller` (closures → `''`); middleware via `gatherMiddleware()` (class names for objects); metadata `name`, `wheres`, `domain` |
+| `RouteCollectionInterface` | `RouteCollection(Router)`  every route except HEAD/OPTIONS-only; handler from `uses`/`controller` (closures → `''`); middleware via `gatherMiddleware()` (class names for objects); metadata `name`, `wheres`, `domain` |
 | `ValidationExtractorInterface` | `ValidationExtractor(new RuleParser)` |
 | `SecurityDetectorInterface` | `SecurityDetector` |
 | `ApexDocs\ApexDocs` (alias `apexdocs`) | `make(Config)->routes()->validation()->security()` |
@@ -32,7 +32,7 @@ uses `SpecCache` when `cache.enabled`; a failing cache store falls back to a liv
 ## Facade & immutability
 
 `ApexDocs::generate()`, `::filterRoutes()`, `::transformDocument()`… proxy the singleton, but the
-fluent methods return **new instances**. `ApexDocs::filterRoutes($f);` alone does nothing —
+fluent methods return **new instances**. `ApexDocs::filterRoutes($f);` alone does nothing 
 either chain `->generate()` or rebind:
 
 ```php

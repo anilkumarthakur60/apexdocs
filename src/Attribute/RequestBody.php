@@ -7,7 +7,7 @@ namespace ApexDocs\Attribute;
 use Attribute;
 
 /**
- * Declare the request body for any controller method — framework-agnostic.
+ * Declare the request body for any controller method  framework-agnostic.
  * The class is reflected to build an OpenAPI schema automatically.
  *
  * #[RequestBody(class: CreateUserDto::class)]

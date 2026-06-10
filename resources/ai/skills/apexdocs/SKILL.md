@@ -11,7 +11,7 @@ collection gives paths/methods, reflection gives parameters/bodies/responses, PH
 exist for Laravel (auto-discovered) and Symfony (bundle); a PSR-15 handler serves any other stack.
 
 Everything here is derived from the package source. Live facts (what *this* app's spec contains
-right now, why a route is missing) come from the `apexdocs` MCP server — prefer it over guessing.
+right now, why a route is missing) come from the `apexdocs` MCP server  prefer it over guessing.
 
 ## Reference map
 
@@ -35,28 +35,28 @@ right now, why a route is missing) come from the `apexdocs` MCP server — prefe
 1. **The code is the source of truth.** Never hand-edit or commit generated `openapi.json` as the
    canonical spec. Fix the controller, DTO, FormRequest, route or config, then regenerate.
 2. **Inference first, attributes second.** Check what the generator already derives (PHPDoc summary,
-   return type, FormRequest rules, `auth`/`throttle` middleware) — add attributes only for what it
+   return type, FormRequest rules, `auth`/`throttle` middleware)  add attributes only for what it
    cannot know: non-200 responses, query params, examples, deprecation, hiding, explicit security.
 3. **Type your DTOs.** Public typed properties / promoted ctor params + `@var Item[]` produce exact
    schemas; return `Dto[]`, `Collection<int, Dto>`, `LengthAwarePaginator<Dto>` for lists.
    Untyped `array` → `{type: array, items: {}}`; an Eloquent model → bare `object`.
-4. **`ApexDocs` is immutable** — `routes()`, `filterRoutes()`, `transformDocument()`… return a
+4. **`ApexDocs` is immutable**  `routes()`, `filterRoutes()`, `transformDocument()`… return a
    *new* instance. In Laravel: `app()->extend(ApexDocs::class, fn ($d) => $d->filterRoutes(...))`
    or chain straight into `->generate()`.
 5. **Route selection is layered**: `api_path_prefix` → `exclude_paths` → `spec_group` →
-   `filterRoutes()` → `#[Hidden]`. A missing endpoint is always one of these — `list_routes`
+   `filterRoutes()` → `#[Hidden]`. A missing endpoint is always one of these  `list_routes`
    tells you which.
 6. **Docs routes exist only in `environments`** (default `local`, `staging`) and behind
    `middleware` (default `web`); artisan commands work everywhere. The docs paths themselves are
    auto-excluded from the spec.
-7. **Cache** is on outside `local` — after changing code on staging/production run
+7. **Cache** is on outside `local`  after changing code on staging/production run
    `app(SpecCache::class)->forget()` or the spec is stale for `cache.ttl` seconds.
 8. Run `php artisan apexdocs:validate --strict` after every documentation change; CI can `apexdocs:diff`
    against a committed baseline to catch breaking changes.
 
 ## Workflow: document an endpoint
 
-1. `describe_operation` (MCP) or `apexdocs:generate | jq '.paths["/api/users/{id}"]'` — see what exists.
+1. `describe_operation` (MCP) or `apexdocs:generate | jq '.paths["/api/users/{id}"]'`  see what exists.
 2. Make the action's **return type** precise (`UserDto`, `@return UserDto[]`); type-hint the
    **FormRequest** for writes (rules → body schema, 422 added automatically).
 3. Add attributes:
@@ -91,7 +91,7 @@ right now, why a route is missing) come from the `apexdocs` MCP server — prefe
 | `HeaderParam(name, type='string', description='', required=false, example=null, deprecated=false)` | C M R | header parameter |
 | `CookieParam(...)` same as HeaderParam | C M R | cookie parameter |
 | `BodyParam(name, type='string', description='', required=false, example=null, enum=null, format='', nullable=false)` | C M R | one JSON body property (all merged into one object) |
-| `RequestBody(class, description='', required=true, contentType='application/json')` | M | body schema from a DTO — beats BodyParam and FormRequest |
+| `RequestBody(class, description='', required=true, contentType='application/json')` | M | body schema from a DTO  beats BodyParam and FormRequest |
 | `ApiResponse(status=200, description='', resource=null, collection=false, schema=null, headers=[], examples=[])` | M R | response; `resource` → `{data: $ref}` (collection adds `meta`/`links`) |
 | `Example(name, value, summary='', for='response')` | M R | named example on the success response or the request body (`for: 'request'`) |
 | `ResponseHeader(name, type='string', description='', example=null, required=false)` | C M R | header on the success response |
@@ -108,14 +108,14 @@ Full semantics in `references/attributes.md`.
 | Endpoint missing | `list_routes` → `reason`: prefix (`api_path_prefix`), `exclude_paths`, `spec_group`/`#[ApiGroup]`, `filterRoutes`, `#[Hidden]`, or only HEAD/OPTIONS/PROPFIND verbs |
 | No request body | Method not POST/PUT/PATCH; FormRequest not type-hinted; `rules()` throws / has required params / returns `[]`; use `#[RequestBody]`/`#[BodyParam]` |
 | Response is bare `{type: object}` | Return type is an Eloquent model / untyped / `JsonResponse`; add `@return Dto` or `#[ApiResponse(resource:)]` |
-| List documented as `items: {}` | `@return array` without element type — write `@return Dto[]` |
+| List documented as `items: {}` | `@return array` without element type  write `@return Dto[]` |
 | Property missing from schema | Not public; or `max_depth` reached (nested object collapses to `{type: object}`) |
 | Property wrongly required | No default + non-nullable → required; readonly nullable → required; add a default or make mutable |
 | Security wrong / 401 missing | `security.auto_detect`; middleware contains `auth`/`sanctum`/`passport`/`jwt`? override with `#[Security]`/`#[NoSecurity]` |
 | `Security requirement 'x' has no matching securityScheme` | scheme not in `security.schemes` and not auto-detected (package not installed) |
-| Duplicate operationId | Unnamed routes with punctuation-only differences or same route name for several verbs — name routes distinctly |
+| Duplicate operationId | Unnamed routes with punctuation-only differences or same route name for several verbs  name routes distinctly |
 | Path template `{x}` has no parameter | `#[PathParam]` name differs from the template; template uses characters the router didn't map |
 | Docs 404 in production | `environments` excludes it (by design); add env + auth middleware |
-| Spec stale | Cache on (`cache.enabled`) — `SpecCache::forget()` / `APEXDOCS_CACHE_ENABLED=false` locally |
+| Spec stale | Cache on (`cache.enabled`)  `SpecCache::forget()` / `APEXDOCS_CACHE_ENABLED=false` locally |
 | `InvalidConfigException … not a class that exists` | Transformer class name typo in `document_transformers`/`operation_transformers` |
-| Symfony boot fails on `ui.default` | Removed key — use `ui.show_toolbar`/`ui.theme` (see UPGRADING) |
+| Symfony boot fails on `ui.default` | Removed key  use `ui.show_toolbar`/`ui.theme` (see UPGRADING) |

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace ApexDocs\Spec;
 
 /**
- * OpenAPI components object — reusable schemas, responses, parameters, etc.
+ * OpenAPI components object  reusable schemas, responses, parameters, etc.
  */
 final class Components
 {
@@ -78,7 +78,7 @@ final class Components
     }
 
     /**
-     * Inverse of {@see toArray()} — populate from a serialised form (e.g. a
+     * Inverse of {@see toArray()}  populate from a serialised form (e.g. a
      * cached spec). Round-trips every supported section so callers get the
      * exact components map back.
      *

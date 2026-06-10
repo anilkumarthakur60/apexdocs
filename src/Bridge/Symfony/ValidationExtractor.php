@@ -15,7 +15,7 @@ use ReflectionNamedType;
  * carrying #[MapRequestPayload] (Symfony 6.2+).
  *
  * #[MapQueryString] describes query parameters rather than a body, which this
- * contract cannot express — document those with #[QueryParam] for now.
+ * contract cannot express  document those with #[QueryParam] for now.
  */
 final class ValidationExtractor implements ValidationExtractorInterface
 {

@@ -98,7 +98,7 @@ final class SchemaExample
         $type = $schema['type'] ?? null;
 
         if (is_array($type)) {
-            // OpenAPI 3.1 nullable form — the null branch carries no example.
+            // OpenAPI 3.1 nullable form  the null branch carries no example.
             $concrete = array_values(array_filter($type, static fn ($t) => $t !== 'null'));
             $type = $concrete[0] ?? 'null';
         }

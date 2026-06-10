@@ -9,7 +9,7 @@ use Symfony\Component\DependencyInjection\Extension\ExtensionInterface;
 use Symfony\Component\HttpKernel\Bundle\Bundle;
 
 /**
- * Symfony bundle entry point — register in {@see Symfony\Component\HttpKernel\Kernel}
+ * Symfony bundle entry point  register in {@see Symfony\Component\HttpKernel\Kernel}
  * or via `bundles.php`:
  *
  *     ApexDocs\Bridge\Symfony\ApexDocsBundle::class => ['all' => true],

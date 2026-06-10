@@ -7,7 +7,7 @@ namespace ApexDocs\Exception;
 use Throwable;
 
 /**
- * Thrown when {@see \ApexDocs\Extractor\SchemaBuilder} cannot build a schema —
+ * Thrown when {@see \ApexDocs\Extractor\SchemaBuilder} cannot build a schema 
  * usually because the underlying class is unloadable or recursion limits were
  * hit.
  */

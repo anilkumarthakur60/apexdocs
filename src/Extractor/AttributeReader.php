@@ -28,8 +28,8 @@ final class AttributeReader
     /**
      * Get all instances of $attributeClass (for repeatable attributes).
      *
-     * An attribute that cannot be instantiated — wrong target, unknown named
-     * argument, a constant that no longer resolves — is skipped rather than
+     * An attribute that cannot be instantiated  wrong target, unknown named
+     * argument, a constant that no longer resolves  is skipped rather than
      * allowed to abort the whole documentation build.
      *
      * @return list<object>

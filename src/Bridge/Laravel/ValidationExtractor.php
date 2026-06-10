@@ -14,19 +14,19 @@ use ReflectionNamedType;
  * Laravel bridge: extracts a request-body schema from FormRequest::rules().
  *
  * Documentation-time, not request-time. Anything we instantiate is purely so
- * we can call rules() — we do NOT want side effects from real request
+ * we can call rules()  we do NOT want side effects from real request
  * handling. So:
  *
- *  - We bypass the constructor (`newInstanceWithoutConstructor`) — avoids
+ *  - We bypass the constructor (`newInstanceWithoutConstructor`)  avoids
  *    HTTP context, route resolution, and DB access that the FormRequest base
  *    class normally wires up.
  *  - We wire a container only if the method exists; we never call validate()
  *    or authorize().
  *  - We suppress notices/warnings around the rules() call: app code often
- *    references `$this->user()`, `$this->route('id')`, etc. — which raise
+ *    references `$this->user()`, `$this->route('id')`, etc.  which raise
  *    deprecations against a constructorless instance. They're noise here,
  *    not actionable.
- *  - Anything that throws — including \Error — is treated as "rules
+ *  - Anything that throws  including \Error  is treated as "rules
  *    unavailable" and the route is documented without a body schema.
  *  - Schemas are cached per-class for the lifetime of the process so big
  *    controllers don't re-instantiate the same FormRequest dozens of times.
@@ -114,7 +114,7 @@ final class ValidationExtractor implements ValidationExtractorInterface
 
         $rulesMethod = $ref->getMethod('rules');
         if ($rulesMethod->getNumberOfRequiredParameters() > 0) {
-            // `rules(Foo $x)` — we can't fabricate $x safely. Skip.
+            // `rules(Foo $x)`  we can't fabricate $x safely. Skip.
             return null;
         }
 
@@ -125,7 +125,7 @@ final class ValidationExtractor implements ValidationExtractorInterface
                 try {
                     $instance->setContainer(app());
                 } catch (\Throwable) {
-                    // ignore — container wiring is best-effort
+                    // ignore  container wiring is best-effort
                 }
             }
             $rules = $rulesMethod->invoke($instance);
@@ -164,7 +164,7 @@ final class ValidationExtractor implements ValidationExtractorInterface
     private function hasFileRule(array $rules): bool
     {
         foreach ($rules as $rule) {
-            // Only string rules can be inspected — casting a closure or a
+            // Only string rules can be inspected  casting a closure or a
             // ValidationRule object to string throws.
             foreach (is_array($rule) ? $rule : [$rule] as $part) {
                 if (! is_string($part) && ! $part instanceof \Stringable) {

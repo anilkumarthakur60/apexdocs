@@ -11,7 +11,7 @@ use ReflectionProperty;
 
 /**
  * Converts PHP type strings into OpenAPI schema arrays.
- * Pure PHP — no framework dependency.
+ * Pure PHP  no framework dependency.
  *
  * When a ComponentRegistry is attached, every class schema is registered once
  * and subsequent references return $ref pointers instead of inlining the schema.
@@ -143,7 +143,7 @@ final class SchemaBuilder
                 }
             }
 
-            // An empty `enum` is not a meaningful constraint — omit it.
+            // An empty `enum` is not a meaningful constraint  omit it.
             return $values === [] ? ['type' => $type] : ['type' => $type, 'enum' => $values];
         } catch (\Throwable) {
             return ['type' => 'string'];
@@ -156,7 +156,7 @@ final class SchemaBuilder
         $required = [];
 
         foreach ($ref->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
-            // Only own properties — parent properties handled via allOf
+            // Only own properties  parent properties handled via allOf
             if ($prop->getDeclaringClass()->getName() !== $ref->getName()) {
                 continue;
             }
@@ -224,7 +224,7 @@ final class SchemaBuilder
      *
      * Only user-space parents with public properties qualify. Framework base
      * classes (Eloquent's Model, Symfony's controllers, …) expose unrelated
-     * public state — $timestamps, $exists, $wasRecentlyCreated — that has no
+     * public state  $timestamps, $exists, $wasRecentlyCreated  that has no
      * business in an API payload schema.
      */
     private function isDocumentableParent(ReflectionClass $parent): bool
@@ -278,7 +278,7 @@ final class SchemaBuilder
      *   - Allows null and no default → still required to be PRESENT in the
      *     payload (clients send `null` explicitly), but only for readonly
      *     props. Mutable nullable props with no default are treated as
-     *     optional — the conventional Eloquent/DTO read.
+     *     optional  the conventional Eloquent/DTO read.
      *   - Non-nullable, no default → required.
      *
      * PHP quirk: ReflectionProperty::hasDefaultValue() returns false for
@@ -372,7 +372,7 @@ final class SchemaBuilder
         $parts = array_values(array_filter($parts, fn ($t) => $t !== 'null'));
 
         // A `mixed`/`void`/`never` member yields an empty schema, which is not a
-        // valid oneOf branch — and it also makes the whole union unconstrained.
+        // valid oneOf branch  and it also makes the whole union unconstrained.
         $branches = [];
         foreach ($parts as $part) {
             $branch = $this->fromTypeString($part, $depth);
@@ -408,7 +408,7 @@ final class SchemaBuilder
     {
         if ($schema === []) {
             // `mixed`/`void` carry no constraint at all, and an empty array
-            // encodes as `[]` — not a Schema Object. "Anything, including null"
+            // encodes as `[]`  not a Schema Object. "Anything, including null"
             // is best expressed by saying nothing.
             return [];
         }
@@ -440,7 +440,7 @@ final class SchemaBuilder
             return $schema;
         }
 
-        // No type / $ref to anchor onto — fall back to the union form.
+        // No type / $ref to anchor onto  fall back to the union form.
         return ['oneOf' => [$schema, ['type' => 'null']]];
     }
 

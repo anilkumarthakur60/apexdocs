@@ -135,7 +135,7 @@ final class SecurityDetector implements SecurityDetectorInterface
             return $this->hasSanctum() ? 'sanctum' : self::FALLBACK;
         }
 
-        // Generic auth guard — name the first scheme we actually defined.
+        // Generic auth guard  name the first scheme we actually defined.
         return array_key_first($this->schemes()) ?? self::FALLBACK;
     }
 

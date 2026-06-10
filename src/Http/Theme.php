@@ -13,7 +13,7 @@ namespace ApexDocs\Http;
  * colour rendered as pale-on-white and could not be read.
  *
  * Every token that carries text is contrast-checked against the surface it sits
- * on — see tests/Unit/Http/ThemeContrastTest.php, which fails the build if a
+ * on  see tests/Unit/Http/ThemeContrastTest.php, which fails the build if a
  * pair drops below the WCAG 2.1 AA ratio of 4.5:1. Colours here are chosen to
  * satisfy that, not to look right in one designer's editor.
  */
@@ -26,10 +26,10 @@ final class Theme
      *
      * These are the *phone* values. A breakpoint in UiRenderer::cssResponsive()
      * is a handful of writes to this token set on `:root`, not a pile of
-     * per-selector overrides — so the only place a layout dimension is defined
+     * per-selector overrides  so the only place a layout dimension is defined
      * is here and the five ascending min-width blocks.
      *
-     * `--banner-h` is the one token whose value here is only a starting point —
+     * `--banner-h` is the one token whose value here is only a starting point 
      * 0px, correct for the common case of no announcement banner. When there is
      * one it carries author-supplied HTML that wraps at any width, so its height
      * is measured and republished by the shell metrics in UiRenderer::jsCore().
@@ -73,7 +73,7 @@ final class Theme
         // ── Text ─────────────────────────────────────────────────────────────
         '--t1' => '#f4f4f5',
         '--t2' => '#a1a1aa',
-        // #52525b measured 2.56:1 here — below AA even for large text.
+        // #52525b measured 2.56:1 here  below AA even for large text.
         '--t3' => '#85858f',
 
         // ── Accent ───────────────────────────────────────────────────────────
@@ -114,7 +114,7 @@ final class Theme
         '--neutral-soft' => 'rgba(113,113,122,0.14)',
         '--neutral-b' => 'rgba(113,113,122,0.30)',
 
-        // Legacy aliases — plenty of rules still say var(--green).
+        // Legacy aliases  plenty of rules still say var(--green).
         '--green' => '#4ade80',
         '--blue' => '#60a5fa',
         '--amber' => '#fbbf24',

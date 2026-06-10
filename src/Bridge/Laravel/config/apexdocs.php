@@ -163,7 +163,7 @@ return [
     |--------------------------------------------------------------------------
     |
     | Middleware applied to the docs routes, and the environments they are
-    | registered in. An empty `environments` array means every environment —
+    | registered in. An empty `environments` array means every environment 
     | if you enable that, put real auth middleware in front of the docs.
     |
     */

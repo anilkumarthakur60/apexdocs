@@ -12,7 +12,7 @@ All run in every environment (the `environments` gate is HTTP-only). Exit codes:
 | `apexdocs:watch` | `--output=path`, `--interval=2` | Polls mtimes of `app/` and `routes/` PHP files; regenerates on change; Ctrl+C stops (pcntl when available). |
 | `apexdocs:mock` | `--host=127.0.0.1`, `--port=8081` | Writes the spec to a 0600 temp file, starts `php -S` with `resources/mock/server.php`, which answers each path with an example built from its lowest 2xx response (+ documented headers); `?__status=404` selects another documented response. |
 | `apexdocs:mcp` | `--in-process`, `--timeout=120` | MCP server over stdio. Default: every snapshot is built by running `apexdocs:snapshot` in a **fresh process** so code changes are visible; `--in-process` is faster but stale after edits. |
-| `apexdocs:snapshot` (hidden) | — | Prints `{generated_at, duration_ms, config, routes[], spec}` JSON — what the MCP server consumes. |
+| `apexdocs:snapshot` (hidden) |  | Prints `{generated_at, duration_ms, config, routes[], spec}` JSON  what the MCP server consumes. |
 | `apexdocs:install-ai` | `--target=claude,agents\|cursor\|copilot\|all`, `--force` | Installs the skill, agent, instructions block and MCP config into the project (idempotent, marker blocks, merged JSON). |
 
 Publish tags: `apexdocs-config` (config file), `apexdocs-ai` (skill + agent into `.claude/`).

@@ -47,13 +47,13 @@ final class RouteSelector
         private Config $config,
         private ?Closure $routeFilter = null,
     ) {
-        // An empty list — or an empty prefix inside it — means "document every
+        // An empty list  or an empty prefix inside it  means "document every
         // route".
         $this->matchAll = $config->pathPrefixes === [];
         foreach ($config->pathPrefixes as $prefix) {
             if (! is_string($prefix)) {
                 // A stray null (an unset env var in the list) must be dropped,
-                // never promoted to the match-everything sentinel — that would
+                // never promoted to the match-everything sentinel  that would
                 // silently publish every route in the application.
                 continue;
             }
@@ -147,7 +147,7 @@ final class RouteSelector
      * unanchored `api` would match every path under /api and silently empty the
      * whole document, and `api/internal` would also drop `/api/internally`.
      *
-     * A pattern that is not a valid regex is simply not treated as one — testing
+     * A pattern that is not a valid regex is simply not treated as one  testing
      * it first keeps PCRE from emitting a warning that a strict error handler
      * would turn into an exception mid-build.
      */
