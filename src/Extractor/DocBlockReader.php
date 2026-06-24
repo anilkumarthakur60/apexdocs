@@ -168,6 +168,61 @@ final class DocBlockReader
     }
 
     /**
+     * Types from `@property` and `@property-read`, keyed by property name.
+     *
+     * The Eloquent-model convention: the columns of a model are documented as
+     * annotations (by hand or by ide-helper) because no PHP property declares
+     * them. `@property-write` is skipped — it never appears in a payload.
+     *
+     * @return array<string, string>
+     */
+    public static function propertyTypes(string|false $docComment): array
+    {
+        $node = self::parse($docComment);
+        if ($node === null) {
+            return [];
+        }
+
+        $result = [];
+        foreach (['@property', '@property-read'] as $tagName) {
+            foreach ($node->getTagsByName($tagName) as $tag) {
+                $value = $tag->value;
+                $name = ltrim((string) ($value->propertyName ?? ''), '$');
+                $type = trim((string) ($value->type ?? ''));
+                if ($name !== '' && $type !== '' && ! isset($result[$name])) {
+                    $result[$name] = $type;
+                }
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Class names from `@mixin` — for an API resource, the model whose
+     * attributes `$this->…` actually reads.
+     *
+     * @return list<string>
+     */
+    public static function mixins(string|false $docComment): array
+    {
+        $node = self::parse($docComment);
+        if ($node === null) {
+            return [];
+        }
+
+        $result = [];
+        foreach ($node->getTagsByName('@mixin') as $tag) {
+            $type = trim((string) ($tag->value->type ?? ''));
+            if ($type !== '') {
+                $result[] = $type;
+            }
+        }
+
+        return array_values(array_unique($result));
+    }
+
+    /**
      * @return array<string, string> param name => type string
      */
     public static function paramTypes(string|false $docComment): array

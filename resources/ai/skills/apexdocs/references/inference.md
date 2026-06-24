@@ -11,7 +11,7 @@ Per route (`OperationBuilder::build`), for each documentable verb (`GET PUT POST
 | path parameters | from the template; type: scalar type-hint → router constraint (`wheres`/Symfony requirements; `\d`-leading → integer, `a\|b` → enum, else pattern) → name heuristic (`id`, `*_id`, `*Id` → integer); description from `@param` |
 | query/header/cookie parameters | **never inferred**  declare with attributes |
 | request body | POST/PUT/PATCH: Laravel FormRequest type-hinted on the action (`rules()` executed on a constructor-less instance with the container set; failures → no body) / Symfony `#[MapRequestPayload]` param |
-| 200 response | from `@return` / return type via `SchemaBuilder`; `{}` schema → plain `description: OK` |
+| 200 response | from `@return` / return type via `SchemaBuilder`; `{}` schema → plain `description: OK`. A class in that type resolves to a component schema: public properties, else its `toArray()`/`jsonSerialize()` shape (`ArrayShapeReader` — see schemas-and-types.md), else `@property` annotations |
 | 401 | any middleware matching `\bauth\b` (`auth`, `auth:sanctum`, `auth.basic`) when `infer_error_responses` |
 | 422 | write verbs when `include_validation_errors` (even without a FormRequest) |
 | 429 | middleware containing `throttle` or `rate` when `rate_limits.enabled` |

@@ -20,6 +20,55 @@ final class SchemaBuilder
 {
     private const REF_PREFIX = '#/components/schemas/';
 
+    /** Psalm/PHPStan string and integer refinements — all one JSON type. */
+    private const STRING_ALIASES = [
+        'string', 'class-string', 'interface-string', 'enum-string', 'trait-string',
+        'callable-string', 'literal-string', 'non-empty-string', 'non-falsy-string',
+        'truthy-string', 'numeric-string', 'lowercase-string', 'non-empty-lowercase-string',
+    ];
+
+    private const INTEGER_ALIASES = [
+        'positive-int', 'negative-int', 'non-positive-int', 'non-negative-int',
+        'non-zero-int', 'int-mask', 'int-mask-of',
+    ];
+
+    /**
+     * Framework bases that stand in for "some payload" without being one.
+     * Matched EXACTLY, never by inheritance: `UserResource extends JsonResource`
+     * must keep its schema — it is only the bare base, written as a return type,
+     * that has nothing to say. Reflected, each publishes its own plumbing:
+     * `{resource, with, additional}` for JsonResource, `{exists,
+     * wasRecentlyCreated, timestamps}` for an Eloquent Model.
+     */
+    private const ABSTRACT_PAYLOADS = [
+        'Illuminate\Http\Resources\Json\JsonResource',
+        'Illuminate\Http\Resources\Json\ResourceCollection',
+        'Illuminate\Database\Eloquent\Model',
+        'Illuminate\Database\Eloquent\Relations\Relation',
+        'Illuminate\Database\Eloquent\Builder',
+        'Illuminate\Database\Query\Builder',
+    ];
+
+    /**
+     * Classes that *carry* a payload rather than being one. Reflecting them
+     * documents the framework's plumbing: `Illuminate\Http\JsonResponse` has
+     * public `original` and `exception`, so a controller declared
+     * `: JsonResponse` published `{original, exception}` as its response body —
+     * a confident, wrong answer where the truth is that the body is unknown.
+     *
+     * Matched by inheritance, so one entry covers Illuminate's JsonResponse,
+     * RedirectResponse, StreamedResponse and BinaryFileResponse alike. Laravel
+     * API resources are deliberately absent: a JsonResource *subclass* is the
+     * payload; only the bare base above is not.
+     */
+    private const RESPONSE_WRAPPERS = [
+        'Symfony\Component\HttpFoundation\Response',
+        'Psr\Http\Message\ResponseInterface',
+        'Psr\Http\Message\StreamInterface',
+        'Illuminate\Contracts\View\View',
+        'Illuminate\Contracts\Routing\ResponseFactory',
+    ];
+
     /** @var array<string, true> prevent infinite recursion during build */
     private array $building = [];
 
@@ -49,10 +98,13 @@ final class SchemaBuilder
             $lower === 'bool', $lower === 'boolean', $lower === 'true', $lower === 'false'
                                                      => ['type' => 'boolean'],
             $lower === 'int', $lower === 'integer'   => ['type' => 'integer'],
+            $lower === 'array-key'                   => ['type' => ['string', 'integer']],
             $lower === 'float', $lower === 'double', $lower === 'number'
                                                      => ['type' => 'number', 'format' => 'float'],
-            $lower === 'string', $lower === 'class-string', $lower === 'non-empty-string'
-                                                     => ['type' => 'string'],
+            // PHPStan/Psalm narrow the scalars far past PHP's own vocabulary;
+            // every one of these is still just a string or an integer in JSON.
+            in_array($lower, self::STRING_ALIASES, true) => ['type' => 'string'],
+            in_array($lower, self::INTEGER_ALIASES, true) => ['type' => 'integer'],
             $lower === 'array', $lower === 'iterable', $lower === 'list'
                                                      => ['type' => 'array', 'items' => new \stdClass],
             $lower === 'object', $lower === 'stdclass' => ['type' => 'object'],
@@ -62,7 +114,11 @@ final class SchemaBuilder
             str_ends_with($type, '{}')               => $this->mapOf(substr($type, 0, -2), $depth),
             class_exists($type) || interface_exists($type) || enum_exists($type)
                                                      => $this->fromClass($type, $depth),
-            default                                  => ['type' => 'string'],
+            // A name that resolves to nothing — an unimported class, a typo, a
+            // `callable`, a `resource` — constrains nothing. Guessing `string`
+            // here is how a JSON object came to be documented as a string; for
+            // a return type it also means no 200 content is invented.
+            default                                  => [],
         };
     }
 
@@ -70,6 +126,25 @@ final class SchemaBuilder
     public function fromClass(string $class, int $depth = 0): array
     {
         $class = trim($class, '\\');
+
+        // A date is a string in JSON, not an object graph: Laravel, Symfony and
+        // every serialiser worth the name emit DateTimeInterface as an ISO-8601
+        // string, and a $ref to a `Carbon` component documents nothing.
+        if (is_a($class, \DateTimeInterface::class, true)) {
+            return ['type' => 'string', 'format' => 'date-time'];
+        }
+
+        // A collection or paginator written without its generic is a list of
+        // something unknown — the same reading `Collection<T>` already gets.
+        if (TypeInferrer::isIterableWrapper($class)) {
+            return ['type' => 'array', 'items' => new \stdClass];
+        }
+
+        // A response wrapper carries the payload; it is not the payload. Nor is
+        // the abstract base a payload class happens to extend.
+        if (self::isResponseWrapper($class) || in_array($class, self::ABSTRACT_PAYLOADS, true)) {
+            return [];
+        }
 
         // Already registered in registry → return $ref immediately
         if ($this->registry?->has($class)) {
@@ -152,12 +227,31 @@ final class SchemaBuilder
 
     private function fromReflection(ReflectionClass $ref, int $depth): array
     {
+        // A class that declares how it becomes an array says more than its
+        // property list does. For an API resource the keys live in `toArray()`
+        // and the public surface is plumbing — Laravel's own `$collects` and
+        // `$resource` are public and belong in no payload — and for a
+        // JsonSerializable value object `jsonSerialize()` *is* the JSON.
+        $shape = ArrayShapeReader::forClass($ref);
+        if ($shape !== []) {
+            // That method describes the whole payload, so a parent's properties
+            // are not merged in on top of it.
+            return $this->fromShape($shape, $depth);
+        }
+
         $ownProperties = [];
         $required = [];
 
         foreach ($ref->getProperties(ReflectionProperty::IS_PUBLIC) as $prop) {
             // Only own properties  parent properties handled via allOf
             if ($prop->getDeclaringClass()->getName() !== $ref->getName()) {
+                continue;
+            }
+
+            // A static property is class state, not instance data: it cannot
+            // appear in a payload. `JsonResource::$wrap` is the example that
+            // matters — it was being published as a response key.
+            if ($prop->isStatic()) {
                 continue;
             }
 
@@ -196,11 +290,20 @@ final class SchemaBuilder
             }
         }
 
+        // Nothing to reflect and no payload method: an Eloquent model documents
+        // its columns as annotations, because no PHP property declares them.
+        if ($ownProperties === []) {
+            $annotated = ArrayShapeReader::fromAnnotations($ref);
+            if ($annotated !== []) {
+                return $this->fromShape($annotated, $depth);
+            }
+        }
+
         $ownSchema = ['type' => 'object'];
         if ($ownProperties !== []) {
             // An empty PHP array encodes as `[]`, and `properties: []` is not a
-            // valid JSON Schema. A class with nothing public (an Eloquent model,
-            // say) is simply an untyped object.
+            // valid JSON Schema. A class with nothing public and no readable
+            // payload method is simply an untyped object.
             $ownSchema['properties'] = $ownProperties;
         }
         if ($required) {
@@ -217,6 +320,80 @@ final class SchemaBuilder
         }
 
         return $ownSchema;
+    }
+
+    /**
+     * Turn a payload shape recovered by {@see ArrayShapeReader} into an object
+     * schema. Keys are required unless the reader found them conditional.
+     *
+     * @param  array<string, array<string, mixed>>  $shape
+     * @return array<string, mixed>
+     */
+    private function fromShape(array $shape, int $depth): array
+    {
+        $properties = [];
+        $required = [];
+
+        foreach ($shape as $key => $node) {
+            if (is_int($key)) {
+                // `properties` keyed 0,1,2… encodes as a JSON array, which is
+                // not a Schema Object. A positional key describes a tuple, not
+                // an object, so there is nothing to publish.
+                continue;
+            }
+
+            $schema = $this->fromShapeNode($node, $depth + 1);
+            $properties[$key] = $schema === [] ? new \stdClass : $schema;
+
+            if (! ($node['optional'] ?? false)) {
+                $required[] = $key;
+            }
+        }
+
+        if ($properties === []) {
+            return ['type' => 'object'];
+        }
+
+        $schema = ['type' => 'object', 'properties' => $properties];
+        if ($required !== []) {
+            $schema['required'] = $required;
+        }
+
+        return $schema;
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     * @return array<string, mixed>
+     */
+    private function fromShapeNode(array $node, int $depth): array
+    {
+        if (isset($node['shape'])) {
+            /** @var array<string, array<string, mixed>> $nested */
+            $nested = $node['shape'];
+
+            return $depth >= $this->maxDepth ? ['type' => 'object'] : $this->fromShape($nested, $depth);
+        }
+
+        if (isset($node['list'])) {
+            /** @var array<string, mixed> $item */
+            $item = $node['list'];
+            $items = $depth >= $this->maxDepth ? [] : $this->fromShapeNode($item, $depth + 1);
+
+            return ['type' => 'array', 'items' => $items === [] ? new \stdClass : $items];
+        }
+
+        $schema = isset($node['type']) ? $this->fromTypeString((string) $node['type'], $depth) : [];
+
+        if (isset($node['format']) && ($schema['type'] ?? null) === 'string') {
+            $schema['format'] = (string) $node['format'];
+        }
+
+        if (($node['nullable'] ?? false) && $schema !== []) {
+            $schema = self::asNullable($schema);
+        }
+
+        return $schema;
     }
 
     /**
@@ -264,7 +441,12 @@ final class SchemaBuilder
 
         $normalised = TypeInferrer::normalise($type);
 
-        return $normalised === '' ? null : $normalised;
+        if ($normalised === '') {
+            return null;
+        }
+
+        // `@var Item[]` names the Item this file imported, not a global one.
+        return NameResolver::forClass($prop->getDeclaringClass())->resolveTypeString($normalised);
     }
 
     /**
@@ -324,6 +506,30 @@ final class SchemaBuilder
         }
 
         return false;
+    }
+
+    private static function isResponseWrapper(string $class): bool
+    {
+        foreach (self::RESPONSE_WRAPPERS as $wrapper) {
+            // is_a() with a class-string target is false, not fatal, when the
+            // framework in question is not installed.
+            if (is_a($class, $wrapper, true)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * A Schema Object slot cannot hold an empty PHP array: it encodes as `[]`,
+     * which is not a schema. "No constraint" is the empty *object*.
+     *
+     * @param  array<string, mixed>  $schema
+     */
+    public static function anySchema(array $schema): array|\stdClass
+    {
+        return $schema === [] ? new \stdClass : $schema;
     }
 
     private function isPhpBuiltin(string $class): bool

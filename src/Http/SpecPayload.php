@@ -94,12 +94,19 @@ final readonly class SpecPayload
         return $spec instanceof Document ? $spec : $spec->generate();
     }
 
+    /**
+     * The documentation page carries the whole UI — stylesheet and script are
+     * inlined — and is rebuilt from source on every request. Cached by the
+     * browser, it pins the reader to the UI of whenever they first opened it,
+     * with no visible symptom and nothing to invalidate: the spec it fetches is
+     * already `no-store`, so only the page itself can go stale.
+     */
     public static function html(string $html): self
     {
         return new self(
             body: $html,
             contentType: 'text/html; charset=UTF-8',
-            headers: [],
+            headers: ['Cache-Control' => 'no-store'],
             downloadName: null,
         );
     }

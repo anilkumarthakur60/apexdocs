@@ -57,6 +57,31 @@ Tips for accurate bodies: keep `rules()` free of request/route access (`$this->r
 `$this->user()`) or guard them with null-safe fallbacks; use `Rule::enum(Status::class)` or
 `in:` for enums; add `nullable` explicitly; use `date_format:Y-m-d` for date-only fields.
 
+## API resources → response schemas
+
+A `JsonResource` / `ResourceCollection` subclass is documented from the `toArray()` it declares,
+read statically — never instantiated, never called, no model or request needed. Full expression
+table in `schemas-and-types.md`; the Laravel-specific parts:
+
+- **Types come from the model.** Put `@mixin \App\Models\User` on the resource and `@property`
+  annotations on the model (ide-helper writes them) and `$this->email` types itself.
+  `$this->resource` *is* the mixin target, so `$this->resource->email` resolves too.
+- **`whenLoaded()`, `when()`, `mergeWhen()`, `whenNotNull()`, `whenCounted()`, `whenAppended()`**
+  make the key optional (they return `MissingValue`), including inside
+  `PostResource::collection($this->whenLoaded('posts'))`. Their value argument still types the key.
+- **`PostResource::collection(…)`** → array of `$ref`; **`new PostResource(…)`** / `::make(…)` →
+  `$ref`. Both register the nested resource as its own component.
+- **`ResourceCollection`**: `$this->collection` → an array of `$collects`, else Laravel's own
+  convention (`UserCollection` → `User`, then `UserResource`). A redeclared `public $collects` is
+  never mistaken for a payload key.
+- **A resource that does not declare `toArray()`** keeps `{type: object}`: the inherited one lives
+  in `/vendor/` and describes nothing.
+- **Carbon** attributes are `{type: string, format: date-time}`, not a `Carbon` component.
+- **`$this->wrap`, `additional()`, `withResponse()`** are not read. `#[ApiResponse(resource:)]`
+  supplies the `{data: …}` envelope (`collection: true` adds `meta`/`links`).
+- Escape hatch: `@return array{id: int, name: string, meta?: array{plan: string}}` on `toArray()`
+  wins over the body.
+
 ## Security detection (`SecurityDetector`)
 
 | Middleware string contains | Scheme (when package present → else) |

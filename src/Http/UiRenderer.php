@@ -308,7 +308,7 @@ final class UiRenderer
             <div id="apex-palette-backdrop" onclick="apexPaletteClose()"></div>
             <div id="apex-palette-box">
                 <div id="apex-palette-search-wrap">
-                    <svg id="apex-palette-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <svg id="apex-palette-search-icon" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                         <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/>
                         <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                     </svg>
@@ -513,8 +513,12 @@ final class UiRenderer
         .apex-export-trigger:hover{color:var(--t1);background:var(--s2);border-color:var(--border-s)}
         .apex-chevron{font-size:10px;transition:transform .15s}
         .apex-export-wrap.open .apex-chevron{transform:rotate(180deg)}
-        .apex-export-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:160px;max-width:min(240px,calc(100vw - 24px));background:var(--elev);border:1px solid var(--border-s);border-radius:10px;padding:4px;box-shadow:var(--shadow-1);opacity:0;transform:translateY(-6px) scale(.97);pointer-events:none;transition:opacity .15s,transform .15s;z-index:1400}
-        .apex-export-wrap.open .apex-export-menu{opacity:1;transform:none;pointer-events:all}
+        /* `visibility` alongside the opacity, or the four links inside a closed
+           menu stay in the tab order: invisible focus stops between the toolbar
+           and the search field, with no way to tell where focus went. Kept as
+           `visibility` rather than `display` so the transition still runs. */
+        .apex-export-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:160px;max-width:min(240px,calc(100vw - 24px));background:var(--elev);border:1px solid var(--border-s);border-radius:10px;padding:4px;box-shadow:var(--shadow-1);opacity:0;visibility:hidden;transform:translateY(-6px) scale(.97);pointer-events:none;transition:opacity .15s,transform .15s,visibility .15s;z-index:1400}
+        .apex-export-wrap.open .apex-export-menu{opacity:1;visibility:visible;transform:none;pointer-events:all}
         .apex-export-item{display:block;padding:7px 12px;border-radius:6px;font-size:12.5px;color:var(--t2);text-decoration:none;transition:all .12s}
         .apex-export-item:hover{color:var(--t1);background:var(--s2)}
         .apex-export-divider{height:1px;background:var(--border);margin:4px 0}
@@ -615,7 +619,9 @@ final class UiRenderer
         .axg{margin-bottom:2px}
         .axg-count{font-size:10px;padding:1px 6px;border-radius:999px;background:var(--s2);color:var(--t3)}
         .axg-items{display:none}.axg.open .axg-items{display:block}
-        .axi{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 20px;cursor:pointer;border-radius:0;transition:background .12s;position:relative}
+        /* An <a>, so: no underline, inherited colour, and the same box it had
+           as a div. */
+        .axi{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 20px;cursor:pointer;border-radius:0;transition:background .12s;position:relative;text-decoration:none;color:inherit}
         .axi:hover{background:var(--s1)}
         .axi.active{background:var(--accent-soft)}
         .axi.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
@@ -651,6 +657,9 @@ final class UiRenderer
            wide table would slide the whole article sideways, with no scrollbar
            to undo it. `clip` clips at the same edge without creating a
            scrollport. Anything genuinely wide gets its own `.ax-tablewrap`. */
+        /* Centred against a measure only while the article is a block in flow
+           (below the rail threshold, where the viewport is the only bound). The
+           auto margin is undone once it becomes a grid item — see >=1200px. */
         #axui-doc{max-width:var(--doc-max);margin-inline:auto;padding:16px var(--gutter) 28px;overflow-x:clip}
         [id]{scroll-margin-top:calc(var(--ctx-h) + 12px)}
 
@@ -662,7 +671,7 @@ final class UiRenderer
            under the bar, so the offset goes back to 0 (see cssResponsive). */
         #ax-ctx{position:sticky;top:var(--bar-h);z-index:6;height:var(--ctx-h);display:flex;align-items:center;gap:8px;padding:0 var(--gutter);background:var(--bar-bg);border-bottom:1px solid var(--border);font-size:12px}
         #ax-ctx[hidden]{display:none}
-        .axw-title{font-size:26px;font-weight:700;letter-spacing:-.025em;color:var(--t1);margin-bottom:6px}
+        .axw-title{font-size:26px;font-weight:700;letter-spacing:-.025em;color:var(--t1);margin:0 0 6px}
         .axw-meta{display:flex;align-items:center;gap:10px;margin-bottom:16px}
         .axw-version{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--accent-soft);border:1px solid var(--accent-soft-b);color:var(--accent-t)}
         .axw-openapi{font-size:11px;color:var(--t3)}
@@ -680,7 +689,7 @@ final class UiRenderer
         /* Operation detail */
         .ax-op-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:20px}
         .ax-op-title-wrap{flex:1;min-width:0}
-        .ax-op-path{font-size:18px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--t1);letter-spacing:-.01em;word-break:break-all}
+        .ax-op-path{margin:0;font-size:18px;font-weight:600;font-family:'JetBrains Mono',monospace;color:var(--t1);letter-spacing:-.01em;word-break:break-all}
         .ax-op-summary{font-size:14px;color:var(--t2);margin-top:4px;line-height:1.5}
         .ax-depr-badge{display:inline-flex;align-items:center;font-size:10.5px;font-weight:600;padding:2px 7px;border-radius:999px;background:rgba(245,158,11,.12);color:var(--amber);border:1px solid rgba(245,158,11,.3);margin-left:8px;vertical-align:middle}
         .ax-op-desc{font-size:14px;color:var(--t2);line-height:1.7;margin-bottom:20px;padding:14px 16px;background:var(--s1);border-left:2px solid var(--accent);border-radius:0 var(--r) var(--r) 0}
@@ -746,7 +755,7 @@ final class UiRenderer
 
         /* Responses */
         .ax-resp{border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:8px}
-        .ax-resp-header{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer;transition:background .12s;user-select:none}
+        .ax-resp-header{display:flex;align-items:center;width:100%;gap:10px;padding:10px 14px;font-family:inherit;font-size:inherit;color:inherit;background:none;border:0;text-align:left;cursor:pointer;transition:background .12s;user-select:none}
         .ax-resp-header:hover{background:var(--s1)}
         .ax-resp-status{font-size:13px;font-weight:700;font-family:monospace;flex-shrink:0}
         .axs-2xx{color:var(--green)}.axs-3xx{color:var(--blue)}.axs-4xx{color:var(--amber)}.axs-5xx{color:var(--red)}
@@ -861,7 +870,9 @@ final class UiRenderer
         #apex-toast.show{opacity:1;transform:translateY(0)}
 
         /* ── Sidebar group name ── */
-        .axg-header{display:flex;align-items:center;padding:6px 12px 6px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);cursor:pointer;user-select:none;transition:color .15s;gap:5px}
+        /* A <button>, so the UA's own chrome has to go: it is a disclosure
+           control, and it has to look exactly like the row it replaced. */
+        .axg-header{display:flex;align-items:center;width:100%;padding:6px 12px 6px 14px;font-family:inherit;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);background:none;border:0;text-align:left;cursor:pointer;user-select:none;transition:color .15s;gap:5px}
         .axg-header:hover{color:var(--t2)}
         .axg-name{flex:1}
         .axg-arrow{font-size:9px;transition:transform .2s;flex-shrink:0}
@@ -1215,7 +1226,15 @@ final class UiRenderer
         @media (min-width:1200px){
             :root{--nav-w:264px;--rail-w:380px}
             #axui-content-inner{display:grid;grid-template-columns:minmax(0,1fr) var(--rail-w);align-items:start}
-            #axui-doc{grid-area:1/1}
+            /* The article now fills its cell: the rail already bounds it, so a
+               measure of its own only opens a gap between the two columns.
+               `margin-inline` MUST be reset with `max-width` — an auto inline
+               margin on a grid item cancels the stretch and sizes the box to
+               fit-content, which rendered the article 592px wide inside a
+               1216px cell, narrower than even its own max-width, with all the
+               slack showing as dead space either side of the documentation.
+               Guarded by a CSS regression test. */
+            #axui-doc{grid-area:1/1;max-width:none;margin-inline:0}
             /* #axui-panel-slot must keep overflow:visible and align-self:stretch.
                Give it any overflow value and it becomes the scroll container for
                its own sticky child, which degrades the rail to static silently 
@@ -1232,9 +1251,11 @@ final class UiRenderer
                that keeps the rail blank on the views with no console. */
         }
 
-        /* ══ >=1560px  wide desktop ══ */
+        /* ══ >=1560px — wide desktop ══
+           No `--doc-max` here: past 1200px the article is a grid item that
+           fills its cell, so a measure would have nothing to act on. */
         @media (min-width:1560px){
-            :root{--gutter:40px;--rail-w:440px;--doc-max:900px}
+            :root{--gutter:40px;--rail-w:440px}
         }
 
         /* The single fallback: without dvh the shell falls back to vh, which is
@@ -1273,6 +1294,26 @@ final class UiRenderer
             .ax-op-header:hover .ax-permalink-btn,
             .ax-permalink-btn:focus-visible{opacity:1}
         }
+
+        /* ══ Focus ══
+           There was no focus ring anywhere in this stylesheet: a keyboard user
+           could not see where they were. One ring, on everything focusable,
+           drawn with the palette's `--ring` token (both modes define it at 3:1
+           against their surfaces). `:focus-visible`, so a mouse click never
+           paints one, and `outline`, so it costs no layout and survives forced
+           colours. */
+        :focus-visible{outline:2px solid var(--ring);outline-offset:2px}
+        /* A sidebar row and an accordion header are flush with their container's
+           edge, where an outset ring is clipped by the scrollport. */
+        .axi:focus-visible,.axg-header:focus-visible,.ax-resp-header:focus-visible,
+        .ax-resp summary:focus-visible,.apex-pal-item:focus-visible{outline-offset:-2px}
+        /* Against a filled control the ring needs the inner edge to read. */
+        .ax-try-send:focus-visible,.apex-export-item:focus-visible{box-shadow:0 0 0 2px var(--ring-2)}
+        /* These three set `outline:none` for their own borderless look and are
+           addressed by id, which outranks the blanket rule above. */
+        #axui-filter:focus-visible,#apex-palette-input:focus-visible,
+        .ax-try-input:focus-visible,.ax-try-textarea:focus-visible,
+        .ax-bulk-area:focus-visible,.ax-try-auth-type:focus-visible{outline:2px solid var(--ring);outline-offset:1px}
 
         /* ══ Reduced motion ══
            Stated as intent, per animation, then a blanket net for anything added
@@ -1628,10 +1669,14 @@ final class UiRenderer
                 var items=list.trim().split(/\n/).map(function(l){return '<li>'+l.replace(/^[-*] /,'')+'</li>';}).join('');
                 return pre+'<ul>'+items+'</ul>';
             });
-            /* Paragraphs / line breaks */
+            /* Paragraphs. A single newline is a SOFT break — a space — as in
+               every markdown renderer, so a PHPDoc hard-wrapped at 80 columns
+               reflows to the width it is given instead of keeping the source's
+               ragged line ends at every viewport. A hard break is markdown's
+               own: two trailing spaces, or a trailing backslash. */
             s=s.split(/\n{2,}/).map(function(p){
                 if(/^<(h\d|ul|pre|blockquote)/.test(p.trim()))return p;
-                return '<p>'+p.replace(/\n/g,'<br>')+'</p>';
+                return '<p>'+p.replace(/(?: {2,}|\\)\n/g,'<br>').replace(/\n/g,' ')+'</p>';
             }).join('');
             /* Re-inject fenced blocks */
             s=s.replace(/ B(\d+) /g,function(_,i){return '<pre class="ax-md-pre"><code>'+escH(blocks[+i])+'</code></pre>';});
@@ -1880,6 +1925,10 @@ final class UiRenderer
     private function jsNav(): string
     {
         return <<<'JS'
+        /* The hash this session wrote, so the listener does not re-render a view
+           that has just rendered itself. */
+        var _lastHash='';
+
         /* ── Schema browser navigation ── */
         window.axNavSchema=function(name){
             _activeSchemaName=name;_activeOpKey=null;
@@ -1887,7 +1936,7 @@ final class UiRenderer
             var schema=spec.components.schemas[name];if(!schema)return;
             renderSidebar(spec);
             renderSchemaView(name,schema,spec);
-            history.replaceState(null,'','#schema_'+encodeURIComponent(name));
+            _lastHash='schema_'+encodeURIComponent(name);history.replaceState(null,'','#'+_lastHash);
             var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
             axSidebarClose();
         };
@@ -1902,7 +1951,7 @@ final class UiRenderer
                 +usedBy.map(function(u){return '<div class="ax-used-item" onclick="axNav(\''+u.method+'__'+escH(u.path)+'\',\''+escH(u.path)+'\',\''+u.method+'\')"><span class="axm axm-'+u.method+'">'+u.method.toUpperCase()+'</span><span>'+escH(u.path)+'</span></div>';}).join('')
                 +'</div></div>':'';
             setDoc('<div class="ax-breadcrumb"><span class="ax-breadcrumb-item ax-breadcrumb-link" onclick="axGoWelcome()">Schemas</span><span class="ax-breadcrumb-sep">›</span><span class="ax-breadcrumb-current">'+escH(name)+'</span></div>'
-                +'<div class="ax-op-header"><div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(name)+'</div>'
+                +'<div class="ax-op-header"><div class="ax-op-title-wrap"><h1 class="ax-op-path">'+escH(name)+'</h1>'
                 +(schema.title?'<div class="ax-op-summary">'+escH(schema.title)+'</div>':'')+'</div></div>'
                 +(schema.description?'<div class="ax-op-desc">'+md(schema.description)+'</div>':'')
                 +'<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Definition</div>'+expandToggle()+'</div>'+renderSchema(schema,spec,0)+'</div>'
@@ -1926,6 +1975,14 @@ final class UiRenderer
                 else{renderWelcome(spec);}
                 renderSidebarFooter(spec);
                 var hash=location.hash.slice(1);if(hash)navigateHash(hash,spec);
+                /* The sidebar navigates by href, so the hash — not a click
+                   handler — is what selects a view. This is also what makes the
+                   browser's Back button walk the endpoints visited. */
+                window.addEventListener('hashchange',function(){
+                    var h=location.hash.slice(1);
+                    if(!h){axGoWelcome();return;}
+                    if(h!==_lastHash)navigateHash(h,_specCache||spec);
+                });
                 var filter=document.getElementById('axui-filter');
                 if(filter){filter.addEventListener('input',function(){renderSidebar(spec,filter.value);});}
             },function(err){renderError(err);});
@@ -1944,7 +2001,7 @@ final class UiRenderer
             setDoc(card);setPanel('');
         }
         function renderEmptySpec(spec){
-            setDoc('<div class="axw-title">'+escH((spec.info&&spec.info.title)||'API')+'</div>'
+            setDoc('<h1 class="axw-title">'+escH((spec.info&&spec.info.title)||'API')+'</h1>'
                 +'<div class="ax-empty-spec"><div class="ax-empty-icon">📭</div><div class="ax-empty-title">No endpoints documented yet</div>'
                 +'<div class="ax-empty-msg">Add controllers with route attributes, then regenerate the spec.</div></div>');
             setPanel('');
@@ -1980,18 +2037,23 @@ final class UiRenderer
                 var hasActive=items.some(function(i){return i.key===_activeOpKey;});
                 var open=(q||tag===Object.keys(groups)[0]||hasActive)?' open':'';
                 html+='<div class="axg'+open+'" id="axg-'+escH(tag)+'">'
-                    +'<div class="axg-header" onclick="axToggleGroup(this)">'
-                    +'<span class="axg-arrow">▶</span>'
+                    +'<button type="button" class="axg-header" aria-expanded="'+(open?'true':'false')+'" aria-controls="axg-items-'+escH(tag)+'" onclick="axToggleGroup(this)">'
+                    +'<span class="axg-arrow" aria-hidden="true">▶</span>'
                     +'<span class="axg-name">'+escH(tag)+'</span>'
                     +'<span class="axg-count">'+items.length+'</span>'
-                    +'</div><div class="axg-items">';
+                    +'</button><div class="axg-items" id="axg-items-'+escH(tag)+'">';
                 items.forEach(function(i){
                     var dep=i.op.deprecated?' axi-depr':'';
-                    html+='<div class="axi'+(i.key===_activeOpKey?' active':'')+dep+'" data-key="'+escH(i.key)+'" data-path="'+escH(i.path)+'" data-method="'+escH(i.method)+'" onclick="axNavEl(this)">'
+                    /* A real <a href>: keyboard-reachable, focusable, and
+                       middle-click/cmd-click opens the endpoint in a new tab —
+                       none of which a <div onclick> can do. The hashchange
+                       listener renders it, which also makes Back work. */
+                    var active=i.key===_activeOpKey;
+                    html+='<a class="axi'+(active?' active':'')+dep+'" href="#'+escH(axHashFor(i.op,i.key))+'"'+(active?' aria-current="page"':'')+' data-key="'+escH(i.key)+'" data-path="'+escH(i.path)+'" data-method="'+escH(i.method)+'">'
                         +'<span class="axm axm-'+i.method+'">'+i.method.toUpperCase()+'</span>'
                         +'<span class="axi-path">'+escH(i.path)+'</span>'
                         +(i.op.deprecated?'<span class="axi-depr-dot">D</span>':'')
-                        +'</div>';
+                        +'</a>';
                 });
                 html+='</div></div>';
             }
@@ -2003,17 +2065,17 @@ final class UiRenderer
                 anyResult=true;
                 var schOpen=(_activeSchemaName||q)?' open':'';
                 html+='<div class="axg'+schOpen+'" id="axg-__schemas__">'
-                    +'<div class="axg-header" onclick="axToggleGroup(this)">'
-                    +'<span class="axg-arrow">▶</span>'
+                    +'<button type="button" class="axg-header" aria-expanded="'+(schOpen?'true':'false')+'" aria-controls="axg-items-schemas" onclick="axToggleGroup(this)">'
+                    +'<span class="axg-arrow" aria-hidden="true">▶</span>'
                     +'<span class="axg-name">Schemas</span>'
                     +'<span class="axg-count">'+schemaKeys.length+'</span>'
-                    +'</div><div class="axg-items">';
+                    +'</button><div class="axg-items" id="axg-items-schemas">';
                 schemaKeys.forEach(function(n){
-                    var active=(n===_activeSchemaName)?' active':'';
-                    html+='<div class="axi axi-schema'+active+'" onclick="axNavSchema(\''+escH(n)+'\')">'
-                        +'<span class="axm axm-schema">{}</span>'
+                    var active=(n===_activeSchemaName);
+                    html+='<a class="axi axi-schema'+(active?' active':'')+'" href="#schema_'+encodeURIComponent(n)+'"'+(active?' aria-current="page"':'')+'>'
+                        +'<span class="axm axm-schema" aria-hidden="true">{}</span>'
                         +'<span class="axi-path">'+escH(n)+'</span>'
-                        +'</div>';
+                        +'</a>';
                 });
                 html+='</div></div>';
             }
@@ -2022,20 +2084,21 @@ final class UiRenderer
             if(whKeys.length&&!q){
                 var whActive=_activeOpKey&&_activeOpKey.startsWith('webhook__');
                 html+='<div class="axg'+(whActive?' open':'')+'" id="axg-__webhooks__">'
-                    +'<div class="axg-header" onclick="axToggleGroup(this)">'
-                    +'<span class="axg-arrow">▶</span>'
+                    +'<button type="button" class="axg-header" aria-expanded="'+(whActive?'true':'false')+'" aria-controls="axg-items-webhooks" onclick="axToggleGroup(this)">'
+                    +'<span class="axg-arrow" aria-hidden="true">▶</span>'
                     +'<span class="axg-name">Webhooks</span>'
                     +'<span class="axg-count">'+whKeys.length+'</span>'
-                    +'</div><div class="axg-items">';
+                    +'</button><div class="axg-items" id="axg-items-webhooks">';
                 whKeys.forEach(function(wname){
                     var wop=wh[wname];
                     for(var wm in wop){
                         if(!METHODS.includes(wm))continue;
-                        html+='<div class="axi" data-key="webhook__'+escH(wname)+'__'+escH(wm)+'" data-wname="'+escH(wname)+'" data-wmethod="'+escH(wm)+'" onclick="axNavWhEl(this)">'
+                        var whKey='webhook__'+wname+'__'+wm;
+                        html+='<a class="axi'+(whKey===_activeOpKey?' active':'')+'" href="#wh_'+encodeURIComponent(wname)+'_'+escH(wm)+'" data-key="'+escH(whKey)+'" data-wname="'+escH(wname)+'" data-wmethod="'+escH(wm)+'">'
                             +'<span class="axm axm-'+wm+'">'+wm.toUpperCase()+'</span>'
                             +'<span class="axi-path">'+escH(wname)+'</span>'
                             +'<span class="ax-webhook-badge">wh</span>'
-                            +'</div>';
+                            +'</a>';
                     }
                 });
                 html+='</div></div>';
@@ -2060,7 +2123,15 @@ final class UiRenderer
             footer.innerHTML=items.join('');
         }
 
-        window.axToggleGroup=function(el){el.closest('.axg').classList.toggle('open');};
+        /* The deep link an endpoint already answers to, so the sidebar can be a
+           list of real links instead of click handlers. */
+        function axHashFor(op,key){
+            return 'op_'+((op&&op.operationId)||key);
+        }
+        window.axToggleGroup=function(el){
+            var open=el.closest('.axg').classList.toggle('open');
+            el.setAttribute('aria-expanded',open?'true':'false');
+        };
         window.axNavEl=function(el){var g=el.closest('.axg');if(g)g.classList.add('open');axNav(el.dataset.key,el.dataset.path,el.dataset.method);};
         window.axNavWhEl=function(el){var g=el.closest('.axg');if(g)g.classList.add('open');axNavWebhook(el.dataset.wname,el.dataset.wmethod);};
 
@@ -2073,7 +2144,7 @@ final class UiRenderer
             var op=spec.paths&&spec.paths[path]&&spec.paths[path][method];if(!op)return;
             renderSidebar(spec);
             renderOperation(path,method,op,spec,false);
-            history.replaceState(null,'','#op_'+(op.operationId||key));
+            _lastHash='op_'+(op.operationId||key);history.replaceState(null,'','#'+_lastHash);
             var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
             axSidebarClose();
         };
@@ -2084,7 +2155,7 @@ final class UiRenderer
             var op=spec.webhooks&&spec.webhooks[name]&&spec.webhooks[name][method];if(!op)return;
             renderSidebar(spec);
             renderOperation(name,method,op,spec,true);
-            history.replaceState(null,'','#wh_'+name+'_'+method);
+            _lastHash='wh_'+name+'_'+method;history.replaceState(null,'','#'+_lastHash);
             var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
             axSidebarClose();
         };
@@ -2130,10 +2201,10 @@ final class UiRenderer
             for(var p in paths)for(var m in paths[p])if(METHODS.includes(m)){opCount++;if(paths[p][m].deprecated)deprCount++;(paths[p][m].tags||['General']).forEach(function(t){tagSet.add(t);});}
             var schemaCount=Object.keys((spec.components&&spec.components.schemas)||{}).length;
             var whCount=Object.keys(spec.webhooks||{}).length;
-            var svgEp='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><path d="M1 4h14M1 8h14M1 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
-            var svgGr='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>';
-            var svgSc='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
-            var svgWh='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><path d="M3 13c0-3 2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/></svg>';
+            var svgEp='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon" aria-hidden="true"><path d="M1 4h14M1 8h14M1 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+            var svgGr='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon" aria-hidden="true"><rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>';
+            var svgSc='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon" aria-hidden="true"><rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+            var svgWh='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon" aria-hidden="true"><path d="M3 13c0-3 2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/></svg>';
             var stats='<div class="axw-stats">'
                 +'<div class="axw-stat">'+svgEp+'<div><div class="axw-stat-n">'+opCount+'</div><div class="axw-stat-l">Endpoints</div></div></div>'
                 +'<div class="axw-stat">'+svgGr+'<div><div class="axw-stat-n">'+tagSet.size+'</div><div class="axw-stat-l">Groups</div></div></div>'
@@ -2152,7 +2223,7 @@ final class UiRenderer
             }
             if(info.license){var l=info.license;var ln=escH(l.name||l.identifier||'License');metaHtml+='<div class="axw-meta-item">License: '+(l.url?'<a href="'+escH(l.url)+'" target="_blank" style="color:var(--accent);text-decoration:none">'+ln+'</a>':ln)+'</div>';}
             if(info.termsOfService)metaHtml+='<div class="axw-meta-item"><a href="'+escH(info.termsOfService)+'" target="_blank" style="color:var(--accent);text-decoration:none">Terms of Service</a></div>';
-            setDoc('<div class="axw-title">'+escH(info.title||'API')+'</div>'
+            setDoc('<h1 class="axw-title">'+escH(info.title||'API')+'</h1>'
                 +'<div class="axw-meta"><span class="axw-version">v'+escH(info.version||'1.0')+'</span><span class="axw-openapi">'+escH(spec.openapi||'OpenAPI')+'</span>'+(deprCount?'<span style="font-size:11px;color:var(--amber);padding:2px 6px;border-radius:4px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)">'+deprCount+' deprecated</span>':'')+'</div>'
                 +(info.description?'<div class="axw-desc axw-md">'+md(info.description)+'</div>':'')
                 +stats
@@ -2163,7 +2234,35 @@ final class UiRenderer
             setPanel('');
         }
 
+        /* An operation may point at `components` instead of inlining: a Response,
+           a Parameter and a Request Body are all $ref-able, and ApexDocs itself
+           emits the inferred 401/422/429 as `#/components/responses/…`. Every
+           consumer below reads plain objects — an unresolved response has no
+           `description` and no `content`, so its accordion opened onto an empty
+           body that `:empty{display:none}` then hid, and the click looked dead.
+           Resolved once here, on a shallow copy: `op` belongs to the cached
+           spec, which the JSON view of this page also shows. */
+        function deref(node,spec){
+            return node&&typeof node==='object'&&node['$ref']
+                ? (resolveRef(node['$ref'],spec)||node)
+                : node;
+        }
+        function derefOp(op,spec){
+            if(!op||typeof op!=='object')return op;
+            var out={};
+            for(var k in op)out[k]=op[k];
+            if(out.requestBody)out.requestBody=deref(out.requestBody,spec);
+            if(Array.isArray(out.parameters))out.parameters=out.parameters.map(function(p){return deref(p,spec);});
+            if(out.responses){
+                var resolved={};
+                Object.keys(out.responses).forEach(function(status){resolved[status]=deref(out.responses[status],spec);});
+                out.responses=resolved;
+            }
+            return out;
+        }
+
         function renderOperation(path,method,op,spec,isWebhook){
+            op=derefOp(op,spec);
             _schemaIds=0;
             var dep=op.deprecated?'<span class="ax-depr-badge">deprecated</span>':'';
             var tag=(op.tags||['General'])[0];
@@ -2192,7 +2291,7 @@ final class UiRenderer
             var extHtml=op.externalDocs?'<a href="'+escH(op.externalDocs.url)+'" target="_blank" rel="noreferrer" class="ax-ext-docs-link">'+escH(op.externalDocs.description||'External Docs')+' ↗</a>':'';
             // Permalink
             var opId=op.operationId||(isWebhook?'wh_':'op_')+method+'__'+path;
-            var plBtn='<button class="ax-permalink-btn" onclick="axCopyPermalink(\''+escH(opId)+'\')" title="Copy permalink"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M7 9a3 3 0 0 0 4.5.3l2-2A3 3 0 0 0 9.2 3L8.1 4.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 7a3 3 0 0 0-4.5-.3l-2 2A3 3 0 0 0 6.8 13l1.1-1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>';
+            var plBtn='<button class="ax-permalink-btn" onclick="axCopyPermalink(\''+escH(opId)+'\')" title="Copy permalink"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M7 9a3 3 0 0 0 4.5.3l2-2A3 3 0 0 0 9.2 3L8.1 4.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 7a3 3 0 0 0-4.5-.3l-2 2A3 3 0 0 0 6.8 13l1.1-1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>';
             /* Deprecation / sunset banner */
             var depBanner='';
             if(op.deprecated||op['x-sunset-date']||op['x-deprecation-notice']||op['x-migration-guide']){
@@ -2204,7 +2303,7 @@ final class UiRenderer
             var html=bc+depBanner
                 +'<div class="ax-op-header">'
                 +'<span class="axm axm-'+method+'">'+method.toUpperCase()+'</span>'
-                +'<div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(path)+dep+plBtn+'</div>'
+                +'<div class="ax-op-title-wrap"><h1 class="ax-op-path">'+escH(path)+dep+plBtn+'</h1>'
                 +(op.summary?'<div class="ax-op-summary">'+escH(op.summary)+'</div>':'')
                 +'</div></div>'
                 +(op.description?'<div class="ax-op-desc axw-md">'+md(op.description)+'</div>':'')
@@ -2256,13 +2355,14 @@ final class UiRenderer
                     var cls=sc<300?'axs-2xx':sc<400?'axs-3xx':sc<500?'axs-4xx':'axs-5xx';
                     var icon=sc<300?'✓':sc<400?'→':'✕';
                     var isFirst=ri===0;
+                    var bodyId='ax-resp-body-'+escH(status);
                     html+='<div class="ax-resp'+(isFirst?' open':'')+'" id="ax-resp-'+escH(status)+'">'
-                        +'<div class="ax-resp-header" onclick="axToggleResp(this)">'
-                        +'<span class="ax-resp-status '+cls+'">'+icon+' '+escH(status)+'</span>'
+                        +'<button type="button" class="ax-resp-header" aria-expanded="'+(isFirst?'true':'false')+'" aria-controls="'+bodyId+'" onclick="axToggleResp(this)">'
+                        +'<span class="ax-resp-status '+cls+'"><span aria-hidden="true">'+icon+'</span> '+escH(status)+'</span>'
                         +'<span class="ax-resp-desc">'+escH(resp.description||'')+'</span>'
-                        +'<span class="ax-resp-arrow">▶</span>'
-                        +'</div>'
-                        +'<div class="ax-resp-body" style="'+(isFirst?'':'display:none')+'">';
+                        +'<span class="ax-resp-arrow" aria-hidden="true">▶</span>'
+                        +'</button>'
+                        +'<div class="ax-resp-body" id="'+bodyId+'" style="'+(isFirst?'':'display:none')+'">';
                     var rc=resp.content||{};var rck=Object.keys(rc);
                     if(rck.length>1){
                         html+='<div class="ax-resp-ct-tabs">';
@@ -2317,6 +2417,7 @@ final class UiRenderer
             var resp=el.closest('.ax-resp');var body=el.nextElementSibling;
             var open=resp.classList.toggle('open');
             body.style.display=open?'':'none';
+            el.setAttribute('aria-expanded',open?'true':'false');
         };
         window.axGoWelcome=function(){
             _activeOpKey=null;
@@ -2361,7 +2462,7 @@ final class UiRenderer
                 if(resolved&&depth<3){
                     var sid='axs'+(++_schemaIds);
                     return '<div class="ax-ref-wrap">'
-                        +'<button class="ax-schema-collapse-btn" data-schema="'+sid+'" onclick="axToggleSchema(\''+sid+'\')">▼</button>'
+                        +'<button type="button" class="ax-schema-collapse-btn" data-schema="'+sid+'" aria-expanded="true" aria-controls="'+sid+'" aria-label="Collapse '+escH(refName)+'" onclick="axToggleSchema(\''+sid+'\')">▼</button>'
                         +'<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>'
                         +'<div id="'+sid+'" class="ax-ref-expanded">'+renderSchema(resolved,spec,depth+1)+'</div>'
                         +'</div>';
@@ -2390,7 +2491,7 @@ final class UiRenderer
                     var nestedId=isNested?'axs'+(++_schemaIds):'';
                     var isReq=req.indexOf(pn)!==-1;
                     html+='<div class="ax-prop-row">'
-                        +(isNested?'<button class="ax-schema-collapse-btn" data-schema="'+nestedId+'" onclick="axToggleSchema(\''+nestedId+'\')">'+(_expandAll?'▼':'▶')+'</button>':'')
+                        +(isNested?'<button type="button" class="ax-schema-collapse-btn" data-schema="'+nestedId+'" aria-expanded="'+(_expandAll?'true':'false')+'" aria-controls="'+nestedId+'" aria-label="Toggle '+escH(pn)+'" onclick="axToggleSchema(\''+nestedId+'\')">'+(_expandAll?'▼':'▶')+'</button>':'')
                         +'<span class="ax-prop-name">'+escH(pn)+'</span>'
                         +'<span class="ax-prop-type ax-type-badge">'+escH(pt)+'</span>'
                         +'<span class="ax-prop-badges">'+propBadges(pv,isReq)+'</span>'
@@ -2410,7 +2511,7 @@ final class UiRenderer
             var el=document.getElementById(id);var btn=document.querySelector('[data-schema="'+id+'"]');if(!el)return;
             var open=el.style.display!=='none';
             el.style.display=open?'none':'';
-            if(btn)btn.textContent=open?'▶':'▼';
+            if(btn){btn.textContent=open?'▶':'▼';btn.setAttribute('aria-expanded',open?'false':'true');}
         };
 
         JS;

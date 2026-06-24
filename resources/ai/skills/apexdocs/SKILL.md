@@ -18,7 +18,7 @@ right now, why a route is missing) come from the `apexdocs` MCP server  prefer i
 | Area | File | Covers |
 |---|---|---|
 | Attributes | `references/attributes.md` | all 22 attributes: signature, target, repeatable, precedence, exact emitted output |
-| Schemas & types | `references/schemas-and-types.md` | DTO reflection rules, required-ness, `@var`/`@param`, generics unwrapping, enums, nullability, allOf inheritance, max_depth, component naming |
+| Schemas & types | `references/schemas-and-types.md` | DTO reflection rules, API resource `toArray()`/`jsonSerialize()` shape reading, `@property`/`@mixin`, required-ness, `@var`/`@param`, generics unwrapping, enums, nullability, allOf inheritance, max_depth, component naming |
 | Inference | `references/inference.md` | operationId, tags, summary/description, path params, request body sources & order, responses (200/401/422/429), security detection |
 | Config | `references/config.md` | every key of `config/apexdocs.php`, the Symfony tree, `Config` object + `fromArray`/`with` |
 | Commands | `references/commands.md` | `apexdocs:generate|validate|export|diff|watch|mock|mcp|install-ai|snapshot`, exit codes, stdout hygiene |
@@ -39,8 +39,12 @@ right now, why a route is missing) come from the `apexdocs` MCP server  prefer i
    cannot know: non-200 responses, query params, examples, deprecation, hiding, explicit security.
 3. **Type your DTOs.** Public typed properties / promoted ctor params + `@var Item[]` produce exact
    schemas; return `Dto[]`, `Collection<int, Dto>`, `LengthAwarePaginator<Dto>` for lists.
-   Untyped `array` → `{type: array, items: {}}`; an Eloquent model → bare `object`.
-4. **`ApexDocs` is immutable**  `routes()`, `filterRoutes()`, `transformDocument()`… return a
+   Untyped `array` → `{type: array, items: {}}`.
+   An **API resource** is read from its `toArray()` (or `jsonSerialize()`) without being run, so
+   its keys are documented already; give the resource a `@mixin \App\Models\X` — or the model
+   `@property` annotations — and the keys get real types too. `@return array{…}` on the payload
+   method overrides everything and is the fix for a body too dynamic to read.
+4. **`ApexDocs` is immutable** — `routes()`, `filterRoutes()`, `transformDocument()`… return a
    *new* instance. In Laravel: `app()->extend(ApexDocs::class, fn ($d) => $d->filterRoutes(...))`
    or chain straight into `->generate()`.
 5. **Route selection is layered**: `api_path_prefix` → `exclude_paths` → `spec_group` →
@@ -107,9 +111,11 @@ Full semantics in `references/attributes.md`.
 |---|---|
 | Endpoint missing | `list_routes` → `reason`: prefix (`api_path_prefix`), `exclude_paths`, `spec_group`/`#[ApiGroup]`, `filterRoutes`, `#[Hidden]`, or only HEAD/OPTIONS/PROPFIND verbs |
 | No request body | Method not POST/PUT/PATCH; FormRequest not type-hinted; `rules()` throws / has required params / returns `[]`; use `#[RequestBody]`/`#[BodyParam]` |
-| Response is bare `{type: object}` | Return type is an Eloquent model / untyped / `JsonResponse`; add `@return Dto` or `#[ApiResponse(resource:)]` |
-| List documented as `items: {}` | `@return array` without element type  write `@return Dto[]` |
+| Response is bare `{type: object}` | Return type untyped or `JsonResponse`; add `@return Dto` or `#[ApiResponse(resource:)]`. For a resource: no own `toArray()` (the inherited one is in `/vendor/`), or its body is unreadable — annotate it `@return array{…}` |
+| List documented as `items: {}` | `@return array` without element type — write `@return Dto[]` |
 | Property missing from schema | Not public; or `max_depth` reached (nested object collapses to `{type: object}`) |
+| Resource key present but untyped (`{}`) | Nothing in the expression said anything — add `@mixin`/`@property` to the model, a cast, or `@return array{…}` |
+| Resource key wrongly `required` | It is unconditional in the literal; wrap it in `when…()`, or mark it optional in `@return array{key?: T}` |
 | Property wrongly required | No default + non-nullable → required; readonly nullable → required; add a default or make mutable |
 | Security wrong / 401 missing | `security.auto_detect`; middleware contains `auth`/`sanctum`/`passport`/`jwt`? override with `#[Security]`/`#[NoSecurity]` |
 | `Security requirement 'x' has no matching securityScheme` | scheme not in `security.schemes` and not auto-detected (package not installed) |
