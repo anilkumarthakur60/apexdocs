@@ -921,6 +921,11 @@ final class UiRenderer
         /* ── $ref expanded/collapsible ── */
         .ax-ref-wrap{display:flex;flex-direction:column;gap:4px}
         .ax-ref-badge{cursor:default}
+        /* A linked badge. The dotted underline is the same affordance the prose
+           links use, and it has to be visible at rest: a reader cannot hover
+           every badge to find out which of them go somewhere. */
+        .ax-ref-link{cursor:pointer;text-decoration:underline dotted;text-decoration-thickness:1px;text-underline-offset:2px;transition:background .12s,color .12s}
+        .ax-ref-link:hover{background:var(--accent-soft);color:var(--accent-t);text-decoration-style:solid}
         .ax-ref-expanded{margin-top:4px}
 
         /* ── oneOf/anyOf ── */
@@ -994,7 +999,7 @@ final class UiRenderer
         .axm-schema{background:var(--purple-soft);color:var(--purple-t)}
         .axi-schema .axi-path{font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px}
         .ax-used-list{display:flex;flex-direction:column;gap:4px}
-        .ax-used-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;background:var(--card);border:1px solid var(--border);transition:background .12s,border-color .12s}
+        .ax-used-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;background:var(--card);border:1px solid var(--border);color:inherit;text-decoration:none;transition:background .12s,border-color .12s}
         .ax-used-item:hover{background:var(--s2);border-color:var(--border-s)}
 
         /* ── Deprecation banner ── */
@@ -1948,7 +1953,7 @@ final class UiRenderer
                 var s=JSON.stringify(op);if(s.indexOf('#/components/schemas/'+name)!==-1)usedBy.push({path:p,method:m,op:op});
             }}
             var usedHtml=usedBy.length?'<div class="ax-section"><div class="ax-section-title">Used by ('+usedBy.length+')</div><div class="ax-used-list">'
-                +usedBy.map(function(u){return '<div class="ax-used-item" onclick="axNav(\''+u.method+'__'+escH(u.path)+'\',\''+escH(u.path)+'\',\''+u.method+'\')"><span class="axm axm-'+u.method+'">'+u.method.toUpperCase()+'</span><span>'+escH(u.path)+'</span></div>';}).join('')
+                +usedBy.map(function(u){return '<a class="ax-used-item" href="#'+escH(axHashFor(u.op,u.method+'__'+u.path))+'"><span class="axm axm-'+u.method+'">'+u.method.toUpperCase()+'</span><span>'+escH(u.path)+'</span></a>';}).join('')
                 +'</div></div>':'';
             setDoc('<div class="ax-breadcrumb"><span class="ax-breadcrumb-item ax-breadcrumb-link" onclick="axGoWelcome()">Schemas</span><span class="ax-breadcrumb-sep">›</span><span class="ax-breadcrumb-current">'+escH(name)+'</span></div>'
                 +'<div class="ax-op-header"><div class="ax-op-title-wrap"><h1 class="ax-op-path">'+escH(name)+'</h1>'
@@ -2454,6 +2459,25 @@ final class UiRenderer
             return cur;
         }
 
+        /* Any $ref is a jump, not a label: the component it names has a view of
+           its own, and the badge is exactly where a reader is standing when
+           they want it. Derived from the ref — no name is special — and linked
+           only when the target really is a published schema, so a dangling ref
+           cannot become a dead link. The href is the same deep link the sidebar
+           uses, so the hashchange router renders it and Back returns here. */
+        function refBadge(ref,spec,extraClass,label){
+            var path=String(ref||'');
+            var name=path.split('/').pop();
+            var known=path.indexOf('#/components/schemas/')===0
+                && !!(spec&&spec.components&&spec.components.schemas&&spec.components.schemas[name]);
+            var cls=(extraClass?extraClass+' ':'')+'ax-type-badge ax-ref-badge';
+            var text=escH(label||name);
+
+            return known
+                ? '<a class="'+cls+' ax-ref-link" href="#schema_'+escH(encodeURIComponent(name))+'" title="Go to '+escH(name)+'">'+text+'</a>'
+                : '<span class="'+cls+'">'+text+'</span>';
+        }
+
         function renderSchema(schema,spec,depth){
             if(!schema)return '';
             if(schema['$ref']){
@@ -2463,11 +2487,11 @@ final class UiRenderer
                     var sid='axs'+(++_schemaIds);
                     return '<div class="ax-ref-wrap">'
                         +'<button type="button" class="ax-schema-collapse-btn" data-schema="'+sid+'" aria-expanded="true" aria-controls="'+sid+'" aria-label="Collapse '+escH(refName)+'" onclick="axToggleSchema(\''+sid+'\')">▼</button>'
-                        +'<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>'
+                        +refBadge(schema['$ref'],spec)
                         +'<div id="'+sid+'" class="ax-ref-expanded">'+renderSchema(resolved,spec,depth+1)+'</div>'
                         +'</div>';
                 }
-                return '<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>';
+                return refBadge(schema['$ref'],spec);
             }
             if(schema.allOf)return '<div class="ax-schema-obj"><div class="ax-allof-label">allOf</div>'+schema.allOf.map(function(s){return renderSchema(s,spec,depth+1);}).join('')+'</div>';
             if(schema.oneOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">One of:</div>'+schema.oneOf.map(function(s,i){return '<div class="ax-oneof-item'+(i>0?' ax-oneof-sep':'')+'">'+(i>0?'<div style="font-size:10px;color:var(--t3);margin:2px 0">or</div>':'')+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
@@ -2487,13 +2511,21 @@ final class UiRenderer
                     var rawType=pv.type;
                     if(Array.isArray(rawType)){rawType=rawType.filter(function(t){return t!=='null';})[0]||'any';}
                     var pt=rawType||(pv['$ref']?pv['$ref'].split('/').pop():(pv.properties?'object':'any'));
+                    /* `array` alone said nothing about what was in it — the
+                       item's own $ref names it, and links to it. */
+                    var itemRef=rawType==='array'&&pv.items&&pv.items['$ref']?pv.items['$ref']:null;
+                    var typeHtml=pv['$ref']
+                        ? refBadge(pv['$ref'],spec,'ax-prop-type')
+                        : (itemRef
+                            ? refBadge(itemRef,spec,'ax-prop-type',itemRef.split('/').pop()+'[]')
+                            : '<span class="ax-prop-type ax-type-badge">'+escH(pt)+'</span>');
                     var isNested=(rawType==='object'||pv.properties)&&depth<2;
                     var nestedId=isNested?'axs'+(++_schemaIds):'';
                     var isReq=req.indexOf(pn)!==-1;
                     html+='<div class="ax-prop-row">'
                         +(isNested?'<button type="button" class="ax-schema-collapse-btn" data-schema="'+nestedId+'" aria-expanded="'+(_expandAll?'true':'false')+'" aria-controls="'+nestedId+'" aria-label="Toggle '+escH(pn)+'" onclick="axToggleSchema(\''+nestedId+'\')">'+(_expandAll?'▼':'▶')+'</button>':'')
                         +'<span class="ax-prop-name">'+escH(pn)+'</span>'
-                        +'<span class="ax-prop-type ax-type-badge">'+escH(pt)+'</span>'
+                        +typeHtml
                         +'<span class="ax-prop-badges">'+propBadges(pv,isReq)+'</span>'
                         +(pv.description?'<span class="ax-prop-desc axw-md">'+md(pv.description)+'</span>':'')
                         +'</div>';
