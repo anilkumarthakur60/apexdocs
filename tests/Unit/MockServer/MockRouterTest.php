@@ -34,8 +34,19 @@ it('contains no eval, no shell_exec, no system, no passthru', function () {
 it('MockCommand passes the spec via env var, not embedded heredoc', function () {
     $source = file_get_contents(__DIR__.'/../../../src/Bridge/Laravel/Console/Commands/MockCommand.php');
 
-    expect($source)->toContain('APEXDOCS_MOCK_SPEC=')
-        ->and($source)->toContain('escapeshellarg')
+    expect($source)->toContain("'APEXDOCS_MOCK_SPEC' => \$specFile")
         ->and($source)->not->toContain('apexdocs_example(') // old in-PHP function
         ->and($source)->not->toContain('json_decode(\''); // no inline-JSON embedding
+});
+
+it('MockCommand spawns the server without a shell', function () {
+    $source = file_get_contents(__DIR__.'/../../../src/Bridge/Laravel/Console/Commands/MockCommand.php');
+
+    // An argument array through proc_open means no quoting rules to get wrong,
+    // and "VAR=value cmd" — which only works in a POSIX shell — never appears.
+    expect($source)->toContain('proc_open(')
+        ->and($source)->toContain('PHP_BINARY')
+        ->and($source)->not->toContain('passthru(')
+        ->and($source)->not->toContain('shell_exec(')
+        ->and($source)->not->toContain('APEXDOCS_MOCK_SPEC=%s');
 });
