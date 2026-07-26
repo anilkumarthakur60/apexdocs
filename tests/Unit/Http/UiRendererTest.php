@@ -6,14 +6,11 @@ use ApexDocs\Config;
 use ApexDocs\Http\UiRenderer;
 
 /**
- * UiRenderer is the package's biggest single file (~2.2k lines) but until
- * now had zero direct coverage. These tests don't pretend to validate the
- * generated HTML semantically — that's what a real browser test would do —
- * but they enforce the things that a unit test CAN catch: every supported
- * UI variant returns non-empty HTML, the title/version/spec URL are
- * properly HTML-escaped, the native "apex" UI inlines its assets (no CDN
- * required, per the renderer's contract), and rendering does not throw on
- * unknown UI names.
+ * UiRenderer is the package's biggest single file (~2.2k lines). These tests
+ * don't pretend to validate the generated HTML semantically — that's what a
+ * real browser test would do — but they enforce the things a unit test CAN
+ * catch: the page renders, the title/version/spec URL are properly
+ * HTML-escaped, and every asset is inlined so the page needs no network.
  */
 function ui(): UiRenderer
 {
@@ -25,21 +22,20 @@ function cfg(array $overrides = []): Config
     return new Config(
         title: $overrides['title'] ?? 'My API',
         version: $overrides['version'] ?? '1.2.3',
-        defaultUi: $overrides['ui'] ?? 'apex',
     );
 }
 
-it('renders non-empty HTML for every supported UI variant', function (string $variant) {
-    $html = ui()->render($variant, '/docs/spec.json', cfg(['ui' => $variant]));
+it('renders a complete HTML document', function () {
+    $html = ui()->render('/docs/spec.json', cfg());
 
     expect($html)->toBeString()
         ->and(strlen($html))->toBeGreaterThan(500)
         ->and($html)->toContain('<html')
         ->and($html)->toContain('</html>');
-})->with(['apex', 'scalar', 'swagger', 'redoc', 'stoplight', 'rapidoc']);
+});
 
 it('HTML-escapes the title and version', function () {
-    $html = ui()->render('apex', '/spec.json', cfg([
+    $html = ui()->render('/spec.json', cfg([
         'title' => '<script>alert(1)</script>',
         'version' => '1.0">x',
     ]));
@@ -50,22 +46,29 @@ it('HTML-escapes the title and version', function () {
 });
 
 it('escapes the spec URL where it is used in HTML attributes', function () {
-    $html = ui()->render('apex', '/spec.json?x="><script>', cfg());
+    $html = ui()->render('/spec.json?x="><script>', cfg());
 
     expect($html)->not->toContain('"><script>')
         ->and($html)->toContain('&quot;');
 });
 
-it('falls back gracefully when an unknown UI is requested', function () {
-    expect(fn () => ui()->render('not-a-real-ui', '/spec.json', cfg()))
-        ->not->toThrow(\Throwable::class);
+it('navigates the command palette with a bare fragment', function () {
+    $html = ui()->render('/spec.json', cfg());
+
+    // The palette used to link to "?ui=apex#op_…": a full navigation, which
+    // resurrected a deleted parameter and discarded any ?theme= override.
+    expect($html)->not->toContain('?ui=')
+        ->and($html)->toContain('href="#op_');
 });
 
-it('inlines its assets for the native apex UI (no external CDN)', function () {
-    $html = ui()->render('apex', '/spec.json', cfg(['ui' => 'apex']));
+it('inlines its assets (no external CDN)', function () {
+    $html = ui()->render('/spec.json', cfg());
 
-    // The native UI is the whole point — must work fully offline.
+    // Zero outbound requests is the property that justified deleting the
+    // CDN-backed UIs — the page must work fully offline.
     expect($html)->toContain('<style')
         ->and($html)->toContain('<script')
-        ->and($html)->not->toMatch('#<script[^>]*src="https?://#'); // no remote script src
+        ->and($html)->not->toMatch('#<script[^>]*src="https?://#')      // no remote script
+        ->and($html)->not->toMatch('#<link[^>]*href="https?://#')       // no remote stylesheet
+        ->and($html)->not->toMatch('#<(elements-api|rapi-doc)\b#');     // no CDN web component
 });
