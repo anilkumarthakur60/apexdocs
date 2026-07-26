@@ -6,21 +6,37 @@ namespace ApexDocs\Bridge\Laravel;
 
 use ApexDocs\Contract\SecurityDetectorInterface;
 use ApexDocs\Route\Route;
-use Laravel\Passport\PassportServiceProvider;
-use Laravel\Sanctum\SanctumServiceProvider;
-use PHPOpenSourceSaver\JWTAuth\Providers\LaravelServiceProvider;
 use ReflectionMethod;
 
 /**
  * Laravel bridge: auto-detects Sanctum / Passport / JWT security schemes.
+ *
+ * Every scheme name handed out by {@see forRoute()} is guaranteed to exist in
+ * {@see schemes()}. An operation that referenced an undefined scheme would make
+ * the whole document invalid, so when none of the known packages is installed
+ * the detector falls back to a plain `bearerAuth` definition it declares itself.
  */
 final class SecurityDetector implements SecurityDetectorInterface
 {
+    private const SANCTUM_PROVIDER = 'Laravel\\Sanctum\\SanctumServiceProvider';
+
+    private const PASSPORT_PROVIDER = 'Laravel\\Passport\\PassportServiceProvider';
+
+    private const JWT_PROVIDERS = [
+        'PHPOpenSourceSaver\\JWTAuth\\Providers\\LaravelServiceProvider',
+        'Tymon\\JWTAuth\\Providers\\LaravelServiceProvider',
+    ];
+
+    private const FALLBACK = 'bearerAuth';
+
+    /**
+     * @return array<string, array<string, mixed>>
+     */
     public function schemes(): array
     {
         $schemes = [];
 
-        if (class_exists(SanctumServiceProvider::class)) {
+        if ($this->hasSanctum()) {
             $schemes['sanctum'] = [
                 'type' => 'http',
                 'scheme' => 'bearer',
@@ -29,8 +45,8 @@ final class SecurityDetector implements SecurityDetectorInterface
             ];
         }
 
-        if (class_exists(PassportServiceProvider::class)) {
-            $appUrl = config('app.url', 'http://localhost');
+        if ($this->hasPassport()) {
+            $appUrl = rtrim((string) $this->appUrl(), '/');
             $schemes['passport'] = [
                 'type' => 'oauth2',
                 'description' => 'Laravel Passport OAuth2.',
@@ -38,19 +54,18 @@ final class SecurityDetector implements SecurityDetectorInterface
                     'authorizationCode' => [
                         'authorizationUrl' => $appUrl.'/oauth/authorize',
                         'tokenUrl' => $appUrl.'/oauth/token',
-                        'scopes' => [],
+                        'refreshUrl' => $appUrl.'/oauth/token',
+                        'scopes' => new \stdClass,
                     ],
-                    'password' => [
+                    'clientCredentials' => [
                         'tokenUrl' => $appUrl.'/oauth/token',
-                        'scopes' => [],
+                        'scopes' => new \stdClass,
                     ],
                 ],
             ];
         }
 
-        if (class_exists(LaravelServiceProvider::class)
-            || class_exists(\Tymon\JWTAuth\Providers\LaravelServiceProvider::class)
-        ) {
+        if ($this->hasJwt()) {
             $schemes['jwt'] = [
                 'type' => 'http',
                 'scheme' => 'bearer',
@@ -59,25 +74,100 @@ final class SecurityDetector implements SecurityDetectorInterface
             ];
         }
 
+        if ($schemes === []) {
+            $schemes[self::FALLBACK] = [
+                'type' => 'http',
+                'scheme' => 'bearer',
+                'description' => 'Bearer token. Pass in Authorization: Bearer <token>.',
+            ];
+        }
+
         return $schemes;
     }
 
+    /**
+     * @return list<array<string, list<string>>>|null
+     */
     public function forRoute(Route $route, ReflectionMethod $handler): ?array
     {
-        $security = [];
+        $names = [];
 
         foreach ($route->middleware as $mw) {
-            $mw = is_string($mw) ? $mw : '';
-
-            if (in_array($mw, ['auth:sanctum', 'auth', 'auth:api'], true)) {
-                $security[] = ['sanctum' => []];
-            } elseif (str_contains($mw, 'passport') || str_contains($mw, 'oauth')) {
-                $security[] = ['passport' => []];
-            } elseif (str_contains($mw, 'jwt')) {
-                $security[] = ['jwt' => []];
+            if (! is_string($mw)) {
+                continue;
+            }
+            $name = $this->schemeForMiddleware($mw);
+            if ($name !== null) {
+                $names[$name] = true;
             }
         }
 
-        return empty($security) ? null : $security;
+        if ($names === []) {
+            return null;
+        }
+
+        return array_values(array_map(
+            static fn (string $name): array => [$name => []],
+            array_keys($names),
+        ));
+    }
+
+    private function schemeForMiddleware(string $middleware): ?string
+    {
+        $mw = strtolower($middleware);
+
+        // `auth:sanctum`, `auth`, `auth.basic`, `auth:api`, class-name form.
+        $isAuth = $mw === 'auth'
+            || str_starts_with($mw, 'auth:')
+            || str_starts_with($mw, 'auth.')
+            || str_contains($mw, 'authenticate');
+
+        if (str_contains($mw, 'jwt')) {
+            return $this->hasJwt() ? 'jwt' : self::FALLBACK;
+        }
+        if (str_contains($mw, 'passport') || str_contains($mw, 'oauth') || str_contains($mw, 'client_credentials')) {
+            return $this->hasPassport() ? 'passport' : self::FALLBACK;
+        }
+        if (! $isAuth) {
+            return null;
+        }
+        if (str_contains($mw, 'sanctum')) {
+            return $this->hasSanctum() ? 'sanctum' : self::FALLBACK;
+        }
+
+        // Generic auth guard — name the first scheme we actually defined.
+        return array_key_first($this->schemes()) ?? self::FALLBACK;
+    }
+
+    private function hasSanctum(): bool
+    {
+        return class_exists(self::SANCTUM_PROVIDER);
+    }
+
+    private function hasPassport(): bool
+    {
+        return class_exists(self::PASSPORT_PROVIDER);
+    }
+
+    private function hasJwt(): bool
+    {
+        foreach (self::JWT_PROVIDERS as $provider) {
+            if (class_exists($provider)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function appUrl(): string
+    {
+        if (! function_exists('config')) {
+            return 'http://localhost';
+        }
+
+        $url = config('app.url', 'http://localhost');
+
+        return is_string($url) && $url !== '' ? $url : 'http://localhost';
     }
 }
