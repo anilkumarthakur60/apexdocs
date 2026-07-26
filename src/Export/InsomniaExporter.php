@@ -12,10 +12,17 @@ use ApexDocs\Spec\Document;
  */
 final class InsomniaExporter
 {
+    use CollectionExport;
+    use WritesFiles;
+
+    private int $sequence = 0;
+
     /** @return array<string, mixed> */
     public function toArray(Document $doc): array
     {
+        $this->sequence = 0;
         $spec = $doc->toArray();
+        $example = new SchemaExample($spec);
         $title = $spec['info']['title'] ?? 'API';
         $workspaceId = 'wrk_'.$this->id();
 
@@ -36,6 +43,8 @@ final class InsomniaExporter
             ],
         ];
 
+        $authentication = $this->authentication($spec);
+
         foreach ($this->groupByTag($spec) as $tag => $items) {
             $folderId = 'fld_'.$this->id();
             $resources[] = [
@@ -43,7 +52,7 @@ final class InsomniaExporter
                 'parentId' => $workspaceId, 'name' => $tag,
             ];
             foreach ($items as [$path, $method, $op]) {
-                $resources[] = $this->buildRequest($path, $method, $op, $folderId);
+                $resources[] = $this->buildRequest($path, $method, $op, $folderId, $example, $authentication);
             }
         }
 
@@ -66,97 +75,129 @@ final class InsomniaExporter
 
     public function toFile(Document $doc, string $path): void
     {
-        $dir = dirname($path);
-        if (! is_dir($dir)) {
-            mkdir($dir, 0755, true);
-        }
-        file_put_contents($path, $this->toString($doc));
+        $this->write($path, $this->toString($doc));
     }
 
-    private function groupByTag(array $spec): array
-    {
-        $groups = [];
-        foreach ($spec['paths'] ?? [] as $path => $methods) {
-            foreach ($methods as $method => $op) {
-                if (! is_array($op)) {
-                    continue;
-                }
-                $tag = $op['tags'][0] ?? 'General';
-                $groups[$tag][] = [$path, strtoupper($method), $op];
-            }
-        }
-
-        return $groups;
-    }
-
-    private function buildRequest(string $path, string $method, array $op, string $parentId): array
-    {
-        $params = $op['parameters'] ?? [];
-        $query = array_map(
-            fn ($p) => ['name' => $p['name'], 'value' => (string) ($p['example'] ?? ''), 'disabled' => ! ($p['required'] ?? false)],
-            array_filter($params, fn ($p) => ($p['in'] ?? '') === 'query'),
-        );
+    /**
+     * @param  array<string, mixed>  $op
+     * @param  array<string, mixed>  $authentication
+     * @return array<string, mixed>
+     */
+    private function buildRequest(
+        string $path,
+        string $method,
+        array $op,
+        string $parentId,
+        SchemaExample $example,
+        array $authentication,
+    ): array {
         $headers = [['name' => 'Accept', 'value' => 'application/json']];
-        foreach (array_filter($params, fn ($p) => ($p['in'] ?? '') === 'header') as $h) {
-            $headers[] = ['name' => $h['name'], 'value' => (string) ($h['example'] ?? '')];
+        foreach ($this->parametersIn($op, 'header') as $h) {
+            $headers[] = ['name' => (string) $h['name'], 'value' => $this->paramValue($h)];
+        }
+
+        $query = [];
+        foreach ($this->parametersIn($op, 'query') as $p) {
+            $query[] = [
+                'name' => (string) $p['name'],
+                'value' => $this->paramValue($p),
+                'disabled' => ! ($p['required'] ?? false),
+            ];
+        }
+
+        $pathParams = [];
+        foreach ($this->parametersIn($op, 'path') as $p) {
+            $pathParams[] = ['name' => (string) $p['name'], 'value' => $this->paramValue($p)];
         }
 
         $req = [
             '_id' => 'req_'.$this->id(),
             '_type' => 'request',
             'parentId' => $parentId,
-            'name' => ($op['deprecated'] ?? false)
-                                ? ($op['summary'] ?? $path).' [DEPRECATED]'
-                                : ($op['summary'] ?? $path),
+            'name' => $this->itemName($path, $op),
             'method' => $method,
             'url' => '{{ _.base_url }}'.$path,
             'headers' => $headers,
-            'parameters' => array_values($query),
+            'parameters' => $query,
+            'pathParameters' => $pathParams,
+            'metaSortKey' => $this->sequence++,
         ];
 
-        if (isset($op['requestBody'])) {
-            $req['body'] = $this->body($op['requestBody']);
+        if (isset($op['requestBody']) && is_array($op['requestBody'])) {
+            $req['body'] = $this->body($op['requestBody'], $example);
         }
-        if ($op['description'] ?? '') {
+        if (($op['description'] ?? '') !== '') {
             $req['description'] = $op['description'];
+        }
+        if ($authentication !== [] && ($op['security'] ?? null) !== []) {
+            $req['authentication'] = $authentication;
         }
 
         return $req;
     }
 
-    private function body(array $requestBody): array
+    /**
+     * @param  array<string, mixed>  $requestBody
+     * @return array<string, mixed>
+     */
+    private function body(array $requestBody, SchemaExample $example): array
     {
-        $content = $requestBody['content'] ?? [];
+        $content = is_array($requestBody['content'] ?? null) ? $requestBody['content'] : [];
+
         if (isset($content['application/json'])) {
             return [
                 'mimeType' => 'application/json',
-                'text' => json_encode($this->example($content['application/json']['schema'] ?? []), JSON_PRETTY_PRINT),
+                'text' => $this->jsonBody($content['application/json'], $example),
             ];
         }
-        if (isset($content['multipart/form-data'])) {
+
+        foreach (['multipart/form-data' => 'multipart/form-data', 'application/x-www-form-urlencoded' => 'application/x-www-form-urlencoded'] as $type => $mime) {
+            if (! isset($content[$type])) {
+                continue;
+            }
             $params = [];
-            foreach (($content['multipart/form-data']['schema']['properties'] ?? []) as $k => $v) {
-                $params[] = ['name' => $k, 'value' => '', 'type' => ($v['format'] ?? '') === 'binary' ? 'file' : 'text'];
+            foreach ($this->propertiesOf($content[$type], $example) as $name => $prop) {
+                $binary = ($prop['format'] ?? '') === 'binary';
+                $params[] = [
+                    'name' => $name,
+                    'value' => $binary ? '' : $this->scalar($example->build($prop)),
+                    'type' => $binary ? 'file' : 'text',
+                ];
             }
 
-            return ['mimeType' => 'multipart/form-data', 'params' => $params];
+            return ['mimeType' => $mime, 'params' => $params];
         }
 
         return ['mimeType' => 'application/json', 'text' => '{}'];
     }
 
-    private function example(array $schema): mixed
+    /**
+     * @param  array<string, mixed>  $spec
+     * @return array<string, mixed>
+     */
+    private function authentication(array $spec): array
     {
-        if (isset($schema['example'])) {
-            return $schema['example'];
+        foreach ($this->securitySchemes($spec) as $scheme) {
+            $type = strtolower((string) ($scheme['type'] ?? ''));
+            $httpScheme = strtolower((string) ($scheme['scheme'] ?? ''));
+
+            if ($type === 'oauth2' || ($type === 'http' && $httpScheme === 'bearer')) {
+                return ['type' => 'bearer', 'token' => '{{ _.token }}', 'prefix' => 'Bearer'];
+            }
+            if ($type === 'http' && $httpScheme === 'basic') {
+                return ['type' => 'basic', 'username' => '{{ _.username }}', 'password' => '{{ _.password }}'];
+            }
+            if ($type === 'apikey') {
+                return [
+                    'type' => 'apikey',
+                    'key' => (string) ($scheme['name'] ?? 'X-API-Key'),
+                    'value' => '{{ _.api_key }}',
+                    'addTo' => strtolower((string) ($scheme['in'] ?? 'header')) === 'query' ? 'queryParams' : 'header',
+                ];
+            }
         }
 
-        return match ($schema['type'] ?? 'object') {
-            'object' => (object) array_map(fn ($v) => $this->example($v), $schema['properties'] ?? []),
-            'array' => [$this->example($schema['items'] ?? [])],
-            'integer' => 1, 'number' => 1.0, 'boolean' => true, 'null' => null,
-            default => $schema['enum'][0] ?? 'string',
-        };
+        return [];
     }
 
     private function id(): string
