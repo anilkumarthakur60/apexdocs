@@ -58,9 +58,8 @@ final class Configuration implements ConfigurationInterface
                 ->arrayNode('ui')
                     ->addDefaultsIfNotSet()
                     ->children()
-                        ->scalarNode('default')->defaultValue('apex')->end()
-                        ->scalarNode('path')->defaultValue('/documentation/api')->end()
-                        ->booleanNode('show_ui_switcher')->defaultTrue()->end()
+                        ->scalarNode('path')->defaultValue('documentation/api')->end()
+                        ->booleanNode('show_toolbar')->defaultTrue()->end()
                         ->scalarNode('theme')->defaultValue('dark')->end()
                         ->scalarNode('custom_logo')->defaultValue('')->end()
                         ->scalarNode('custom_css')->defaultValue('')->end()
@@ -107,6 +106,15 @@ final class Configuration implements ConfigurationInterface
                         ->scalarNode('default_path')->defaultValue('')->end()
                     ->end()
                 ->end()
+                ->arrayNode('rate_limits')
+                    ->addDefaultsIfNotSet()
+                    ->children()
+                        ->booleanNode('enabled')->defaultTrue()->end()
+                    ->end()
+                ->end()
+                ->scalarNode('spec_group')->defaultValue('')->end()
+                ->arrayNode('document_transformers')->scalarPrototype()->end()->end()
+                ->arrayNode('operation_transformers')->scalarPrototype()->end()->end()
             ->end();
 
         return $tree;
