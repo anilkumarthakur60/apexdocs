@@ -15,37 +15,82 @@ use ReflectionMethod;
  */
 final class ResponseExtractor
 {
-    public function __construct(private SchemaBuilder $schemaBuilder) {}
+    private const WRITE_METHODS = ['POST', 'PUT', 'PATCH'];
+
+    public function __construct(
+        private SchemaBuilder $schemaBuilder,
+        private bool $includeValidationErrors = true,
+        private bool $inferErrorResponses = true,
+        private bool $includePaginationMeta = true,
+        private bool $documentRateLimits = true,
+    ) {}
 
     /**
+     * @param  string|null  $httpMethod  the verb being documented; defaults to every
+     *                                   verb the route answers
      * @return array<string, array<string, mixed>>
      */
-    public function extract(Route $route, ReflectionClass $class, ReflectionMethod $method): array
+    public function extract(Route $route, ReflectionClass $class, ReflectionMethod $method, ?string $httpMethod = null): array
     {
         $responses = [];
 
         // 1. Explicit #[ApiResponse] attributes
         foreach (AttributeReader::all($method, ApiResponse::class) as $attr) {
             /** @var ApiResponse $attr */
-            $responses[(string) $attr->status] = $this->buildFromAttribute($attr);
+            $responses[$this->responseKey($attr->status)] = $this->buildFromAttribute($attr);
         }
 
-        // 2. Infer 200 from return type if not explicitly defined
-        if (! isset($responses['200'])) {
-            $inferred = $this->inferFromReturnType($method);
-            $responses['200'] = $inferred ?? ['description' => 'OK'];
+        // 2. Infer a success response from the return type — but only when the
+        //    author has not already declared one. An endpoint documented as
+        //    201 Created must not also sprout a phantom 200.
+        if (! $this->hasSuccessResponse($responses)) {
+            $responses['200'] = $this->inferFromReturnType($method) ?? ['description' => 'OK'];
         }
 
         // 3. Middleware-based error responses
-        $this->addMiddlewareResponses($responses, $route);
+        if ($this->inferErrorResponses) {
+            $this->addMiddlewareResponses($responses, $route);
+        }
 
         // 4. Validation errors for write methods
-        $writes = ['POST', 'PUT', 'PATCH'];
-        if (! empty(array_intersect(array_map('strtoupper', $route->methods), $writes))) {
+        if ($this->includeValidationErrors && $this->isWrite($route, $httpMethod)) {
             $responses['422'] ??= ['$ref' => '#/components/responses/ValidationError'];
         }
 
+        ksort($responses, SORT_NATURAL);
+
         return $responses;
+    }
+
+    /**
+     * A Responses Object key must be an HTTP status code or the literal
+     * "default"; anything outside 100–599 goes into the default bucket rather
+     * than producing a key no validator accepts.
+     */
+    private function responseKey(int $status): string
+    {
+        return $status >= 100 && $status <= 599 ? (string) $status : 'default';
+    }
+
+    /**
+     * @param  array<string, array<string, mixed>>  $responses
+     */
+    private function hasSuccessResponse(array $responses): bool
+    {
+        foreach (array_keys($responses) as $status) {
+            if ((int) $status >= 200 && (int) $status < 300) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isWrite(Route $route, ?string $httpMethod): bool
+    {
+        $methods = $httpMethod !== null ? [strtoupper($httpMethod)] : $route->documentedMethods();
+
+        return array_intersect($methods, self::WRITE_METHODS) !== [];
     }
 
     /** @return array<string, mixed> */
@@ -63,19 +108,66 @@ final class ResponseExtractor
         }
 
         if ($attr->headers) {
-            $response['headers'] = $attr->headers;
+            $response['headers'] = $this->normaliseHeaders($attr->headers);
         }
 
         if ($attr->examples) {
             if (! isset($response['content'])) {
                 $response['content'] = ['application/json' => ['schema' => ['type' => 'object']]];
             }
-            $response['content']['application/json']['examples'] = $attr->examples;
+            $response['content']['application/json']['examples'] = self::normaliseExamples($attr->examples);
         }
 
         return $response;
     }
 
+    /**
+     * OpenAPI requires each entry of `examples` to be an Example Object, so a
+     * raw value gets wrapped in `{value: …}`.
+     *
+     * @param  array<string, mixed>  $examples
+     * @return array<string, array<string, mixed>>
+     */
+    public static function normaliseExamples(array $examples): array
+    {
+        $out = [];
+        foreach ($examples as $name => $example) {
+            if (is_array($example) && (isset($example['value']) || isset($example['$ref']) || isset($example['externalValue']))) {
+                $out[(string) $name] = $example;
+
+                continue;
+            }
+            $out[(string) $name] = ['value' => $example];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Header entries may be given as a bare type string or a full Header Object.
+     *
+     * @param  array<string, mixed>  $headers
+     * @return array<string, array<string, mixed>>
+     */
+    private function normaliseHeaders(array $headers): array
+    {
+        $out = [];
+        foreach ($headers as $name => $header) {
+            if (is_string($header)) {
+                $out[(string) $name] = ['schema' => ['type' => $header]];
+
+                continue;
+            }
+            if (is_array($header) && ! isset($header['schema']) && ! isset($header['$ref'])) {
+                $header['schema'] = ['type' => 'string'];
+            }
+            $out[(string) $name] = is_array($header) ? $header : ['schema' => ['type' => 'string']];
+        }
+
+        return $out;
+    }
+
+    /** @return array<string, mixed>|null */
     private function inferFromReturnType(ReflectionMethod $method): ?array
     {
         $typeStr = TypeInferrer::returnType($method);
@@ -83,8 +175,8 @@ final class ResponseExtractor
             return null;
         }
 
-        $schema = $this->schemaBuilder->fromTypeString(TypeInferrer::normalise($typeStr));
-        if (empty($schema)) {
+        $schema = $this->schemaBuilder->fromTypeString($typeStr);
+        if ($schema === []) {
             return null;
         }
 
@@ -94,18 +186,27 @@ final class ResponseExtractor
         ];
     }
 
+    /**
+     * @param  array<string, array<string, mixed>>  $responses
+     */
     private function addMiddlewareResponses(array &$responses, Route $route): void
     {
         foreach ($route->middleware as $mw) {
-            if (str_contains($mw, 'auth') && ! isset($responses['401'])) {
-                $responses['401'] = ['$ref' => '#/components/responses/Unauthorized'];
+            if (! is_string($mw)) {
+                continue;
             }
-            if (str_contains($mw, 'throttle') && ! isset($responses['429'])) {
-                $responses['429'] = ['$ref' => '#/components/responses/TooManyRequests'];
+            if (preg_match('/\bauth\b/i', $mw) === 1) {
+                $responses['401'] ??= ['$ref' => '#/components/responses/Unauthorized'];
+            }
+            if ($this->documentRateLimits
+                && (str_contains(strtolower($mw), 'throttle') || str_contains(strtolower($mw), 'rate'))
+            ) {
+                $responses['429'] ??= ['$ref' => '#/components/responses/TooManyRequests'];
             }
         }
     }
 
+    /** @return array<string, mixed> */
     private function resourceSchema(string $class): array
     {
         if (! class_exists($class)) {
@@ -118,29 +219,35 @@ final class ResponseExtractor
         ];
     }
 
+    /** @return array<string, mixed> */
     private function collectionSchema(string $class): array
     {
         if (! class_exists($class)) {
             return ['type' => 'object'];
         }
 
-        return [
-            'type' => 'object',
-            'properties' => [
-                'data' => ['type' => 'array', 'items' => $this->schemaBuilder->fromClass($class)],
-                'meta' => ['$ref' => '#/components/schemas/PaginationMeta'],
-                'links' => ['$ref' => '#/components/schemas/PaginationLinks'],
-            ],
+        $properties = [
+            'data' => ['type' => 'array', 'items' => $this->schemaBuilder->fromClass($class)],
         ];
+
+        if ($this->includePaginationMeta) {
+            $properties['meta'] = ['$ref' => '#/components/schemas/PaginationMeta'];
+            $properties['links'] = ['$ref' => '#/components/schemas/PaginationLinks'];
+        }
+
+        return ['type' => 'object', 'properties' => $properties];
     }
 
     private function defaultDesc(int $status): string
     {
         return match ($status) {
             200 => 'OK', 201 => 'Created', 202 => 'Accepted', 204 => 'No Content',
+            301 => 'Moved Permanently', 302 => 'Found', 304 => 'Not Modified',
             400 => 'Bad Request', 401 => 'Unauthorized', 403 => 'Forbidden',
-            404 => 'Not Found', 409 => 'Conflict', 422 => 'Unprocessable Entity',
-            429 => 'Too Many Requests', 500 => 'Internal Server Error',
+            404 => 'Not Found', 405 => 'Method Not Allowed', 409 => 'Conflict',
+            410 => 'Gone', 415 => 'Unsupported Media Type', 422 => 'Unprocessable Entity',
+            429 => 'Too Many Requests',
+            500 => 'Internal Server Error', 502 => 'Bad Gateway', 503 => 'Service Unavailable',
             default => 'Response',
         };
     }
