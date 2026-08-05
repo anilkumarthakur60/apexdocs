@@ -17,9 +17,18 @@ workstreams have landed.
 part-methods) and WS2 (the CSS-grid shell, the mobile-first breakpoint rewrite,
 and making the code/try-it panel reachable at every viewport width).
 
-**Outstanding:** WS3–WS7. WS3 is the accessibility layer and is the most
-valuable of them — the navigation tree is still `<div onclick>`, so it cannot be
-reached with a keyboard, and there is no `:focus-visible` rule in the stylesheet.
+**Landed since:** the keyboard layer of WS3. The navigation is real `<a href>`
+links routed by a `hashchange` listener (so Back/Forward walk the endpoints, and
+an endpoint opens in a new tab), every disclosure control is a `<button>`
+carrying `aria-expanded`/`aria-controls`, each view names itself with an `h1`,
+the active row carries `aria-current="page"`, decorative glyphs are
+`aria-hidden`, a closed menu no longer holds invisible focus stops, and there is
+one keyboard-only focus ring drawn from `--ring`. Measured with the harness
+below: 222/222 navigation rows reachable by Tab, up from 0/211.
+
+**Outstanding:** the rest of WS3 — live-region announcements for the
+try-it-out result, roving `tabindex` inside the navigation tree, an audit of the
+dialogs' focus traps — and WS4–WS7.
 
 ## Measuring
 

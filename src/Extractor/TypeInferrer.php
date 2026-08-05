@@ -33,6 +33,25 @@ final class TypeInferrer
     private function __construct() {}
 
     /**
+     * Is this class one of the wrappers whose JSON form is a list?
+     *
+     * `Collection<Post>` is unwrapped to `Post[]` by {@see normalise()}. Written
+     * without its generic, the same class would otherwise be reflected as an
+     * object with no properties — a `Collection` component schema that says
+     * nothing. It is an array of something unknown, and that is worth saying.
+     *
+     * The name is not enough on its own: a DTO of one's own called `Collection`
+     * is an object like any other. It must also actually be iterable.
+     */
+    public static function isIterableWrapper(string $class): bool
+    {
+        $class = trim($class, '\\');
+
+        return in_array(strtolower(ClassName::short($class)), self::ITERABLE_GENERICS, true)
+            && is_a($class, \Traversable::class, true);
+    }
+
+    /**
      * Returns a normalised type string, e.g.:
      *  "UserResource[]", "string", "int|null", "App\Models\User"
      */
@@ -41,16 +60,26 @@ final class TypeInferrer
         // 1. PHPDoc @return (richer type info, handles generics)
         $docType = DocBlockReader::returnType($method->getDocComment());
         if ($docType !== null && $docType !== '') {
-            return self::normalise($docType);
+            // A docblock is written in the vocabulary of its own file, so
+            // `@return UserResource` means the imported one. Left unresolved it
+            // matches no class, and a JSON payload ends up documented as the
+            // fallback type instead of as a schema.
+            return NameResolver::forClass($method->getDeclaringClass())
+                ->resolveTypeString(self::normalise($docType));
         }
 
-        // 2. Reflection return type
+        // 2. Reflection return type — already fully qualified, so only the
+        //    relative keywords need a class to point at.
         $reflType = $method->getReturnType();
         if ($reflType === null) {
             return null;
         }
 
-        return self::normalise(self::reflectionTypeString($reflType));
+        $type = self::normalise(self::reflectionTypeString($reflType));
+
+        return in_array(strtolower($type), ['self', 'static', '$this'], true)
+            ? $method->getDeclaringClass()->getName()
+            : $type;
     }
 
     /**

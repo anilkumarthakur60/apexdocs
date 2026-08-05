@@ -254,3 +254,125 @@ it('gives every coarse-pointer target 44px on both axes', function () {
 
     expect($offenders)->toBe([]);
 });
+
+it('stretches the article across its grid cell instead of shrink-wrapping it', function () {
+    // Once the console is promoted to a rail, the article is a grid item — and
+    // `margin-inline:auto` on a grid item cancels the stretch and sizes the box
+    // to fit-content. It rendered 592px wide inside a 1216px cell, narrower
+    // than even its own max-width, and every pixel of the slack read as dead
+    // space between the documentation and the console. The measure that centred
+    // it in flow has to be dropped with the margin, or it re-opens the gap.
+    $railRules = [];
+    foreach (uiCssRules() as [$selector, $body]) {
+        if (uiTargets($selector, '#axui-doc') && str_contains($body, 'grid-area')) {
+            $railRules[] = $selector.'{'.$body.'}';
+        }
+    }
+
+    expect($railRules)->not->toBe([]);
+
+    foreach ($railRules as $rule) {
+        expect($rule)->toContain('margin-inline:0')
+            ->and($rule)->toContain('max-width:none');
+    }
+});
+
+it('treats a single newline in a description as a soft break', function () {
+    // Every PHPDoc is hard-wrapped at ~80 columns. Turning each newline into a
+    // <br> froze those line ends into the page, so a description kept the
+    // source's ragged right edge at every viewport, however much room it had.
+    // Markdown's own hard break — two trailing spaces, or a trailing backslash
+    // — is the only one that survives.
+    $softBreak = <<<'JS'
+.replace(/(?: {2,}|\\)\n/g,'<br>').replace(/\n/g,' ')
+JS;
+    $hardWrapEverything = <<<'JS'
+p.replace(/\n/g,'<br>')
+JS;
+
+    expect(uiScript())->toContain(trim($softBreak))
+        ->and(uiScript())->not->toContain(trim($hardWrapEverything));
+});
+
+it('resolves a $ref-ed response, parameter and body before rendering them', function () {
+    // ApexDocs emits the inferred 401/422/429 as `#/components/responses/…`.
+    // Read unresolved, such a response has neither `description` nor `content`:
+    // the accordion body renders empty, `.ax-resp-body:empty{display:none}`
+    // hides it, and clicking the row looks like a dead control.
+    $js = uiScript();
+
+    expect($js)->toContain('op=derefOp(op,spec)')
+        ->and($js)->toContain('out.responses=resolved')
+        ->and($js)->toContain('out.requestBody=deref(out.requestBody,spec)')
+        ->and($js)->toContain('out.parameters=out.parameters.map')
+        // The panel is fed the resolved operation, so the code samples and the
+        // try-it body see a $ref-ed request body too.
+        ->and(strpos($js, 'op=derefOp(op,spec)'))->toBeLessThan(strpos($js, 'renderPanel(path,method,op,spec)'));
+});
+
+/**
+ * Measured in headless Chrome before this: 211 endpoint rows in the navigation,
+ * none of them reachable by Tab; 34 group headers, none reachable and none
+ * reporting their state; no `:focus-visible` rule anywhere in the stylesheet, so
+ * a keyboard user could not see where they were; and no `h1` on the page. The
+ * whole navigation was `<div onclick>`.
+ */
+it('navigates with real links, so the keyboard and the back button work', function () {
+    $js = uiScript();
+
+    // <a href> — focusable, activatable with Enter, openable in a new tab, and
+    // routed by the hash listener rather than a click handler.
+    expect($js)->toContain("html+='<a class=\"axi'")
+        ->and($js)->not->toContain("html+='<div class=\"axi'")
+        ->and($js)->toContain("href=\"#'+escH(axHashFor(i.op,i.key))+'\"")
+        ->and($js)->toContain("window.addEventListener('hashchange'")
+        // aria-current is what a screen reader reads as "you are here".
+        ->and($js)->toContain('aria-current="page"');
+});
+
+it('gives every disclosure control a button and a reported state', function () {
+    $js = uiScript();
+
+    expect($js)->toContain('<button type="button" class="axg-header"')
+        ->and($js)->toContain('<button type="button" class="ax-resp-header"')
+        ->and($js)->not->toContain('<div class="axg-header"')
+        ->and($js)->not->toContain('<div class="ax-resp-header"')
+        // …and the state has to follow the toggle, not just the initial render.
+        ->and($js)->toContain("el.setAttribute('aria-expanded',open?'true':'false')")
+        ->and(substr_count($js, "aria-expanded"))->toBeGreaterThanOrEqual(6);
+});
+
+it('draws a focus ring, and only for the keyboard', function () {
+    $css = uiStylesheet();
+
+    expect($css)->toContain(':focus-visible{outline:2px solid var(--ring)')
+        // An inset ring where an outset one would be clipped by a scrollport.
+        ->and($css)->toContain('.axi:focus-visible')
+        ->and($css)->toContain('outline-offset:-2px')
+        // The token has to exist in both palettes or the ring is invisible in one.
+        ->and(Theme::css())->toContain('--ring:');
+});
+
+it('names every view with a heading', function () {
+    $js = uiScript();
+
+    expect(substr_count($js, '<h1 class="ax-op-path"'))->toBe(2)   // operation + schema
+        ->and(substr_count($js, '<h1 class="axw-title"'))->toBe(2); // welcome + empty spec
+});
+
+it('keeps a closed menu out of the tab order', function () {
+    // opacity:0 alone leaves its four links focusable: invisible focus stops
+    // between the toolbar and the search field.
+    $css = uiStylesheet();
+
+    expect($css)->toContain('.apex-export-menu{')
+        ->and($css)->toMatch('/\.apex-export-menu\{[^}]*visibility:hidden/')
+        ->and($css)->toMatch('/\.apex-export-wrap\.open \.apex-export-menu\{[^}]*visibility:visible/');
+});
+
+it('marks every decorative glyph hidden from assistive tech', function () {
+    // A bare <svg> is announced as "graphic"; each of these sits next to the
+    // text that already says what it means.
+    expect(uiPage())->not->toMatch('/<svg(?![^>]*aria-hidden)/')
+        ->and(uiScript())->not->toMatch('/<svg(?![^>]*aria-hidden)/');
+});

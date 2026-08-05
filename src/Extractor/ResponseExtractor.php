@@ -215,7 +215,7 @@ final class ResponseExtractor
 
         return [
             'type' => 'object',
-            'properties' => ['data' => $this->schemaBuilder->fromClass($class)],
+            'properties' => ['data' => SchemaBuilder::anySchema($this->schemaBuilder->fromClass($class))],
         ];
     }
 
@@ -227,7 +227,7 @@ final class ResponseExtractor
         }
 
         $properties = [
-            'data' => ['type' => 'array', 'items' => $this->schemaBuilder->fromClass($class)],
+            'data' => ['type' => 'array', 'items' => SchemaBuilder::anySchema($this->schemaBuilder->fromClass($class))],
         ];
 
         if ($this->includePaginationMeta) {
