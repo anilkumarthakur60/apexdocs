@@ -8,7 +8,10 @@ use ApexDocs\ApexDocs;
 use ApexDocs\Bridge\Laravel\Console\Commands\DiffCommand;
 use ApexDocs\Bridge\Laravel\Console\Commands\ExportCommand;
 use ApexDocs\Bridge\Laravel\Console\Commands\GenerateCommand;
+use ApexDocs\Bridge\Laravel\Console\Commands\InstallAiCommand;
+use ApexDocs\Bridge\Laravel\Console\Commands\McpCommand;
 use ApexDocs\Bridge\Laravel\Console\Commands\MockCommand;
+use ApexDocs\Bridge\Laravel\Console\Commands\SnapshotCommand;
 use ApexDocs\Bridge\Laravel\Console\Commands\ValidateCommand;
 use ApexDocs\Bridge\Laravel\Console\Commands\WatchCommand;
 use ApexDocs\Cache\SpecCache;
@@ -107,6 +110,11 @@ class ServiceProvider extends LaravelServiceProvider
         $this->publishes([
             __DIR__.'/config/apexdocs.php' => config_path('apexdocs.php'),
         ], 'apexdocs-config');
+
+        $this->publishes([
+            __DIR__.'/../../../resources/ai/skills/apexdocs' => $this->app->basePath('.claude/skills/apexdocs'),
+            __DIR__.'/../../../resources/ai/agents/apexdocs.md' => $this->app->basePath('.claude/agents/apexdocs.md'),
+        ], 'apexdocs-ai');
     }
 
     private function registerRoutes(): void
@@ -157,6 +165,9 @@ class ServiceProvider extends LaravelServiceProvider
                 DiffCommand::class,
                 WatchCommand::class,
                 MockCommand::class,
+                McpCommand::class,
+                SnapshotCommand::class,
+                InstallAiCommand::class,
             ]);
         }
     }

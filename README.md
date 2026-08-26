@@ -22,6 +22,7 @@ Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or a
 - [PHP Attributes](#php-attributes)
 - [DTO Schemas](#dto-schemas)
 - [Artisan Commands](#artisan-commands-laravel)
+- [AI Assistants (Skills, Agents & MCP)](#ai-assistants-skills-agents--mcp)
 - [Standalone Usage](#standalone-usage-no-framework)
 - [Symfony](#symfony)
 - [PSR-15 Frameworks](#psr-15-slim-mezzio-etc)
@@ -45,6 +46,7 @@ Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or a
 - Serves interactive docs from a **native, CDN-free UI** — sidebar, command palette, try-it-out, code samples, zero outbound requests
 - Exports to **Postman Collection v2.1**, **Insomnia**, and **Bruno**
 - Breaking change detection, watch mode, and mock server
+- **AI-assistant ready**: ships a skill, a subagent and an **MCP server** so Claude Code, Cursor, Copilot and Codex can inspect and improve the generated spec
 
 ---
 
@@ -487,6 +489,37 @@ php artisan apexdocs:mock --host=127.0.0.1 --port=8081
 Each endpoint answers with an example built from its lowest documented 2xx
 response, including any documented response headers. Append `?__status=404` to
 any request to get a different documented response instead.
+
+---
+
+## AI Assistants (Skills, Agents & MCP)
+
+Let AI coding agents work with the generated documentation instead of guessing at it. One
+command installs a **skill** (how apexdocs works — every attribute, inference rule, config key),
+a **subagent** (a documentation specialist), an instructions block for `CLAUDE.md` / `AGENTS.md`,
+and registers the **MCP server**:
+
+```bash
+php artisan apexdocs:install-ai                 # Claude Code + AGENTS.md (default)
+php artisan apexdocs:install-ai --target=all    # + Cursor + GitHub Copilot
+```
+
+The MCP server (`php artisan apexdocs:mcp`) rebuilds the spec **from the code on disk in a fresh
+process on every call**, so an agent always sees the effect of its last edit:
+
+| Tool | Purpose |
+|---|---|
+| `spec_summary` | counts, tags, servers, security schemes, how many routes were excluded and why |
+| `list_routes` | every framework route with `included` and the exact exclusion reason (`api_path_prefix`, `exclude_paths`, `spec_group`, `filterRoutes`, `hidden`) |
+| `list_operations` / `describe_operation` | operations (filter by tag/method/path/security) and the full Operation Object + source route |
+| `list_schemas` / `get_schema` | `components/schemas` |
+| `validate_spec` / `diff_spec` | the same rules as `apexdocs:validate` / `apexdocs:diff` |
+| `export_spec` | write OpenAPI JSON/YAML, Postman, Insomnia or Bruno |
+| `get_config` / `attribute_reference` | effective config; live reflection of every `#[Attribute]` |
+| `read_reference` / `search_reference` | the bundled reference set (attributes, schemas & types, inference, config, commands, Laravel, Symfony, standalone, customisation, exports, validation & diff, testing) |
+
+Non-Laravel projects get the same server from `vendor/bin/apexdocs-mcp --bootstrap=apexdocs.php`,
+where `apexdocs.php` returns a configured `ApexDocs\ApexDocs` instance.
 
 ---
 

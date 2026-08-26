@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace ApexDocs\Generator;
 
-use ApexDocs\Attribute\ApiGroup;
 use ApexDocs\Config;
 use ApexDocs\Contract\DocumentTransformerInterface;
 use ApexDocs\Contract\OperationTransformerInterface;
@@ -12,7 +11,6 @@ use ApexDocs\Contract\RouteCollectionInterface;
 use ApexDocs\Contract\SecurityDetectorInterface;
 use ApexDocs\Contract\ValidationExtractorInterface;
 use ApexDocs\Exception\InvalidConfigException;
-use ApexDocs\Extractor\AttributeReader;
 use ApexDocs\Extractor\ComponentRegistry;
 use ApexDocs\Extractor\ParameterExtractor;
 use ApexDocs\Extractor\ResponseExtractor;
@@ -21,8 +19,6 @@ use ApexDocs\Extractor\WebhookScanner;
 use ApexDocs\Route\Route;
 use ApexDocs\Spec\Document;
 use Closure;
-use ReflectionClass;
-use ReflectionException;
 
 /**
  * Orchestrates the full OpenAPI document build.
@@ -375,137 +371,6 @@ final class SpecBuilder
     /** @return list<Route> */
     private function filteredRoutes(): array
     {
-        $routes = $this->routeCollection->all();
-
-        // Filter by configured path prefixes. An empty list — or an empty
-        // prefix inside it — means "document every route".
-        $prefixes = [];
-        $matchAll = $this->config->pathPrefixes === [];
-        foreach ($this->config->pathPrefixes as $prefix) {
-            if (! is_string($prefix)) {
-                // A stray null (an unset env var in the list) must be dropped,
-                // never promoted to the match-everything sentinel — that would
-                // silently publish every route in the application.
-                continue;
-            }
-            $prefix = trim($prefix, '/');
-            if ($prefix === '') {
-                $matchAll = true;
-
-                continue;
-            }
-            $prefixes[] = $prefix;
-        }
-
-        if (! $matchAll && $prefixes === []) {
-            // Every configured prefix was unusable: document nothing rather than
-            // guess, and let apexdocs:validate report the empty spec.
-            return [];
-        }
-
-        if (! $matchAll) {
-            $routes = array_filter($routes, function (Route $route) use ($prefixes) {
-                $uri = ltrim($route->path, '/');
-                foreach ($prefixes as $prefix) {
-                    if ($uri === $prefix || str_starts_with($uri, $prefix.'/')) {
-                        return true;
-                    }
-                }
-
-                return false;
-            });
-        }
-
-        // Exclude patterns — glob or regex, matched with and without the
-        // leading slash so both documented styles work.
-        if ($this->config->excludePaths !== []) {
-            $routes = array_filter($routes, fn (Route $route) => ! $this->isExcluded($route));
-        }
-
-        // Filter by #[ApiGroup] when specGroup is configured
-        if ($this->config->specGroup !== '') {
-            $routes = array_filter($routes, fn (Route $route) => $this->matchesGroup($route, $this->config->specGroup));
-        }
-
-        // Custom user-supplied filter
-        if ($this->routeFilter !== null) {
-            $filter = $this->routeFilter;
-            $routes = array_filter($routes, fn (Route $r) => (bool) $filter($r));
-        }
-
-        return array_values($routes);
-    }
-
-    private function isExcluded(Route $route): bool
-    {
-        $candidates = [$route->path, ltrim($route->path, '/')];
-
-        foreach ($this->config->excludePaths as $pattern) {
-            if (! is_string($pattern) || $pattern === '') {
-                continue;
-            }
-            foreach ($candidates as $candidate) {
-                if (fnmatch($pattern, $candidate)) {
-                    return true;
-                }
-                if ($this->matchesRegex($pattern, $candidate)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Exclude patterns may be globs or regexes. The regex is ANCHORED: an
-     * unanchored `api` would match every path under /api and silently empty the
-     * whole document, and `api/internal` would also drop `/api/internally`.
-     *
-     * A pattern that is not a valid regex is simply not treated as one — testing
-     * it first keeps PCRE from emitting a warning that a strict error handler
-     * would turn into an exception mid-build.
-     */
-    private function matchesRegex(string $pattern, string $subject): bool
-    {
-        static $compiles = [];
-
-        if (! array_key_exists($pattern, $compiles)) {
-            set_error_handler(static fn (): bool => true);
-            $compiles[$pattern] = preg_match('#^'.$pattern.'$#', '') !== false;
-            restore_error_handler();
-        }
-
-        return $compiles[$pattern] && preg_match('#^'.$pattern.'$#', $subject) === 1;
-    }
-
-    private function matchesGroup(Route $route, string $group): bool
-    {
-        [$class, $method] = $route->resolveHandler();
-
-        try {
-            $refClass = new ReflectionClass($class);
-            $refMethod = $refClass->getMethod($method);
-        } catch (ReflectionException) {
-            return false;
-        }
-
-        $allGroups = array_merge(
-            AttributeReader::all($refClass, ApiGroup::class),
-            AttributeReader::all($refMethod, ApiGroup::class),
-        );
-
-        // No #[ApiGroup] on the route → always include
-        if ($allGroups === []) {
-            return true;
-        }
-
-        foreach ($allGroups as $g) {
-            if ($g->name === $group) {
-                return true;
-            }
-        }
-
-        return false;
+        return (new RouteSelector($this->config, $this->routeFilter))->select($this->routeCollection->all());
     }
 }

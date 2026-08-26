@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **AI assistant integration.** `php artisan apexdocs:install-ai` installs an
+  `apexdocs` skill (a `SKILL.md` plus a source-derived reference set covering
+  every attribute, the schema/type rules, everything the generator infers,
+  every config key, all commands, the Laravel and Symfony bridges, standalone
+  use, customisation, exports, and the exact validation/diff rules), a Claude
+  Code subagent, a managed instructions block (`CLAUDE.md`, `AGENTS.md`,
+  `.cursor/rules`, `.github/copilot-instructions.md`) and MCP registration
+  (`.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`). Targets `claude`,
+  `agents` (default both), `cursor`, `copilot`, `all`; idempotent. Also
+  `vendor:publish --tag=apexdocs-ai`.
+- **MCP server.** `php artisan apexdocs:mcp` (Laravel) and
+  `vendor/bin/apexdocs-mcp --bootstrap=file.php` (any framework) serve a
+  dependency-free Model Context Protocol server over stdio. Snapshots are
+  built in a fresh PHP process per call (`apexdocs:snapshot`, hidden) so the
+  agent always sees the code on disk; `--in-process` trades that for speed.
+  Tools: `spec_summary`, `list_operations`, `describe_operation`,
+  `list_routes` (with the reason a route is excluded), `list_schemas`,
+  `get_schema`, `validate_spec`, `diff_spec`, `export_spec`, `get_config`,
+  `attribute_reference`, `read_reference`, `search_reference`; resources
+  `apexdocs://spec.json`, `apexdocs://config`, one per reference topic;
+  prompts `document-endpoint`, `fix-validation`, `missing-endpoint`.
+- `ApexDocs\Validation\SpecValidator`, `ApexDocs\Diff\SpecDiff` and
+  `ApexDocs\Generator\RouteSelector` — the logic behind `apexdocs:validate`,
+  `apexdocs:diff` and route selection, now public framework-agnostic classes
+  (the commands delegate to them). `RouteSelector::exclusionReason()` explains
+  why a route is left out.
+- `ApexDocs::getRouteCollection()` and `ApexDocs::getRouteFilter()`.
+
 ### Removed
 
 - **The five CDN-backed documentation UIs** (Scalar, Swagger UI, ReDoc,
