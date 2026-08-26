@@ -5,58 +5,37 @@ declare(strict_types=1);
 namespace ApexDocs\Bridge\Laravel\Console\Commands;
 
 use ApexDocs\ApexDocs;
+use ApexDocs\Validation\SpecValidator;
 use Illuminate\Console\Command;
 
 class ValidateCommand extends Command
 {
-    protected $signature = 'apexdocs:validate';
+    protected $signature = 'apexdocs:validate
+        {--strict : Treat warnings as errors (useful in CI)}';
 
     protected $description = 'Validate the generated OpenAPI spec for errors and warnings';
 
-    public function handle(ApexDocs $apexDocs): int
+    public function handle(ApexDocs $apexDocs, SpecValidator $validator): int
     {
-        $spec = $apexDocs->generate()->toArray();
-        $errors = [];
-        $warns = [];
-
-        foreach (['openapi', 'info', 'paths'] as $f) {
-            if (empty($spec[$f])) {
-                $errors[] = "Missing required field: {$f}";
-            }
-        }
-
-        foreach ($spec['paths'] ?? [] as $path => $methods) {
-            foreach ($methods as $method => $op) {
-                if (! is_array($op)) {
-                    continue;
-                }
-                $loc = strtoupper($method)." {$path}";
-                if (empty($op['responses'])) {
-                    $errors[] = "{$loc}: no responses";
-                }
-                if (empty($op['operationId'])) {
-                    $warns[] = "{$loc}: missing operationId";
-                }
-                if (empty($op['summary'])) {
-                    $warns[] = "{$loc}: missing summary";
-                }
-            }
-        }
+        ['errors' => $errors, 'warnings' => $warnings] = $validator->validate($apexDocs->generate()->toArray());
 
         foreach ($errors as $e) {
             $this->error($e);
         }
-        foreach ($warns as $w) {
+        foreach ($warnings as $w) {
             $this->warn($w);
         }
 
         $this->newLine();
-        if (empty($errors)) {
-            $this->info('<fg=green>✓</> Valid. '.count($warns).' warning(s).');
+        $strict = (bool) $this->option('strict');
+
+        if ($errors === [] && ! ($strict && $warnings !== [])) {
+            $this->info('<fg=green>✓</> Valid. '.count($warnings).' warning(s).');
 
             return self::SUCCESS;
         }
-        $this->error(count($errors).' error(s) found.');
+
+        $this->error(count($errors).' error(s), '.count($warnings).' warning(s).');
 
         return self::FAILURE;
     }

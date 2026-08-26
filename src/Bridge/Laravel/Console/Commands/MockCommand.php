@@ -61,19 +61,29 @@ class MockCommand extends Command
             return self::FAILURE;
         }
 
-        // Pass spec path via env var, NOT command line — keeps the path out of
-        // process listings and avoids shell-quoting concerns entirely.
-        $cmd = sprintf(
-            'APEXDOCS_MOCK_SPEC=%s php -S %s:%s %s',
-            escapeshellarg($specFile),
-            escapeshellarg($host),
-            escapeshellarg($port),
-            escapeshellarg($router),
+        // Pass the spec path via the environment, NOT the command line — keeps
+        // it out of process listings and avoids shell quoting entirely. Using
+        // proc_open with an explicit env array also works on Windows, where
+        // "VAR=value cmd" is not valid shell syntax.
+        $process = @proc_open(
+            [PHP_BINARY, '-S', $host.':'.$port, $router],
+            [0 => STDIN, 1 => STDOUT, 2 => STDERR],
+            $pipes,
+            null,
+            ['APEXDOCS_MOCK_SPEC' => $specFile] + getenv(),
         );
 
-        passthru($cmd);
+        if (! is_resource($process)) {
+            $this->error('Could not start the PHP development server.');
+            @unlink($specFile);
+
+            return self::FAILURE;
+        }
+
+        $exitCode = proc_close($process);
         @unlink($specFile);
 
-        return self::SUCCESS;
+        // Ctrl+C terminates the child; that is a normal way to stop the server.
+        return $exitCode === 0 || $exitCode === 130 || $exitCode === 255 ? self::SUCCESS : self::FAILURE;
     }
 }

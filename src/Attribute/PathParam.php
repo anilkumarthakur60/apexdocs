@@ -14,5 +14,6 @@ final class PathParam
         public readonly string $type = 'string',
         public readonly string $description = '',
         public readonly mixed $example = null,
+        public readonly bool $deprecated = false,
     ) {}
 }

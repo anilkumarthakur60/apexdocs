@@ -7,117 +7,193 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-_No unreleased changes yet._
-
-## [0.1.0] - 2026-05-13
-
-### Repo + publish readiness
-
-- Repo hygiene: `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1),
-  `.github/ISSUE_TEMPLATE/*` (bug + feature + config router),
-  `.github/PULL_REQUEST_TEMPLATE.md`, `.github/CODEOWNERS`,
-  `.github/FUNDING.yml`, `.github/dependabot.yml`.
-- CI: weekly `composer audit` for known CVEs, Codecov coverage upload from
-  the PHP 8.3 / Laravel 12 row, and `release.yml` that auto-creates a
-  GitHub Release with CHANGELOG excerpt on every SemVer tag push.
-- Composer: `funding` block, `scripts.{security,lint,ci}` with
-  `scripts-descriptions`, `branch-alias` for `dev-main`.
-
-### Test coverage uplift (Pest only — 155 tests / 387 assertions)
-
-- Symfony container compile test exercising the bundle through a real
-  `ContainerBuilder` for every public service, including a rejection test
-  proving the config schema is enforced.
-- Artisan command coverage for `apexdocs:generate`, `apexdocs:validate`,
-  `apexdocs:export` (× 5 formats), and `apexdocs:diff` (success / failure
-  / breaking-change paths).
-- OpenAPI 3.1 structural conformance suite — every invariant required by
-  the 3.1 meta-schema (openapi field, info, type-array nullables, server
-  url, response codes, parameter shapes, valid JSON-Schema types,
-  round-trip JSON + YAML).
-- PSR-15 Handler integration test driving real `nyholm/psr7` requests
-  through every route, plus parity check that the bytes match the Laravel
-  flow (both go through `SpecPayload`).
-
 ### Added
 
-- Native Apex UI: persistent auth token (per-spec localStorage), rich response
-  viewer with Body/Headers/Raw tabs, request history with restore, Models /
-  schema browser tab, response examples switcher, deprecation + sunset banner,
-  expand-all/collapse-all on schema sections, property badges (required,
-  nullable, readOnly, writeOnly, deprecated, format, default, ranges, regex),
-  keyboard-shortcuts dialog (`?`), `j`/`k` next/prev navigation, mobile-friendly
-  off-canvas sidebar, OAuth2 implicit-flow helper, and full markdown rendering
-  for descriptions.
-- Bulk-JSON edit toggle on the Try-it-out Path / Query / Headers groups —
-  paste a full JSON object to populate all fields, copy out to clipboard, or
-  refresh the JSON from current field values.
-- Empty-state and error-state UIs when the spec fails to load or contains no
-  endpoints, with a retry action.
-- Exception hierarchy under `ApexDocs\Exception\*` (`ApexDocsException` marker
-  interface plus typed runtime exceptions).
-- `LICENSE`, `CHANGELOG.md`, `CONTRIBUTING.md`, `SECURITY.md`, `UPGRADING.md`,
-  `.editorconfig`, and a GitHub Actions workflow running Pest on PHP 8.2 / 8.3 /
-  8.4 against Laravel 11 / 12.
-- Symfony `ApexDocsBundle` with DI configuration — `composer require` is now
-  enough to wire the Symfony bridge.
-- `tests/Feature/` smoke test suite plus unit coverage for the host-header
-  fix, OpenAPI 3.1 nullable encoding, and `SchemaBuilder::asNullable`.
-
-### Changed
-
-- **Security:** `SpecBuilder::setServers` no longer derives the default server
-  URL from `$_SERVER['HTTP_HOST']` / `HTTPS`. This was a host header injection
-  vector — the cached spec served to every consumer would inherit attacker
-  controlled values. The builder is now a pure function of `Config`. The
-  Laravel bridge feeds `config('app.url')` (a trusted source) when the user
-  hasn't configured `servers` explicitly.
-- **Security:** `apexdocs:mock` no longer embeds the OpenAPI spec inside a
-  PHP heredoc. The router now lives in `resources/mock/server.php` and reads
-  the spec from a temp file passed via the `APEXDOCS_MOCK_SPEC` env var,
-  removing the code-injection attack surface where descriptions, route
-  metadata, or example values containing `'` could break out of the PHP
-  string literal.
-- **Robustness:** `ValidationExtractor` (Laravel) now wraps the entire
-  `rules()` invocation in `error_reporting(0)` + a `Throwable` catch, skips
-  `rules()` methods that require parameters, and caches the resulting body
-  schema per-class. A FormRequest that throws — including from missing
-  request context like `$this->route('id')` — can no longer kill spec
-  generation.
-- **Correctness:** `SpecCache` now round-trips the full spec — info,
-  servers, components, tags, webhooks, security, and `x-*` extensions all
-  survive a cache hit. Backed by new `Document::fromArray()` and
-  `Components::fromArray()` constructors. Added `SpecCache::getArray()` for
-  HTTP fast paths that just need the serialised form.
-- **Maintainability:** Spec-export response bodies + headers now flow through
-  a single `ApexDocs\Http\SpecPayload` value object. The PSR-15 `Handler` and
-  Laravel `DocsController` both delegate to it so they can no longer drift on
-  content type, CORS, or download filenames.
-- **Robustness:** `WebhookScanner` now uses `token_get_all()` instead of
-  regex to find namespace + class declarations. Avoids false positives on
-  `::class` constants, multi-line namespace blocks, and `class` appearing
-  inside doc comments.
-- **Correctness:** Nullable schemas now emit OpenAPI 3.1's `type: [..., 'null']`
-  instead of the deprecated `nullable: true` keyword. Applied across
-  `SchemaBuilder` (reflection + union), `RuleParser`, `PostmanExporter`, the
-  mock-server example builder, and the Apex UI's schema renderer. A new
-  `SchemaBuilder::asNullable()` helper handles `$ref` / `oneOf` / `anyOf` /
-  `allOf` cases by appending a `null` branch.
-- `composer.json`: removed the unused `nikic/php-parser` dependency, dropped
-  the invalid `symfony/yaml: ^8.0` constraint, changed `minimum-stability` from
-  `dev` to `stable`, and added a `support` block. Dev dependencies trimmed to
-  Pest only.
-- `ApexDocs::generate()` now throws `ApexDocs\Exception\MissingRouteCollectionException`
-  (extends `\RuntimeException`, implements `ApexDocsException`) instead of
-  `\LogicException`.
+- **AI assistant integration.** `php artisan apexdocs:install-ai` installs an
+  `apexdocs` skill (a `SKILL.md` plus a source-derived reference set covering
+  every attribute, the schema/type rules, everything the generator infers,
+  every config key, all commands, the Laravel and Symfony bridges, standalone
+  use, customisation, exports, and the exact validation/diff rules), a Claude
+  Code subagent, a managed instructions block (`CLAUDE.md`, `AGENTS.md`,
+  `.cursor/rules`, `.github/copilot-instructions.md`) and MCP registration
+  (`.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`). Targets `claude`,
+  `agents` (default both), `cursor`, `copilot`, `all`; idempotent. Also
+  `vendor:publish --tag=apexdocs-ai`.
+- **MCP server.** `php artisan apexdocs:mcp` (Laravel) and
+  `vendor/bin/apexdocs-mcp --bootstrap=file.php` (any framework) serve a
+  dependency-free Model Context Protocol server over stdio. Snapshots are
+  built in a fresh PHP process per call (`apexdocs:snapshot`, hidden) so the
+  agent always sees the code on disk; `--in-process` trades that for speed.
+  Tools: `spec_summary`, `list_operations`, `describe_operation`,
+  `list_routes` (with the reason a route is excluded), `list_schemas`,
+  `get_schema`, `validate_spec`, `diff_spec`, `export_spec`, `get_config`,
+  `attribute_reference`, `read_reference`, `search_reference`; resources
+  `apexdocs://spec.json`, `apexdocs://config`, one per reference topic;
+  prompts `document-endpoint`, `fix-validation`, `missing-endpoint`.
+- `ApexDocs\Validation\SpecValidator`, `ApexDocs\Diff\SpecDiff` and
+  `ApexDocs\Generator\RouteSelector` — the logic behind `apexdocs:validate`,
+  `apexdocs:diff` and route selection, now public framework-agnostic classes
+  (the commands delegate to them). `RouteSelector::exclusionReason()` explains
+  why a route is left out.
+- `ApexDocs::getRouteCollection()` and `ApexDocs::getRouteFilter()`.
 
 ### Removed
 
-- `nikic/php-parser` — was declared but never imported anywhere in `src/`.
-- `phpstan/phpstan` and `laravel/pint` dev dependencies — Pest is the project's
-  only quality tool per maintainer decision.
+- **The five CDN-backed documentation UIs** (Scalar, Swagger UI, ReDoc,
+  Stoplight Elements, RapiDoc) and the whole multi-UI system with them. The
+  native UI is now the only UI. Each backend pulled a bundle from a third-party
+  CDN, forced `script-src`/`style-src` to name that host, and brought its own UX
+  conventions — five ways to expand a schema, five keyboard maps, five ideas of
+  what "try it out" means. The page now issues **zero outbound requests** in
+  every state, which is the property the rest of the UI work depends on.
+- `?ui=` is no longer read anywhere. `?theme=dark|light|auto` stays — it is a
+  supported deep-link override and is covered by tests.
+- Removed public API: `UiRenderer::UIS`, `UiRenderer::normalizeUi()`,
+  `Theme::isDark()`, the `$ui` first argument of `UiRenderer::render()`, and the
+  `Config::$defaultUi` property.
+- Removed configuration: `ui.default`, the `APEXDOCS_UI` environment variable,
+  and `ui.show_ui_switcher` (renamed — see below).
+- Removed the `1`…`6` "switch UI backend" keyboard shortcut and its row in the
+  shortcuts dialog.
 
-Initial public release on Packagist.
+### Changed
+
+- `ui.show_ui_switcher` → `ui.show_toolbar` (`Config::$showUiSwitcher` →
+  `Config::$showToolbar`). The flag hides the entire header bar, not a tab
+  strip, so the old name described something that no longer existed.
+
+### Fixed
+
+- The command palette navigated to `?ui=apex#op_…`, so picking a result reloaded
+  the page, wrote a dead parameter into the URL bar and history, and dropped any
+  `?theme=` override on the way. It now resolves the hash in place, exactly like
+  a sidebar click, and the deep-link theme survives.
+- The `t` shortcut toggled the theme by clicking the toolbar button, so it did
+  nothing when `ui.show_toolbar` was `false` — the one configuration where it is
+  the only way to switch. It now calls the theme cycle directly.
+
+### Internal
+
+- `UiRenderer::css()` and `::js()` were each a single ~520 / ~1160-line heredoc.
+  They are now assembled from `cssShell/cssNav/cssDoc/cssSchema/cssPanel/`
+  `cssResponsive` and `jsCore/jsChrome/jsNav/jsIndex/jsDoc/jsSchema/jsPanel/`
+  `jsInit`. Order is load-bearing in both cases. The split itself changed no
+  emitted byte beyond the deletions above and one replacement:
+  `.apex-right{margin-left:auto}` took over the spacing the deleted
+  `.apex-tabs-wrap{flex:1}` used to provide.
+
+See [UPGRADING.md](UPGRADING.md) for the migration steps.
+
+## [0.1.0] - 2026-07-26
+
+Initial public release.
+
+ApexDocs generates OpenAPI 3.1 documents from PHP source: routes, controller
+signatures, PHP 8 attributes, PHPDoc annotations, and framework validation
+rules. The core has no framework dependency — Laravel and Symfony are bridges
+over five small interfaces.
+
+### Generating
+
+- **OpenAPI 3.1 output**, JSON or YAML. Nullability uses JSON Schema type
+  arrays (`["string","null"]`), not the 3.0 `nullable` keyword.
+- **DTO reflection** into `components/schemas`, referenced by `$ref` everywhere
+  it appears. Handles public properties, promoted constructor parameters,
+  readonly and defaulted properties, backed and pure enums, inheritance via
+  `allOf`, and recursive or mutually recursive types. Depth-bounded by
+  `responses.max_depth`.
+- **PHPDoc types**, with generics unwrapped: `Collection<int, User>`,
+  `LengthAwarePaginator<User>`, and `User[]` all become an array of `$ref`;
+  `array<string, User>` becomes an object with `additionalProperties`. `@var`
+  and `@param` supply element types where the PHP type cannot.
+- **Path parameters** typed from the handler signature, then from router
+  constraints, then from the parameter name; described from `@param` tags.
+- **Response inference** from return types, with 401 / 422 / 429 added from
+  route middleware, each configurable.
+
+### Attributes
+
+`#[Group]`, `#[Tag]`, `#[Endpoint]`, `#[Hidden]`, `#[Deprecated]`,
+`#[SunsetDate]`, `#[ExternalDocs]`, `#[ApiGroup]`, `#[Schema]`, `#[Security]`,
+`#[NoSecurity]`, `#[PathParam]`, `#[QueryParam]`, `#[HeaderParam]`,
+`#[CookieParam]`, `#[BodyParam]`, `#[RequestBody]`, `#[ApiResponse]`,
+`#[ResponseHeader]`, `#[Produces]`, `#[Example]`, `#[Webhook]`. Parameter
+attributes work at class or method level, with method-level winning.
+
+### Serving
+
+- **Six documentation UIs**: a native renderer with a sidebar, command palette,
+  try-it-out panel, and code samples that needs no CDN, plus Scalar, Swagger UI,
+  ReDoc, Stoplight Elements, and RapiDoc. Switchable live from the toolbar.
+- **A real light theme.** Both modes define the same ~75 colour tokens from one
+  source (`ApexDocs\Http\Theme`), so the explicit choice and the
+  `prefers-color-scheme` fallback cannot drift. Every token that carries text is
+  contrast-checked against the surface it sits on, and the suite fails if a pair
+  drops below the WCAG AA ratio of 4.5:1 — method badges, JSON syntax
+  highlighting, status pills, and property badges all pass in both themes.
+  Raised surfaces (cards) and recessed ones (code blocks, inputs) are separate
+  tokens, so light mode reads as layered rather than flat.
+- **The third-party UIs follow the theme too**: Scalar, ReDoc, and RapiDoc are
+  configured for the active palette, and the Swagger overrides are scoped to the
+  dark selector so light mode keeps Swagger's own theme. Switching theme while a
+  CDN-backed UI is on screen reloads it for the new palette, since those bundles
+  cannot re-theme after init.
+- **Logo, custom CSS, and announcement banner** are configurable.
+- **PSR-15 handler** for Slim, Mezzio, or any PSR-7 stack, serving the UI, the
+  spec, and every export from one mount point.
+- **Exports**: OpenAPI JSON/YAML, Postman Collection v2.1, Insomnia v4, and
+  Bruno — with request bodies generated from the referenced schemas and auth
+  mapped from the declared security scheme type.
+
+### Laravel bridge
+
+- Auto-discovered service provider, facade, docs routes, and a publishable
+  config file.
+- **FormRequest rules → request-body schema.** Dotted and wildcard keys
+  (`author.name`, `items.*.sku`) build nested structures; ~40 rules map onto
+  JSON Schema keywords. Rules that carry no documentable metadata — closures,
+  `ValidationRule` objects — are skipped rather than crashing the build.
+- **Sanctum / Passport / JWT detection** from route middleware. Every scheme an
+  operation requires is guaranteed to be declared in the document.
+- **Spec caching** through any PSR-16 store, shared across the spec routes and
+  every export.
+- **Environment gating**: the docs routes are registered only in
+  `apexdocs.environments` (default `local` and `staging`), so a public API spec
+  stays off production unless you opt in.
+- **Artisan commands**: `apexdocs:generate` (clean stdout, so redirection
+  works), `apexdocs:validate` (`--strict` for CI), `apexdocs:export`,
+  `apexdocs:diff` for breaking-change detection, `apexdocs:watch`, and
+  `apexdocs:mock` — a mock server answering with examples from the spec.
+
+### Symfony bridge
+
+- Bundle with a full config tree, wiring the router, `#[MapRequestPayload]`
+  bodies, and `#[IsGranted]` security.
+- Inline route requirements (`/users/{id<\d+>}`) are normalised to valid path
+  templates and used to type the parameter.
+
+### Extending
+
+- `RouteCollectionInterface`, `ValidationExtractorInterface`, and
+  `SecurityDetectorInterface` to support any router or validation layer.
+- `DocumentTransformerInterface` / `OperationTransformerInterface`, or plain
+  closures, to post-process the document. Registerable fluently or via config.
+- `ApexDocs\Exception\ApexDocsException` as a marker for every error the
+  package throws.
+
+### Requirements
+
+PHP 8.2+. Laravel 11 or 12 for the Laravel bridge; Symfony 6.4, 7, or 8 for the
+Symfony bridge. Runtime dependencies are `phpstan/phpdoc-parser`,
+`symfony/yaml` (6.4 through 8), and the PSR cache / HTTP-message /
+HTTP-server-handler interfaces.
+
+### Tested
+
+265 Pest tests, 753 assertions, across PHP 8.2–8.4 and Laravel 11–12,
+including an OpenAPI 3.1 structural conformance suite, a WCAG contrast check over
+both themes, and a hostile-input sweep asserting the generator never emits an
+invalid document or throws into the host application.
 
 [Unreleased]: https://github.com/anilkumarthakur60/apexdocs/compare/0.1.0...HEAD
 [0.1.0]:      https://github.com/anilkumarthakur60/apexdocs/releases/tag/0.1.0

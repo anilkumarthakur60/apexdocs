@@ -22,13 +22,15 @@ final class AttributeReader
         ReflectionClass|ReflectionMethod $ref,
         string $attributeClass,
     ): ?object {
-        $attrs = $ref->getAttributes($attributeClass);
-
-        return $attrs ? $attrs[0]->newInstance() : null;
+        return self::all($ref, $attributeClass)[0] ?? null;
     }
 
     /**
      * Get all instances of $attributeClass (for repeatable attributes).
+     *
+     * An attribute that cannot be instantiated — wrong target, unknown named
+     * argument, a constant that no longer resolves — is skipped rather than
+     * allowed to abort the whole documentation build.
      *
      * @return list<object>
      */
@@ -36,10 +38,17 @@ final class AttributeReader
         ReflectionClass|ReflectionMethod $ref,
         string $attributeClass,
     ): array {
-        return array_map(
-            fn ($a) => $a->newInstance(),
-            $ref->getAttributes($attributeClass),
-        );
+        $instances = [];
+
+        foreach ($ref->getAttributes($attributeClass) as $attribute) {
+            try {
+                $instances[] = $attribute->newInstance();
+            } catch (\Throwable) {
+                continue;
+            }
+        }
+
+        return $instances;
     }
 
     public static function has(

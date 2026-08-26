@@ -66,6 +66,9 @@ jobs:
         run: composer audit --no-dev --locked --abandoned=report
         continue-on-error: true
 
+      - name: Lint PHP sources
+        run: composer run lint
+
       - name: Run tests
         if: ${{ !matrix.coverage }}
         run: vendor/bin/pest --colors=always

@@ -63,15 +63,25 @@ final class ValidationExtractor implements ValidationExtractorInterface
             return null;
         }
 
-        $schema = $this->parser->toSchema($rules);
-        $required = $this->parser->required($rules);
+        try {
+            $schema = $this->parser->toSchema($rules);
+        } catch (\Throwable) {
+            // A rule shape we cannot read is not worth failing the build over.
+            return null;
+        }
 
-        if ($required) {
+        // toSchema() already marks nested objects required; union in the
+        // top-level names so both views agree.
+        $required = array_values(array_unique(array_merge(
+            is_array($schema['required'] ?? null) ? $schema['required'] : [],
+            $this->parser->required($rules),
+        )));
+        if ($required !== []) {
             $schema['required'] = $required;
         }
 
         $body = [
-            'required' => true,
+            'required' => $required !== [],
             'content' => ['application/json' => ['schema' => $schema]],
         ];
 
@@ -154,9 +164,15 @@ final class ValidationExtractor implements ValidationExtractorInterface
     private function hasFileRule(array $rules): bool
     {
         foreach ($rules as $rule) {
-            $str = is_array($rule) ? implode('|', array_map('strval', $rule)) : (string) $rule;
-            if (preg_match('/\b(file|image|mimes|mimetypes)\b/i', $str)) {
-                return true;
+            // Only string rules can be inspected — casting a closure or a
+            // ValidationRule object to string throws.
+            foreach (is_array($rule) ? $rule : [$rule] as $part) {
+                if (! is_string($part) && ! $part instanceof \Stringable) {
+                    continue;
+                }
+                if (preg_match('/\b(file|image|mimes|mimetypes)\b/i', (string) $part) === 1) {
+                    return true;
+                }
             }
         }
 

@@ -8,25 +8,33 @@ use ApexDocs\Config;
 
 /**
  * Renders the full API documentation page.
- * Pure PHP — no template engine, no CDN required for the native "apex" mode.
- *
- * Supported UIs: apex (native, built-in), scalar, swagger, redoc, stoplight, rapidoc
+ * Pure PHP — no template engine, and the page makes no outbound request.
  */
 final class UiRenderer
 {
-    private const UIS = ['apex', 'scalar', 'swagger', 'redoc', 'stoplight', 'rapidoc'];
+    private const THEMES = ['dark', 'light', 'auto'];
 
-    private const UI_LABELS = [
-        'apex'      => 'Apex',
-        'scalar'    => 'Scalar',
-        'swagger'   => 'Swagger',
-        'redoc'     => 'Redoc',
-        'stoplight' => 'Stoplight',
-        'rapidoc'   => 'RapiDoc',
-    ];
-
-    public function render(string $ui, string $specUrl, Config $config): string
+    /**
+     * Resolve a requested theme to one we can render, falling back to the
+     * configured value. This backs the documented `?theme=` deep link, so the
+     * value reaching the page is never raw query input.
+     */
+    public static function normalizeTheme(mixed $requested, string $fallback = 'dark'): string
     {
+        if (is_string($requested) && in_array(strtolower($requested), self::THEMES, true)) {
+            return strtolower($requested);
+        }
+
+        return in_array(strtolower($fallback), self::THEMES, true) ? strtolower($fallback) : 'dark';
+    }
+
+    /**
+     * @param  string|null  $theme  overrides Config::$theme when the client asks
+     *                              for a specific palette
+     */
+    public function render(string $specUrl, Config $config, ?string $theme = null): string
+    {
+        $theme    = self::normalizeTheme($theme, $config->theme);
         $title    = htmlspecialchars($config->title, ENT_QUOTES, 'UTF-8');
         $version  = htmlspecialchars($config->version, ENT_QUOTES, 'UTF-8');
         $spec     = htmlspecialchars($specUrl, ENT_QUOTES, 'UTF-8');
@@ -37,22 +45,25 @@ final class UiRenderer
         $specJs   = json_encode($specUrl, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT);
         $cfgJs    = json_encode([
             'specUrl'         => $specUrl,
-            'theme'           => $config->theme,
-            'activeUi'        => $ui,
+            'theme'           => $theme,
             'tryItOut'        => $config->tryItOutEnabled,
             'defaultLanguage' => $config->defaultLanguage,
-        ], JSON_HEX_TAG);
+        ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 
-        $showBar    = $config->showUiSwitcher;
-        $barPx      = $showBar ? 56 : 0;
         $bannerHtml = $this->announcementBanner($config);
-        $bannerPx   = $config->announcementBanner !== '' ? 40 : 0;
-        $totalTopPx = $barPx + $bannerPx;
-        $toolbar    = $showBar ? $this->toolbar($ui, $title, $version, $spec, $yaml, $postman, $insomnia, $bruno, $specJs, $config) : '';
-        $content    = $this->uiContent($ui, $spec, $specJs, $cfgJs, $config);
-        $customCss  = $config->customCss !== '' ? '<style>'.htmlspecialchars($config->customCss, ENT_NOQUOTES, 'UTF-8').'</style>' : '';
-        $themeAttr  = $config->theme === 'auto' ? '' : ' data-theme="'.$config->theme.'"';
+        $toolbar    = $config->showToolbar
+            ? $this->toolbar($title, $version, $spec, $yaml, $postman, $insomnia, $bruno, $specJs, $config, $specUrl)
+            : '';
+        $content    = $this->apexNativeUi();
+        $customCss  = $this->customCss($config);
+        $themeAttr  = $theme === 'auto' ? '' : ' data-theme="'.$theme.'"';
 
+        // Body order is the phone order, and it is the only order: the layout is
+        // decided entirely by CSS grid placement, so nothing here is ever
+        // reparented, and no element's height is computed in PHP. The three
+        // grid rows (banner / bar / app) collapse to zero when their optional
+        // child is absent, which is why dismissing the banner cannot leave a
+        // dead strip behind.
         return <<<HTML
         <!DOCTYPE html>
         <html lang="en"{$themeAttr}>
@@ -65,17 +76,37 @@ final class UiRenderer
             {$customCss}
         </head>
         <body>
-            <div id="apex-progress"><div id="apex-progress-bar"></div></div>
+            <a class="ax-skip" href="#axui-content">Skip to documentation</a>
+            <div id="apex-progress" aria-hidden="true"><div id="apex-progress-bar"></div></div>
             {$bannerHtml}
             {$toolbar}
+            {$content}
+            <div id="apex-toast" role="status" aria-live="polite"><span id="apex-toast-msg"></span></div>
+            <p id="apex-live" class="ax-sr-only" role="status" aria-live="polite"></p>
+            <p id="apex-alert" class="ax-sr-only" role="alert"></p>
             {$this->commandPalette()}
-            <main id="apex-main" style="height:calc(100vh - {$totalTopPx}px)">{$content}</main>
-            <div id="apex-toast"><span id="apex-toast-msg"></span></div>
             <script>var APEX_CFG={$cfgJs};</script>
             <script>{$this->js()}</script>
         </body>
         </html>
         HTML;
+    }
+
+    /**
+     * Author-supplied CSS goes into the page verbatim — HTML-escaping it would
+     * mangle ordinary selectors (`.a > .b` becomes `.a &gt; .b`). Only a
+     * `</style` sequence, which would end the block and open the door to
+     * markup injection, is neutralised.
+     */
+    private function customCss(Config $config): string
+    {
+        if ($config->customCss === '') {
+            return '';
+        }
+
+        $css = preg_replace('#</\s*style#i', '<\\/style', $config->customCss) ?? '';
+
+        return '<style>'.$css.'</style>';
     }
 
     // ── Announcement banner ───────────────────────────────────────────────────
@@ -89,10 +120,10 @@ final class UiRenderer
         $msg  = $config->announcementBanner; // user-controlled HTML allowed intentionally
 
         return <<<HTML
-        <div id="apex-banner" data-type="{$type}" role="alert">
-            <span class="apex-banner-icon">{$this->bannerIcon($config->announcementBannerType)}</span>
+        <div id="apex-banner" data-type="{$type}" role="region" aria-label="Announcement">
+            <span class="apex-banner-icon" aria-hidden="true">{$this->bannerIcon($config->announcementBannerType)}</span>
             <span class="apex-banner-msg">{$msg}</span>
-            <button class="apex-banner-close" onclick="this.parentElement.remove()" aria-label="Dismiss">✕</button>
+            <button class="apex-banner-close" onclick="axBannerClose(this)" aria-label="Dismiss" type="button">✕</button>
         </div>
         HTML;
     }
@@ -109,7 +140,6 @@ final class UiRenderer
     // ── Toolbar ───────────────────────────────────────────────────────────────
 
     private function toolbar(
-        string $ui,
         string $title,
         string $version,
         string $spec,
@@ -119,52 +149,49 @@ final class UiRenderer
         string $bruno,
         string $specJs,
         Config $config,
+        string $specUrlRaw,
     ): string {
-        $brand   = $this->brandSection($title, $version, $config);
-        $tabs    = $this->tabSection($ui);
+        $brand   = $this->brandSection($title, $version, $config, $specUrlRaw);
         $actions = $this->actionsSection($spec, $yaml, $postman, $insomnia, $bruno, $specJs);
 
         return <<<HTML
         <header id="apex-bar" role="banner">
             {$brand}
-            <div class="apex-tabs-wrap">{$tabs}</div>
             {$actions}
         </header>
         HTML;
     }
 
-    private function brandSection(string $title, string $version, Config $config): string
+    private function brandSection(string $title, string $version, Config $config, string $specUrlRaw): string
     {
         $logo = $config->customLogo !== ''
             ? '<img src="'.htmlspecialchars($config->customLogo, ENT_QUOTES, 'UTF-8').'" class="apex-custom-logo" alt="Logo">'
             : $this->iconBolt();
 
+        // The docs root, derived from the spec URL — "." would resolve to the
+        // site root whenever the docs are mounted without a trailing slash.
+        $home = htmlspecialchars(
+            preg_replace('#/spec\.json$#', '', $specUrlRaw) ?: '.',
+            ENT_QUOTES,
+            'UTF-8',
+        );
+
+        // The drawer trigger is authored first in `.apex-left`, not last in the
+        // document like the FAB it replaces: on a phone it is the first thing
+        // Tab reaches, and it can never paint over the drawer it opens.
         return <<<HTML
         <div class="apex-left">
-            <a href="." class="apex-brand" title="ApexDocs">
+            <button id="apex-nav-btn" class="apex-icon-btn" onclick="axSidebarToggle()" type="button"
+                    aria-controls="axui-sidebar" aria-expanded="false" aria-label="Open navigation">
+                <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </button>
+            <a href="{$home}" class="apex-brand" title="ApexDocs">
                 {$logo}
                 <span class="apex-brand-text">ApexDocs</span>
             </a>
-            <span class="apex-vdiv"></span>
+            <span class="apex-vdiv apex-a-lg"></span>
             <span class="apex-api-title" title="{$title}">{$title}</span>
             <span class="apex-version">{$version}</span>
-        </div>
-        HTML;
-    }
-
-    private function tabSection(string $activeUi): string
-    {
-        $tabs = '';
-        foreach (self::UIS as $key) {
-            $label  = self::UI_LABELS[$key];
-            $active = $key === $activeUi ? ' active' : '';
-            $tabs  .= "<a href=\"?ui={$key}\" class=\"apex-tab{$active}\" data-ui=\"{$key}\">{$label}</a>";
-        }
-
-        return <<<HTML
-        <div class="apex-tabs" id="apexTabs">
-            <span class="apex-tab-bg" id="apexTabBg"></span>
-            {$tabs}
         </div>
         HTML;
     }
@@ -184,45 +211,91 @@ final class UiRenderer
         $moonIcon = $this->iconMoon();
         $sunIcon  = $this->iconSun();
         $srvIcon  = $this->iconServer();
+        $kbdIcon  = $this->iconKeyboard();
+        $exports  = $this->exportLinks($spec, $yaml, $postman, $insomnia, $bruno, 'apex-export-item');
+        $moreExp  = $this->exportLinks($spec, $yaml, $postman, $insomnia, $bruno, 'apex-more-item');
 
+        // Widths, not luck, decide what fits: `.apex-a-md` appears at >=600px and
+        // `.apex-a-lg` at >=900px, and everything hidden at a given width is
+        // reachable from the `⋯` menu at that width. Nothing is ever both hidden
+        // and unreachable.
+        //
+        // The env hide sits on the BUTTON, not on `.apex-env-wrap`: the wrapper is
+        // the popover's positioned parent, and a display:none wrapper would take
+        // the popover with it — leaving the `⋯` menu's Server entry with nothing
+        // to open.
         return <<<HTML
         <div class="apex-right">
             <button class="apex-icon-btn" id="apex-palette-btn" title="Search endpoints (⌘K)" aria-label="Search">
                 {$srchIcon}
                 <kbd class="apex-kbd">⌘K</kbd>
             </button>
-            <button class="apex-icon-btn apex-theme-btn" id="apexThemeBtn" title="Toggle theme" aria-label="Toggle theme">
+            <button class="apex-icon-btn apex-theme-btn apex-a-md" id="apexThemeBtn" title="Toggle theme" aria-label="Toggle theme">
                 <span class="apex-icon-moon">{$moonIcon}</span>
                 <span class="apex-icon-sun">{$sunIcon}</span>
             </button>
-            <button class="apex-icon-btn" id="apexEnvBtn" title="Switch server environment" aria-label="Environments">
-                {$srvIcon}
+            <div class="apex-env-wrap">
+                <button class="apex-icon-btn apex-a-md" id="apexEnvBtn" title="Switch server environment" aria-label="Environments">
+                    {$srvIcon}
+                </button>
+                <div id="axui-env-popover" hidden>
+                    <div class="axui-env-title">Server Environment</div>
+                    <div id="axui-env-list"></div>
+                </div>
+            </div>
+            <button class="apex-icon-btn apex-a-md" onclick="axShortcutsOpen()" title="Keyboard shortcuts (?)" aria-label="Shortcuts" type="button">
+                {$kbdIcon}
             </button>
-            <button class="apex-icon-btn" onclick="if(window.axShortcutsOpen)axShortcutsOpen()" title="Keyboard shortcuts (?)" aria-label="Shortcuts" type="button">
-                <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/><path d="M6.2 6.2c.3-1 1.1-1.6 2-1.6 1.1 0 1.9.7 1.9 1.7 0 .9-.5 1.3-1.3 1.6-.7.3-.9.7-.9 1.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/><circle cx="8" cy="11.6" r=".8" fill="currentColor"/></svg>
-            </button>
-            <span class="apex-vdiv"></span>
-            <button class="apex-icon-btn apex-copy-btn" title="Copy spec URL" aria-label="Copy spec URL"
+            <span class="apex-vdiv apex-a-lg"></span>
+            <button class="apex-icon-btn apex-copy-btn apex-a-lg" title="Copy spec URL" aria-label="Copy spec URL"
                     onclick="apexCopy(this)" data-url={$specJs}>
                 <span class="apex-icon-copy">{$copyIcon}</span>
                 <span class="apex-icon-check">{$chkIcon}</span>
             </button>
-            <div class="apex-export-wrap" id="apexExportWrap">
+            <div class="apex-export-wrap apex-a-lg" id="apexExportWrap">
                 <button class="apex-export-trigger" id="apexExportBtn" aria-label="Export" title="Export spec">
                     {$dlIcon}
                     <span>Export</span>
                     <span class="apex-chevron">▾</span>
                 </button>
                 <div class="apex-export-menu" id="apexExportMenu" role="menu">
-                    <a href="{$spec}"     class="apex-export-item" download="openapi.json">OpenAPI JSON</a>
-                    <a href="{$yaml}"     class="apex-export-item" download="openapi.yaml">OpenAPI YAML</a>
-                    <div class="apex-export-divider"></div>
-                    <a href="{$postman}"  class="apex-export-item" download="postman-collection.json">Postman v2.1</a>
-                    <a href="{$insomnia}" class="apex-export-item" download="insomnia.json">Insomnia</a>
-                    <a href="{$bruno}"    class="apex-export-item" download="bruno-collection.json">Bruno</a>
+                    {$exports}
                 </div>
             </div>
+            <button class="apex-icon-btn" id="apex-more-btn" type="button" aria-haspopup="menu" aria-expanded="false" title="More" aria-label="More actions">⋯</button>
+            <dialog id="apex-more" aria-label="More actions">
+                <div class="apex-more-box">
+                    <button class="apex-more-item apex-more-md" type="button" data-more="theme">{$moonIcon}<span>Toggle theme</span></button>
+                    <button class="apex-more-item apex-more-md" type="button" data-more="env">{$srvIcon}<span>Server environment</span></button>
+                    <button class="apex-more-item apex-more-md" type="button" data-more="kbd">{$kbdIcon}<span>Keyboard shortcuts</span></button>
+                    <button class="apex-more-item" type="button" data-more="copy" data-url={$specJs}>{$copyIcon}<span>Copy spec URL</span></button>
+                    <div class="apex-export-divider"></div>
+                    {$moreExp}
+                </div>
+            </dialog>
         </div>
+        HTML;
+    }
+
+    /**
+     * The five download links, shared by the Export dropdown and the `⋯` menu so
+     * the two lists cannot drift apart.
+     */
+    private function exportLinks(
+        string $spec,
+        string $yaml,
+        string $postman,
+        string $insomnia,
+        string $bruno,
+        string $class,
+    ): string {
+        return <<<HTML
+        <a href="{$spec}"     class="{$class}" download="openapi.json">OpenAPI JSON</a>
+                    <a href="{$yaml}"     class="{$class}" download="openapi.yaml">OpenAPI YAML</a>
+                    <div class="apex-export-divider"></div>
+                    <a href="{$postman}"  class="{$class}" download="postman-collection.json">Postman v2.1</a>
+                    <a href="{$insomnia}" class="{$class}" download="insomnia.json">Insomnia</a>
+                    <a href="{$bruno}"    class="{$class}" download="bruno-collection.json">Bruno</a>
         HTML;
     }
 
@@ -240,7 +313,8 @@ final class UiRenderer
                         <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                     </svg>
                     <input id="apex-palette-input" type="search" placeholder="Search endpoints, schemas…" autocomplete="off" spellcheck="false">
-                    <kbd class="apex-kbd" onclick="apexPaletteClose()">Esc</kbd>
+                    <kbd class="apex-kbd" aria-hidden="true">Esc</kbd>
+                    <button id="apex-palette-close" type="button" onclick="apexPaletteClose()" aria-label="Close search">✕</button>
                 </div>
                 <div id="apex-palette-results"></div>
                 <div id="apex-palette-footer">
@@ -253,61 +327,47 @@ final class UiRenderer
         HTML;
     }
 
-    // ── UI content ────────────────────────────────────────────────────────────
-
-    private function uiContent(string $ui, string $specUrl, string $specJs, string $cfgJs, Config $config): string
-    {
-        return match ($ui) {
-            'scalar'    => $this->scalar($specUrl),
-            'swagger'   => $this->swagger($specUrl),
-            'redoc'     => $this->redoc($specUrl),
-            'stoplight' => $this->stoplight($specUrl),
-            'rapidoc'   => $this->rapidoc($specUrl),
-            default     => $this->apexNativeUi($specJs),
-        };
-    }
-
     // ── Native Apex UI ────────────────────────────────────────────────────────
 
-    private function apexNativeUi(string $specJs): string
+    private function apexNativeUi(): string
     {
         return <<<HTML
         <div id="axui">
-            <aside id="axui-sidebar">
+            <nav id="axui-sidebar" aria-label="API reference">
                 <div id="axui-sidebar-search">
                     <div class="axui-search-inner">
-                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" class="axui-search-icon">
+                        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" class="axui-search-icon" aria-hidden="true">
                             <circle cx="6.5" cy="6.5" r="4.5" stroke="currentColor" stroke-width="1.5"/>
                             <path d="M10 10L14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                         </svg>
+                        <label class="ax-sr-only" for="axui-filter">Filter endpoints</label>
                         <input id="axui-filter" type="search" placeholder="Filter endpoints…" autocomplete="off">
-                        <kbd class="apex-kbd" style="font-size:9px;opacity:.35;pointer-events:none">/</kbd>
+                        <kbd class="apex-kbd apex-kbd-slash" aria-hidden="true">/</kbd>
                     </div>
+                    <button id="axui-nav-close" class="apex-icon-btn" onclick="axSidebarClose()" type="button" aria-label="Close navigation">✕</button>
+                    <p id="axui-filter-count" class="ax-sr-only" role="status"></p>
                 </div>
                 <div id="axui-sidebar-body">
                     <div class="axui-loading-state">
-                        <div class="axui-spinner"></div>
+                        <div class="axui-spinner" aria-hidden="true"></div>
                         <span>Loading spec…</span>
                     </div>
                 </div>
                 <div id="axui-sidebar-footer"></div>
-            </aside>
-            <div id="axui-content">
+            </nav>
+            <main id="axui-content" tabindex="-1">
+                <div id="ax-ctx" hidden></div>
                 <div id="axui-content-inner">
-                    <div id="axui-welcome"></div>
+                    <article id="axui-doc" aria-busy="true"></article>
+                    <div id="axui-panel-slot">
+                        <aside id="axui-panel" aria-labelledby="ax-panel-h" data-mode="tabs">
+                            <h2 id="ax-panel-h" class="ax-panel-h">Request console</h2>
+                            <div id="axui-panel-inner"></div>
+                        </aside>
+                    </div>
                 </div>
-            </div>
-            <aside id="axui-panel">
-                <div id="axui-panel-inner"></div>
-            </aside>
+            </main>
         </div>
-        <div id="axui-env-popover" hidden>
-            <div class="axui-env-title">Server Environment</div>
-            <div id="axui-env-list"></div>
-        </div>
-        <button id="axui-sb-toggle" class="apex-icon-btn" aria-label="Toggle sidebar" onclick="axSidebarToggle()" type="button">
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="none"><path d="M2 4h12M2 8h12M2 12h12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-        </button>
         <div id="axui-sb-backdrop" onclick="axSidebarClose()"></div>
         <div id="ax-shortcuts" role="dialog" aria-modal="true" aria-label="Keyboard shortcuts" hidden>
             <div class="ax-sc-backdrop" onclick="axShortcutsClose()"></div>
@@ -320,7 +380,6 @@ final class UiRenderer
                     <div class="ax-sc-row"><kbd>g</kbd><span>Back to overview</span></div>
                     <div class="ax-sc-row"><kbd>t</kbd><span>Toggle theme</span></div>
                     <div class="ax-sc-row"><kbd>c</kbd><span>Copy current code sample</span></div>
-                    <div class="ax-sc-row"><kbd>1</kbd>…<kbd>6</kbd><span>Switch UI backend</span></div>
                     <div class="ax-sc-row"><kbd>?</kbd><span>Show this dialog</span></div>
                     <div class="ax-sc-row"><kbd>Esc</kbd><span>Close any overlay</span></div>
                 </div>
@@ -329,174 +388,114 @@ final class UiRenderer
         HTML;
     }
 
-    // ── Third-party UIs ───────────────────────────────────────────────────────
-
-    private function scalar(string $specUrl): string
-    {
-        return <<<HTML
-        <script
-            id="api-reference"
-            data-url="{$specUrl}"
-            data-configuration='{"theme":"purple","darkMode":true,"layout":"modern","showSidebar":true,"searchHotKey":"k","hideModels":false,"hideDownloadButton":false,"defaultHttpClient":{"targetKey":"javascript","clientKey":"fetch"}}'
-        ></script>
-        <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
-        HTML;
-    }
-
-    private function swagger(string $specUrl): string
-    {
-        return <<<HTML
-        <div id="swagger-ui" style="height:100%;overflow:auto"></div>
-        <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css">
-        <style>
-            .swagger-ui{font-family:inherit!important}.swagger-ui .topbar{display:none}
-            body .swagger-ui,.swagger-ui .wrapper{background:#0a0a0c}
-            .swagger-ui .info .title,.swagger-ui .opblock .opblock-summary-path{color:#f4f4f5}
-            .swagger-ui .scheme-container{background:#111116;box-shadow:none;border:1px solid rgba(255,255,255,.06)}
-            .swagger-ui select,.swagger-ui input{background:#1a1a22;color:#f4f4f5;border-color:rgba(255,255,255,.1)}
-            .swagger-ui .model-box,.swagger-ui section.models{background:#111116}
-        </style>
-        <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-        <script>
-        SwaggerUIBundle({url:"{$specUrl}",dom_id:'#swagger-ui',deepLinking:true,
-            presets:[SwaggerUIBundle.presets.apis,SwaggerUIBundle.SwaggerUIStandalonePreset],
-            layout:'BaseLayout',tryItOutEnabled:true,persistAuthorization:true,
-            displayRequestDuration:true,filter:true,syntaxHighlight:{theme:'agate'},
-            defaultModelsExpandDepth:1,defaultModelExpandDepth:3});
-        </script>
-        HTML;
-    }
-
-    private function redoc(string $specUrl): string
-    {
-        $theme = json_encode([
-            'colors' => ['primary' => ['main' => '#6366f1'],'text' => ['primary' => '#f4f4f5','secondary' => '#a1a1aa']],
-            'typography' => ['fontSize' => '14px','fontFamily' => "-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif",'code' => ['fontSize' => '13px','fontFamily' => "'JetBrains Mono',monospace",'backgroundColor' => 'rgba(255,255,255,0.05)']],
-            'sidebar' => ['backgroundColor' => '#0c0c10','textColor' => '#a1a1aa','activeTextColor' => '#f4f4f5','arrow' => ['size' => '1.4em','color' => '#52525b']],
-            'rightPanel' => ['backgroundColor' => '#111116'],
-            'codeBlock' => ['backgroundColor' => '#0f0f14'],
-            'shape' => ['borderRadius' => '6px'],
-        ]);
-
-        return <<<HTML
-        <div id="redoc-container" style="height:100%;overflow:auto"></div>
-        <script src="https://cdn.redoc.ly/redoc/latest/bundles/redoc.standalone.js"></script>
-        <script>
-        Redoc.init("{$specUrl}",{theme:{$theme},hideDownloadButton:false,disableSearch:false,
-            expandDefaultServerVariables:true,showExtensions:true},
-            document.getElementById('redoc-container'));
-        </script>
-        HTML;
-    }
-
-    private function stoplight(string $specUrl): string
-    {
-        return <<<HTML
-        <link rel="stylesheet" href="https://unpkg.com/@stoplight/elements/styles.min.css">
-        <script src="https://unpkg.com/@stoplight/elements/web-components.min.js"></script>
-        <style>elements-api{--color-primary:#6366f1;--color-canvas-100:#0a0a0c}</style>
-        <elements-api apiDescriptionUrl="{$specUrl}" router="hash" layout="sidebar"
-            style="display:block;height:100%;overflow:auto"></elements-api>
-        HTML;
-    }
-
-    private function rapidoc(string $specUrl): string
-    {
-        return <<<HTML
-        <script type="module" src="https://unpkg.com/rapidoc/dist/rapidoc-min.js"></script>
-        <rapi-doc spec-url="{$specUrl}" theme="dark" bg-color="#0a0a0c" text-color="#f4f4f5"
-            primary-color="#6366f1" nav-bg-color="#0c0c10" nav-text-color="#a1a1aa"
-            nav-hover-bg-color="#1a1a22" nav-hover-text-color="#f4f4f5" nav-accent-color="#6366f1"
-            header-color="#0c0c10" render-style="read" show-header="false" show-info="true"
-            show-components="true" allow-authentication="true" allow-server-selection="true"
-            default-schema-tab="schema" font-size="default"
-            style="width:100%;height:100%;display:block"></rapi-doc>
-        HTML;
-    }
-
     // ── CSS ───────────────────────────────────────────────────────────────────
 
+    /**
+     * The stylesheet, in one method per area of the page. The parts are literal
+     * slices of what used to be a single 520-line heredoc, and the cascade still
+     * depends on their order: a rule can only be overridden by a rule in a later
+     * part. Keep the concatenation below in this sequence.
+     */
     private function css(): string
     {
+        // The palette lives in Theme so both modes define the same token set and
+        // the system-preference fallback cannot drift from the explicit choice.
+        $palette = Theme::css();
+
+        return implode("\n", [
+            $palette,
+            $this->cssShell(),
+            $this->cssNav(),
+            $this->cssDoc(),
+            $this->cssSchema(),
+            $this->cssPanel(),
+            $this->cssResponsive(),
+        ]);
+    }
+
+    /**
+     * Reset, progress bar, announcement banner, toolbar and its export menu,
+     * command palette, HTTP method badges.
+     */
+    private function cssShell(): string
+    {
         return <<<'CSS'
-        /* ── Reset & variables ── */
+        /* ── Z-INDEX LADDER — the only place these numbers are decided ──
+           400  #apex-progress
+           1000 #apex-bar
+           1150 #axui-sb-backdrop
+           1200 #axui-sidebar (drawer)
+           1400 toolbar popovers: .apex-export-menu, #axui-env-popover
+           1500 #apex-toast
+           1600 overlays that still hand-roll their own backdrop
+                (#apex-palette, #ax-shortcuts, .ax-skip) — WS3 replaces these
+                with <dialog>, whose top layer sits above everything anyway.
+           Inside #axui-content there is a second, local sticky stack, topped by
+           #ax-ctx at 6. Nothing there may exceed 9. */
+
+        /* ── Reset ── */
         *{box-sizing:border-box;margin:0;padding:0}
-        :root{
-            --bg:#0a0a0c;--bar-bg:rgba(10,10,14,0.93);--border:rgba(255,255,255,0.07);
-            --border-s:rgba(255,255,255,0.12);--accent:#6366f1;--accent2:#a855f7;
-            --t1:#f4f4f5;--t2:#a1a1aa;--t3:#52525b;
-            --s1:rgba(255,255,255,0.04);--s2:rgba(255,255,255,0.07);--s3:rgba(255,255,255,0.11);
-            --green:#4ade80;--blue:#60a5fa;--amber:#fbbf24;--red:#f87171;--purple:#a78bfa;
-            --r:8px;--bar-h:56px;
-            --m-get:rgba(59,130,246,.14);--m-get-c:#60a5fa;
-            --m-post:rgba(34,197,94,.13);--m-post-c:#4ade80;
-            --m-put:rgba(245,158,11,.13);--m-put-c:#fbbf24;
-            --m-patch:rgba(139,92,246,.13);--m-patch-c:#a78bfa;
-            --m-delete:rgba(239,68,68,.13);--m-delete-c:#f87171;
-            --m-head:rgba(113,113,122,.1);--m-head-c:#a1a1aa;
-        }
-        [data-theme="light"]{
-            --bg:#f8f8fc;--bar-bg:rgba(248,248,252,0.93);--border:rgba(0,0,0,0.08);
-            --border-s:rgba(0,0,0,0.14);--t1:#0f0f14;--t2:#52525b;--t3:#a1a1aa;
-            --s1:rgba(0,0,0,0.04);--s2:rgba(0,0,0,0.07);--s3:rgba(0,0,0,0.1);
-        }
-        @media(prefers-color-scheme:light){
-            :root:not([data-theme]){
-                --bg:#f8f8fc;--bar-bg:rgba(248,248,252,0.93);--border:rgba(0,0,0,0.08);
-                --border-s:rgba(0,0,0,0.14);--t1:#0f0f14;--t2:#52525b;--t3:#a1a1aa;
-                --s1:rgba(0,0,0,0.04);--s2:rgba(0,0,0,0.07);--s3:rgba(0,0,0,0.1);
-            }
-        }
-        html,body{height:100%;overflow:hidden;background:var(--bg)}
-        body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Inter',sans-serif;-webkit-font-smoothing:antialiased;color:var(--t1)}
+        html{background:var(--bg)}
+        body{min-height:100dvh;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Inter',sans-serif;-webkit-font-smoothing:antialiased;color:var(--t1)}
+
+        /* Visually hidden but announced — labels, live regions, glyph names. */
+        .ax-sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+
+        /* ── Skip link ── */
+        .ax-skip{position:fixed;top:8px;left:8px;z-index:1600;padding:10px 14px;border-radius:var(--r);background:var(--elev);border:1px solid var(--border-s);color:var(--t1);font-size:13px;text-decoration:none;transform:translateY(calc(-100% - 12px));transition:transform .15s}
+        .ax-skip:focus{transform:none}
 
         /* ── Loading bar ── */
-        #apex-progress{position:fixed;top:0;left:0;right:0;height:2px;z-index:9999;overflow:hidden}
+        #apex-progress{position:fixed;top:0;left:0;right:0;height:2px;z-index:400;overflow:hidden}
         #apex-progress-bar{height:100%;background:linear-gradient(90deg,#6366f1,#8b5cf6,#a855f7,#ec4899,#f59e0b,#6366f1);background-size:300% 100%;animation:apex-shimmer 1.8s linear infinite}
         @keyframes apex-shimmer{0%{background-position:100% 0}100%{background-position:-200% 0}}
 
-        /* ── Announcement banner ── */
+        /* ── Announcement banner ──
+           min-height, never height: the message is author-supplied and wraps on
+           a phone. It is grid row 1, so its real height is what pushes the rest
+           of the page down — and removing the node collapses the row. */
         #apex-banner{
-            display:flex;align-items:center;gap:10px;padding:0 20px;height:40px;
-            font-size:13px;font-weight:500;position:sticky;top:0;z-index:999;
+            display:flex;align-items:center;gap:10px;padding:9px 16px;min-height:40px;
+            font-size:13px;font-weight:500;
         }
-        #apex-banner[data-type="info"]{background:rgba(99,102,241,.15);border-bottom:1px solid rgba(99,102,241,.3);color:#a5b4fc}
-        #apex-banner[data-type="warning"]{background:rgba(245,158,11,.15);border-bottom:1px solid rgba(245,158,11,.3);color:#fbbf24}
-        #apex-banner[data-type="error"]{background:rgba(239,68,68,.15);border-bottom:1px solid rgba(239,68,68,.3);color:#f87171}
-        .apex-banner-msg{flex:1}
-        .apex-banner-close{background:none;border:none;cursor:pointer;color:inherit;opacity:.6;font-size:14px;padding:4px;border-radius:4px;transition:opacity .15s}.apex-banner-close:hover{opacity:1}
+        #apex-banner[data-type="info"]{background:var(--accent-soft);border-bottom:1px solid var(--accent-soft-b);color:var(--accent-t)}
+        #apex-banner[data-type="warning"]{background:var(--amber-soft);border-bottom:1px solid var(--amber-b);color:var(--amber-t)}
+        #apex-banner[data-type="error"]{background:var(--red-soft);border-bottom:1px solid var(--red-b);color:var(--red-t)}
+        .apex-banner-msg{flex:1;min-width:0}
+        .apex-banner-close{background:none;border:none;cursor:pointer;color:inherit;opacity:.6;font-size:14px;padding:4px;border-radius:4px;transition:opacity .15s;flex-shrink:0}.apex-banner-close:hover{opacity:1}
 
-        /* ── Toolbar ── */
+        /* ── Toolbar ──
+           `--bar-bg` is 93% opaque, so the backdrop-filter this rule used to
+           carry bought a blur nobody could see at the cost of a compositing
+           layer that repaints on every sticky scroll frame on iOS. */
         #apex-bar{
-            position:sticky;top:0;left:0;right:0;z-index:1000;height:var(--bar-h);
-            display:flex;align-items:center;gap:0;padding:0 16px;
-            background:var(--bar-bg);backdrop-filter:blur(24px) saturate(1.8);
-            -webkit-backdrop-filter:blur(24px) saturate(1.8);border-bottom:1px solid var(--border)
+            position:sticky;top:0;z-index:1000;height:var(--bar-h);
+            display:flex;align-items:center;gap:2px;padding:0 12px;
+            background:var(--bar-bg);border-bottom:1px solid var(--border)
         }
         #apex-bar::after{content:'';position:absolute;bottom:-1px;left:0;right:0;height:1px;
-            background:linear-gradient(90deg,transparent,rgba(99,102,241,.5) 25%,rgba(168,85,247,.5) 75%,transparent);
+            background:linear-gradient(90deg,transparent,var(--accent) 25%,var(--accent2) 75%,transparent);opacity:.55;
             pointer-events:none}
 
-        /* Brand */
-        .apex-left{display:flex;align-items:center;gap:9px;flex-shrink:0;min-width:0}
+        /* Brand — `.apex-left` is the flexible half so the fixed-width action
+           cluster on the right can never be pushed off the viewport. */
+        .apex-left{display:flex;align-items:center;gap:9px;flex:1 1 auto;min-width:0;overflow:hidden}
         .apex-brand{display:flex;align-items:center;gap:7px;text-decoration:none;flex-shrink:0;padding:4px 6px;border-radius:var(--r);transition:background .15s}
         .apex-brand:hover{background:var(--s1)}
-        .apex-brand-text{font-size:13.5px;font-weight:700;letter-spacing:-.025em;background:linear-gradient(135deg,#a5b4fc,#c4b5fd,#f0abfc);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
+        .apex-brand-text{font-size:13.5px;font-weight:700;letter-spacing:-.025em;background:linear-gradient(135deg,var(--brand-1),var(--brand-2),var(--brand-3));-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;white-space:nowrap}
         .apex-custom-logo{height:22px;width:auto;border-radius:4px}
         .apex-vdiv{width:1px;height:18px;background:var(--border);flex-shrink:0;margin:0 2px}
-        .apex-api-title{font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-        .apex-version{font-size:10.5px;font-weight:600;letter-spacing:.02em;padding:2px 8px;border-radius:999px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.28);color:#a5b4fc;white-space:nowrap;flex-shrink:0}
+        .apex-api-title{display:none;font-size:13px;font-weight:500;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+        .apex-version{display:none;font-size:10.5px;font-weight:600;letter-spacing:.02em;padding:2px 8px;border-radius:999px;background:var(--accent-soft);border:1px solid var(--accent-soft-b);color:var(--accent-t);white-space:nowrap;flex-shrink:0}
+        /* `.apex-a-md` / `.apex-a-lg` are hidden at the TOP of cssResponsive(),
+           not here: the rules below set `display` on the very same elements at
+           equal specificity, so a hide declared here would lose to whichever of
+           them is authored last. */
 
-        /* Tabs */
-        .apex-tabs-wrap{flex:1;display:flex;justify-content:center;align-items:center;padding:0 10px;min-width:0}
-        .apex-tabs{position:relative;display:inline-flex;align-items:center;gap:1px;background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:4px}
-        .apex-tab-bg{position:absolute;border-radius:7px;background:linear-gradient(135deg,#6366f1,#8b5cf6);box-shadow:0 0 18px rgba(99,102,241,.4),inset 0 1px 0 rgba(255,255,255,.12);transition:left .22s cubic-bezier(.34,1.4,.64,1),width .22s cubic-bezier(.34,1.4,.64,1);pointer-events:none;top:4px;bottom:4px;opacity:0}
-        .apex-tabs:has(.apex-tab.active) .apex-tab-bg{opacity:1}
-        .apex-tab{position:relative;z-index:1;padding:5px 13px;border-radius:7px;font-size:12px;font-weight:500;color:var(--t2);text-decoration:none;transition:color .15s;white-space:nowrap;user-select:none}
-        .apex-tab.active{color:#fff}.apex-tab:not(.active):hover{color:var(--t1)}
-
-        /* Right actions */
-        .apex-right{display:flex;align-items:center;gap:4px;flex-shrink:0}
+        /* Right actions. `align-self:stretch` is what lets a child stretch to the
+           full bar height and anchor a popover to the bar's bottom edge; the
+           buttons stay centred on `align-items:center`. */
+        .apex-right{display:flex;align-items:center;align-self:stretch;gap:4px;flex-shrink:0;margin-left:auto}
         .apex-icon-btn{display:flex;align-items:center;justify-content:center;gap:4px;width:32px;height:32px;border-radius:var(--r);background:transparent;border:1px solid transparent;color:var(--t2);cursor:pointer;transition:all .15s;flex-shrink:0}
         .apex-icon-btn:hover{color:var(--t1);background:var(--s1);border-color:var(--border)}
         .apex-icon-btn .apex-icon-check{display:none;color:var(--green)}
@@ -514,50 +513,100 @@ final class UiRenderer
         .apex-export-trigger:hover{color:var(--t1);background:var(--s2);border-color:var(--border-s)}
         .apex-chevron{font-size:10px;transition:transform .15s}
         .apex-export-wrap.open .apex-chevron{transform:rotate(180deg)}
-        .apex-export-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:160px;background:var(--bar-bg);border:1px solid var(--border-s);border-radius:10px;padding:4px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(16px);opacity:0;transform:translateY(-6px) scale(.97);pointer-events:none;transition:opacity .15s,transform .15s;z-index:1100}
+        .apex-export-menu{position:absolute;right:0;top:calc(100% + 6px);min-width:160px;max-width:min(240px,calc(100vw - 24px));background:var(--elev);border:1px solid var(--border-s);border-radius:10px;padding:4px;box-shadow:var(--shadow-1);opacity:0;transform:translateY(-6px) scale(.97);pointer-events:none;transition:opacity .15s,transform .15s;z-index:1400}
         .apex-export-wrap.open .apex-export-menu{opacity:1;transform:none;pointer-events:all}
         .apex-export-item{display:block;padding:7px 12px;border-radius:6px;font-size:12.5px;color:var(--t2);text-decoration:none;transition:all .12s}
         .apex-export-item:hover{color:var(--t1);background:var(--s2)}
         .apex-export-divider{height:1px;background:var(--border);margin:4px 0}
 
-        /* ── Command Palette ── */
-        #apex-palette{position:fixed;inset:0;z-index:9000;display:flex;align-items:flex-start;justify-content:center;padding-top:80px}
+        /* ── Overflow (⋯) menu ──
+           Holds whatever the current width hides from the bar. A <dialog> so the
+           focus trap, Escape and the backdrop come from the platform.
+           A <dialog> is in the top layer, outside the grid, so it cannot see
+           where the banner pushed the toolbar: `--anchor-y` is the toolbar's
+           measured bottom edge, written once per open. A static offset from the
+           viewport origin painted the sheet over the bar whenever a banner was
+           present. `display:flex` needs the :not([open]) guard — an id-level
+           `display` would otherwise beat the UA rule that hides a shut
+           dialog. */
+        #apex-more{border:none;padding:var(--anchor-y,64px) 8px 8px;background:none;max-width:none;max-height:none;width:100%;height:100%;color:inherit;display:flex;align-items:flex-start;justify-content:flex-end}
+        #apex-more:not([open]){display:none}
+        #apex-more::backdrop{background:var(--backdrop)}
+        .apex-more-box{width:100%;max-width:320px;max-height:100%;overflow-y:auto;background:var(--elev);border:1px solid var(--border-s);border-radius:12px;padding:6px;box-shadow:var(--shadow-2)}
+        .apex-more-item{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:8px;background:none;border:none;color:var(--t2);font-family:inherit;font-size:13px;text-align:left;text-decoration:none;cursor:pointer;transition:background .12s}
+        .apex-more-item:hover{background:var(--s2);color:var(--t1)}
+        .apex-more-item svg{flex-shrink:0}
+
+        /* ── Environment popover ──
+           `align-self:stretch` makes the wrapper the full height of the bar, so
+           the >=600px `top:calc(100% + 6px)` lands 6px under the bar's bottom
+           edge wherever the banner has pushed the bar to. Below 600px the
+           trigger lives in the `⋯` menu, so the list is a bottom sheet instead
+           of a popover anchored to a button that is not on screen. */
+        .apex-env-wrap{position:relative;display:flex;align-items:center;align-self:stretch}
+        #axui-env-popover{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));background:var(--elev);border:1px solid var(--border-s);border-radius:10px;padding:8px;box-shadow:var(--shadow-1);max-height:60dvh;overflow-y:auto;z-index:1400}
+        #axui-env-popover[hidden]{display:none}
+
+        /* ── Command Palette ──
+           Sized in dvh and laid out as a flex column: the on-screen keyboard
+           shrinks the results list instead of pushing the input off a page that
+           cannot scroll. */
+        #apex-palette{position:fixed;inset:0;z-index:1600;display:flex;align-items:flex-start;justify-content:center;padding:max(8vh,40px) 12px 12px}
         #apex-palette[hidden]{display:none}
-        #apex-palette-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);backdrop-filter:blur(4px)}
-        #apex-palette-box{position:relative;width:100%;max-width:580px;background:var(--bar-bg);border:1px solid var(--border-s);border-radius:14px;box-shadow:0 24px 64px rgba(0,0,0,.5);overflow:hidden;backdrop-filter:blur(20px)}
-        #apex-palette-search-wrap{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--border)}
+        #apex-palette-backdrop{position:fixed;inset:0;background:var(--backdrop)}
+        #apex-palette-box{position:relative;display:flex;flex-direction:column;width:100%;max-width:580px;max-height:calc(100dvh - max(8vh,40px) - 12px);background:var(--elev);border:1px solid var(--border-s);border-radius:14px;box-shadow:var(--shadow-2);overflow:hidden}
+        #apex-palette-search-wrap{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--border);flex-shrink:0}
         #apex-palette-search-icon{color:var(--t3);flex-shrink:0}
-        #apex-palette-input{flex:1;background:none;border:none;outline:none;font-size:15px;color:var(--t1);caret-color:var(--accent)}
+        #apex-palette-input{flex:1;min-width:0;background:none;border:none;outline:none;font-size:16px;color:var(--t1);caret-color:var(--accent)}
         #apex-palette-input::placeholder{color:var(--t3)}
-        #apex-palette-results{max-height:380px;overflow-y:auto;padding:6px}
-        .apex-pal-item{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:8px;cursor:pointer;text-decoration:none;transition:background .1s}
+        #apex-palette-close{display:flex;align-items:center;justify-content:center;width:44px;height:44px;margin:-6px -6px -6px 0;flex-shrink:0;background:none;border:none;border-radius:var(--r);color:var(--t3);font-size:15px;cursor:pointer}
+        #apex-palette-close:hover{background:var(--s2);color:var(--t1)}
+        #apex-palette-results{flex:1;min-height:0;max-height:none;overflow-y:auto;padding:6px}
+        .apex-pal-item{display:grid;grid-template-columns:auto minmax(0,1fr);grid-template-areas:"m path" ". sum";align-items:center;gap:2px 10px;padding:9px 10px;border-radius:8px;cursor:pointer;text-decoration:none;transition:background .1s}
         .apex-pal-item:hover,.apex-pal-item.focused{background:var(--s2)}
-        .apex-pal-item .apex-pal-path{font-size:13px;color:var(--t1);font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .apex-pal-item .apex-pal-sum{font-size:12px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
-        .apex-pal-item .apex-pal-tag{font-size:11px;color:var(--t3);flex-shrink:0}
+        .apex-pal-item .axm{grid-area:m}
+        .apex-pal-item .apex-pal-path{grid-area:path;font-size:13px;color:var(--t1);font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .apex-pal-item .apex-pal-sum{grid-area:sum;font-size:12px;color:var(--t3);max-width:none;white-space:normal}
+        .apex-pal-item .apex-pal-sum:empty{display:none}
         .apex-pal-group{padding:6px 10px 4px;font-size:11px;font-weight:600;color:var(--t3);letter-spacing:.05em;text-transform:uppercase}
         .apex-pal-empty{padding:32px;text-align:center;color:var(--t3);font-size:14px}
-        #apex-palette-footer{display:flex;gap:16px;padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--t3)}
+        #apex-palette-footer{display:none;gap:16px;padding:10px 16px;border-top:1px solid var(--border);font-size:11px;color:var(--t3);flex-shrink:0}
         #apex-palette-footer kbd{padding:1px 5px;border-radius:4px;background:var(--s2);border:1px solid var(--border);font-family:inherit;margin-right:4px}
 
         /* ── Method badges ── */
         .axm{display:inline-flex;align-items:center;justify-content:center;padding:2px 7px;border-radius:5px;font-size:10.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;flex-shrink:0;min-width:52px}
-        .axm-get{background:var(--m-get);color:var(--m-get-c);border:1px solid rgba(59,130,246,.25)}
-        .axm-post{background:var(--m-post);color:var(--m-post-c);border:1px solid rgba(34,197,94,.25)}
-        .axm-put{background:var(--m-put);color:var(--m-put-c);border:1px solid rgba(245,158,11,.25)}
-        .axm-patch{background:var(--m-patch);color:var(--m-patch-c);border:1px solid rgba(139,92,246,.25)}
-        .axm-delete{background:var(--m-delete);color:var(--m-delete-c);border:1px solid rgba(239,68,68,.25)}
-        .axm-head,.axm-options{background:var(--m-head);color:var(--m-head-c);border:1px solid rgba(113,113,122,.2)}
+        .axm-get{background:var(--m-get);color:var(--m-get-c);border:1px solid var(--m-get-b)}
+        .axm-post{background:var(--m-post);color:var(--m-post-c);border:1px solid var(--m-post-b)}
+        .axm-put{background:var(--m-put);color:var(--m-put-c);border:1px solid var(--m-put-b)}
+        .axm-patch{background:var(--m-patch);color:var(--m-patch-c);border:1px solid var(--m-patch-b)}
+        .axm-delete{background:var(--m-delete);color:var(--m-delete-c);border:1px solid var(--m-delete-b)}
+        .axm-head,.axm-options{background:var(--m-head);color:var(--m-head-c);border:1px solid var(--m-head-b)}
 
-        /* ── Native Apex UI layout ── */
-        #axui{display:flex;height:100%;overflow:hidden;background:var(--bg)}
-        #axui-sidebar{width:264px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--border);overflow:hidden;background:var(--bg)}
-        #axui-sidebar-search{padding:10px;border-bottom:1px solid var(--border);flex-shrink:0}
-        .axui-search-inner{display:flex;align-items:center;gap:8px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:7px 10px;transition:border-color .15s}
-        .axui-search-inner:focus-within{border-color:rgba(99,102,241,.5)}
+        CSS;
+    }
+
+    /**
+     * The app shell container plus the sidebar: filter, scroller, tag groups,
+     * endpoint rows and the overview block.
+     */
+    private function cssNav(): string
+    {
+        return <<<'CSS'
+        /* ── App shell ──
+           One column on a phone; a grid at >=900px. Neither mode computes a
+           height: see cssResponsive(). */
+        #axui{display:block;background:var(--bg)}
+        #axui-sidebar{display:flex;flex-direction:column;min-height:0;border-right:1px solid var(--border);background:var(--bg)}
+        #axui-sidebar-search{display:flex;align-items:center;gap:6px;padding:10px;border-bottom:1px solid var(--border);flex-shrink:0}
+        .axui-search-inner{flex:1;min-width:0;display:flex;align-items:center;gap:8px;background:var(--inset);border:1px solid var(--border);border-radius:var(--r);padding:7px 10px;transition:border-color .15s}
+        .axui-search-inner:focus-within{border-color:var(--focus)}
         .axui-search-icon{color:var(--t3);flex-shrink:0}
-        #axui-filter{flex:1;background:none;border:none;outline:none;font-size:13px;color:var(--t1);caret-color:var(--accent)}
+        /* 16px, not the designed 13px: below that iOS Safari zooms the viewport
+           on focus, and this is the primary navigation control on a phone. */
+        #axui-filter{flex:1;min-width:0;background:none;border:none;outline:none;font-size:16px;color:var(--t1);caret-color:var(--accent)}
         #axui-filter::placeholder{color:var(--t3)}
+        .apex-kbd-slash{font-size:9px;opacity:.35}
+        #axui-nav-close{flex-shrink:0;font-size:15px}
         #axui-sidebar-body{flex:1;overflow-y:auto;padding:8px 0}
         #axui-sidebar-body::-webkit-scrollbar{width:4px}
         #axui-sidebar-body::-webkit-scrollbar-thumb{background:var(--s3);border-radius:4px}
@@ -568,7 +617,7 @@ final class UiRenderer
         .axg-items{display:none}.axg.open .axg-items{display:block}
         .axi{display:flex;align-items:center;gap:8px;padding:5px 12px 5px 20px;cursor:pointer;border-radius:0;transition:background .12s;position:relative}
         .axi:hover{background:var(--s1)}
-        .axi.active{background:rgba(99,102,241,.1)}
+        .axi.active{background:var(--accent-soft)}
         .axi.active::before{content:'';position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--accent)}
         .axi-path{font-size:12px;color:var(--t2);font-family:'JetBrains Mono',monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;transition:color .12s}
         .axi:hover .axi-path,.axi.active .axi-path{color:var(--t1)}
@@ -579,28 +628,54 @@ final class UiRenderer
         .axs-api-title{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:4px}
         .axs-api-desc{font-size:12px;color:var(--t2);line-height:1.5;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 
-        /* Main content */
-        #axui-content{flex:1;overflow-y:auto;min-width:0;background:var(--bg)}
+        CSS;
+    }
+
+    /**
+     * The document pane: welcome screen, operation header, sections and the
+     * parameters table.
+     */
+    private function cssDoc(): string
+    {
+        return <<<'CSS'
+        /* ── Document pane ──
+           The gutter lives on #axui-doc alone. It used to be stacked on three
+           elements at once (#axui-content, #axui-content-inner and .ax-section),
+           which left 282px of usable width on a 390px phone. */
+        #axui-content{min-width:0;background:var(--bg);scroll-padding-top:calc(var(--ctx-h) + 12px)}
         #axui-content::-webkit-scrollbar{width:4px}
         #axui-content::-webkit-scrollbar-thumb{background:var(--s3);border-radius:4px}
-        #axui-content-inner{max-width:780px;margin:0 auto;padding:28px 32px}
+        #axui-content-inner{min-width:0}
+        /* clip, not hidden: `hidden` makes the article a scroll CONTAINER, which
+           the browser is then free to scroll — focusing an off-screen cell in a
+           wide table would slide the whole article sideways, with no scrollbar
+           to undo it. `clip` clips at the same edge without creating a
+           scrollport. Anything genuinely wide gets its own `.ax-tablewrap`. */
+        #axui-doc{max-width:var(--doc-max);margin-inline:auto;padding:16px var(--gutter) 28px;overflow-x:clip}
+        [id]{scroll-margin-top:calc(var(--ctx-h) + 12px)}
 
-        /* Welcome */
-        #axui-welcome{padding:24px 0}
+        /* ── Operation context bar (filled in by the operation renderer) ──
+           Below 900px the document is the scroller and #apex-bar is sticky at
+           the viewport top, so this must pin BELOW it — `top:0` would put it
+           behind the bar, which outranks it by 994 z-index tiers. At >=900px it
+           is inside the #axui-content scrollport, whose own top already sits
+           under the bar, so the offset goes back to 0 (see cssResponsive). */
+        #ax-ctx{position:sticky;top:var(--bar-h);z-index:6;height:var(--ctx-h);display:flex;align-items:center;gap:8px;padding:0 var(--gutter);background:var(--bar-bg);border-bottom:1px solid var(--border);font-size:12px}
+        #ax-ctx[hidden]{display:none}
         .axw-title{font-size:26px;font-weight:700;letter-spacing:-.025em;color:var(--t1);margin-bottom:6px}
         .axw-meta{display:flex;align-items:center;gap:10px;margin-bottom:16px}
-        .axw-version{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.28);color:#a5b4fc}
+        .axw-version{font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--accent-soft);border:1px solid var(--accent-soft-b);color:var(--accent-t)}
         .axw-openapi{font-size:11px;color:var(--t3)}
         .axw-desc{font-size:14px;color:var(--t2);line-height:1.7;margin-bottom:24px;max-width:580px}
-        .axw-stats{display:flex;gap:12px;margin-bottom:28px;flex-wrap:wrap}
-        .axw-stat{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--s1);border:1px solid var(--border);border-radius:10px;min-width:120px}
+        .axw-stats{display:grid;grid-template-columns:1fr;gap:12px;margin-bottom:28px}
+        .axw-stat{display:flex;align-items:center;gap:8px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;min-width:0}
         .axw-stat-n{font-size:22px;font-weight:700;color:var(--t1);letter-spacing:-.02em}
         .axw-stat-l{font-size:11.5px;color:var(--t3);margin-top:1px}
         .axw-servers{margin-top:20px}
         .axw-servers-title{font-size:12px;font-weight:600;color:var(--t3);letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px}
-        .axw-server{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:var(--r);background:var(--s1);border:1px solid var(--border);margin-bottom:6px;font-size:13px;color:var(--t2);font-family:monospace}
-        .axw-server-dot{width:6px;height:6px;border-radius:999px;background:var(--green);flex-shrink:0}
-        .axw-hint{margin-top:24px;padding:16px;border-radius:var(--r);background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.2);font-size:13px;color:var(--t2);text-align:center}
+        .axw-server{display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:var(--r);background:var(--card);border:1px solid var(--border);margin-bottom:6px;font-size:13px;color:var(--t2);font-family:monospace;overflow-wrap:anywhere}
+        .axw-server-dot{width:6px;height:6px;border-radius:999px;background:var(--green-t);flex-shrink:0}
+        .axw-hint{margin-top:24px;padding:16px;border-radius:var(--r);background:var(--accent-soft);border:1px solid var(--accent-soft-b);font-size:13px;color:var(--t2);text-align:center}
 
         /* Operation detail */
         .ax-op-header{display:flex;align-items:flex-start;gap:12px;margin-bottom:20px}
@@ -613,29 +688,60 @@ final class UiRenderer
         .ax-section-title{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:10px;display:flex;align-items:center;gap:6px}
         .ax-section-title::after{content:'';flex:1;height:1px;background:var(--border)}
 
-        /* Parameters */
+        /* ── Parameters ──
+           Base is card mode: one block per parameter, the header row moved into
+           each cell's ::before. A 5-column table cannot be read at 358px, and
+           panning the whole pane sideways to reach the Description column is
+           worse than stacking. `.ax-tablewrap` is the horizontal scroller for
+           every width where it IS a table. */
+        .ax-tablewrap{overflow-x:auto}
         .ax-params{width:100%;border-collapse:collapse;font-size:13px}
         .ax-params th{text-align:left;padding:6px 12px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);border-bottom:1px solid var(--border)}
         .ax-params td{padding:8px 12px;vertical-align:top;border-bottom:1px solid var(--border);color:var(--t2)}
         .ax-params tr:last-child td{border-bottom:none}
-        .ax-param-name{color:var(--t1);font-family:monospace;font-size:12.5px}
+        .ax-params,.ax-params tbody,.ax-params tr,.ax-params td{display:block}
+        /* Still announced as a header for each cell, just not painted. */
+        .ax-params thead{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
+        .ax-params tr{padding:10px 0;border-bottom:1px solid var(--border)}
+        .ax-params tr:last-child{border-bottom:none}
+        .ax-params td{display:grid;grid-template-columns:82px minmax(0,1fr);gap:2px 8px;padding:2px 0;border-bottom:none}
+        .ax-params td::before{content:attr(data-label);color:var(--t3);font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;padding-top:2px}
+        .ax-param-name{color:var(--t1);font-family:monospace;font-size:12.5px;overflow-wrap:anywhere}
         .ax-req-badge{display:inline-flex;font-size:10px;font-weight:600;padding:1px 5px;border-radius:4px;background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2)}
         .ax-in-badge{display:inline-flex;font-size:10px;font-weight:500;padding:1px 6px;border-radius:4px;background:var(--s2);color:var(--t3)}
-        .ax-type-badge{display:inline-flex;font-size:11px;padding:1px 6px;border-radius:4px;font-family:monospace;color:#93c5fd;background:rgba(59,130,246,.1)}
+        .ax-type-badge{display:inline-flex;font-size:11px;padding:1px 6px;border-radius:4px;font-family:monospace;color:var(--blue-t);background:var(--blue-soft)}
 
+        CSS;
+    }
+
+    /** Schema tree, response accordion and the code / JSON blocks. */
+    private function cssSchema(): string
+    {
+        return <<<'CSS'
         /* Schema tree */
         .ax-schema{font-size:13px}
         .ax-schema-obj{border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
-        .ax-prop-row{display:flex;align-items:baseline;gap:8px;padding:7px 12px;border-bottom:1px solid var(--border);transition:background .1s}
+        /* A property row is a 2-column grid on a phone (expander beside the name,
+           badges and description on their own lines) and reverts to the designed
+           single flex line at >=900px. As a flex row it needs ~240px for the name
+           and badges alone, which is most of a 358px viewport. */
+        .ax-prop-row{
+            display:grid;gap:2px 8px;align-items:baseline;padding:8px 12px;
+            grid-template-columns:auto auto minmax(0,1fr);
+            grid-template-areas:"btn name type" ". badges badges" ". desc desc";
+            border-bottom:1px solid var(--border);transition:background .1s
+        }
+        .ax-prop-row>*{min-width:0}
         .ax-prop-row:last-child{border-bottom:none}
         .ax-prop-row:hover{background:var(--s1)}
-        .ax-prop-name{font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--t1);flex-shrink:0;min-width:120px}
-        .ax-prop-type{flex-shrink:0}
-        .ax-prop-req{flex-shrink:0}
-        .ax-prop-desc{color:var(--t3);font-size:12px;flex:1;margin-left:4px}
-        .ax-prop-nested{padding:0 0 0 16px;border-top:1px solid var(--border);background:var(--s1)}
+        .ax-prop-row .ax-schema-collapse-btn{grid-area:btn}
+        .ax-prop-name{grid-area:name;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--t1);overflow-wrap:anywhere}
+        .ax-prop-type{grid-area:type;justify-self:start;overflow-wrap:anywhere}
+        .ax-prop-badges{grid-area:badges;margin-left:0}
+        .ax-prop-desc{grid-area:desc;color:var(--t3);font-size:12px}
+        .ax-prop-nested{padding-left:min(var(--ind),40px);border-top:1px solid var(--border);background:var(--s1)}
         .ax-enum-wrap{display:flex;gap:4px;flex-wrap:wrap;margin-top:4px}
-        .ax-enum-val{font-size:11px;font-family:monospace;padding:1px 6px;border-radius:4px;background:var(--s2);color:var(--t2)}
+        .ax-enum-val{font-size:11px;font-family:monospace;padding:1px 6px;border-radius:4px;background:var(--s2);color:var(--t2);overflow-wrap:anywhere}
         .ax-allof-label{font-size:11px;color:var(--t3);padding:4px 12px;background:var(--s1);border-bottom:1px solid var(--border)}
 
         /* Responses */
@@ -651,30 +757,77 @@ final class UiRenderer
         .ax-resp-body:empty{display:none}
 
         /* Code / JSON */
-        pre.ax-code{background:var(--s1);border:1px solid var(--border);border-radius:var(--r);padding:14px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6;color:var(--t2)}
-        .ax-k{color:#7dd3fc}.ax-s{color:#86efac}.ax-n{color:#fca5a5}.ax-b{color:#a5b4fc}.ax-null{color:var(--t3)}.ax-p{color:var(--t3)}
+        pre.ax-code{background:var(--inset);border:1px solid var(--border);border-radius:var(--r);padding:14px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.6;color:var(--t2)}
+        .ax-k{color:var(--syn-k)}.ax-s{color:var(--syn-s)}.ax-n{color:var(--syn-n)}.ax-b{color:var(--syn-b)}.ax-null{color:var(--syn-null)}.ax-p{color:var(--syn-p)}
 
-        /* Right panel */
-        #axui-panel{width:360px;flex-shrink:0;border-left:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
-        #axui-panel-inner{flex:1;overflow-y:auto;padding:16px}
+        CSS;
+    }
+
+    /**
+     * The right panel and everything reached from it — code sample tabs, the
+     * try-it form, the response viewer, history, the bulk-JSON editor — followed
+     * by the refinements that were appended after it: sidebar footer,
+     * breadcrumbs, badges, markdown, error states and the shortcuts modal.
+     */
+    private function cssPanel(): string
+    {
+        return <<<'CSS'
+        /* ── Request console ──
+           ONE node with three presentations and no fourth: in flow below the
+           article (`tabs`), in flow as two columns (`stack`), or promoted into a
+           sticky right rail by grid placement (`rail`). It is never
+           display:none — it holds the code samples, try-it-out, the response
+           viewer, history and the schema JSON, so hiding it at any width makes
+           all of them unreachable. `data-mode` is published by axPanelMode();
+           what each mode shows is decided here, where it stays width-agnostic,
+           and the placement that promotes it to a rail is in cssResponsive(). */
+        #axui-panel{display:flex;flex-direction:column;background:var(--bg);border-top:1px solid var(--border);margin-top:12px}
+        .ax-panel-h{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);padding:14px var(--gutter) 0}
+        #axui-panel-inner{padding:8px var(--gutter) 28px}
         #axui-panel-inner::-webkit-scrollbar{width:4px}
         #axui-panel-inner::-webkit-scrollbar-thumb{background:var(--s3);border-radius:4px}
+        /* The welcome, empty and error views have no console. The node still
+           has to exist — hiding #axui-panel is what made every control inside it
+           unreachable — so instead nothing it draws survives an empty inner: no
+           heading, no divider, no top border over blank space. */
+        #axui-panel-inner:empty{display:none}
+        #axui-panel:has(#axui-panel-inner:empty){border-top-width:0;margin-top:0}
+        #axui-panel:has(#axui-panel-inner:empty)>.ax-panel-h{display:none}
+        #axui-panel-slot:has(#axui-panel-inner:empty){border-left-color:transparent}
+        /* The segmented control belongs to `tabs` mode only: `stack` and `rail`
+           show all three panes at once, so the control would switch nothing.
+           It is visible by DEFAULT and suppressed by mode — the reverse would
+           leave the only route to the Try-it and Response panes hidden if
+           axPanelMode() never ran. The panes are emitted by renderPanel(); until
+           they exist the panel stacks its sections, which is the correct narrow
+           presentation anyway. */
+        .ax-pseg{display:flex;gap:2px;padding:10px var(--gutter) 0}
+        .ax-pseg button{flex:1;padding:8px 10px;border-radius:var(--r);background:var(--s1);border:1px solid var(--border);color:var(--t2);font-family:inherit;font-size:12.5px;cursor:pointer}
+        .ax-pseg button[aria-selected="true"]{background:var(--accent-soft);border-color:var(--accent-soft-b);color:var(--accent-t)}
+        .ax-pane[hidden]{display:none}
+        #axui-panel:not([data-mode="tabs"]) .ax-pseg{display:none}
+        /* Beats `.ax-pane[hidden]` on id specificity, which is the point: outside
+           tabs mode there is no control to un-hide a pane. */
+        #axui-panel:not([data-mode="tabs"]) .ax-pane{display:block}
 
         /* Code sample tabs */
         .ax-lang-tabs{display:flex;gap:2px;margin-bottom:12px;flex-wrap:wrap}
         .ax-lang-btn{padding:4px 10px;border-radius:6px;font-size:11.5px;font-weight:500;cursor:pointer;background:transparent;border:1px solid var(--border);color:var(--t3);transition:all .12s}
         .ax-lang-btn.active,.ax-lang-btn:hover{color:var(--t1);background:var(--s2);border-color:var(--border-s)}
-        .ax-lang-btn.active{color:var(--accent);border-color:rgba(99,102,241,.4)}
+        .ax-lang-btn.active{color:var(--accent-t);border-color:var(--accent-soft-b)}
 
         /* Try-it-out form */
         .ax-try-section{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
         .ax-try-label{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:6px;display:block}
-        .ax-try-input{width:100%;padding:7px 10px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);color:var(--t1);font-size:13px;outline:none;transition:border-color .15s;font-family:inherit}
-        .ax-try-input:focus{border-color:rgba(99,102,241,.5)}
+        /* 16px on every control, dropping to the designed size only at >=900px:
+           below 16px iOS Safari zooms the viewport on focus, and there is no
+           reliable way back out of that zoom. */
+        .ax-try-input{width:100%;min-width:0;padding:8px 10px;background:var(--inset);border:1px solid var(--border);border-radius:var(--r);color:var(--t1);font-size:16px;outline:none;transition:border-color .15s;font-family:inherit}
+        .ax-try-input:focus{border-color:var(--focus)}
         .ax-try-input::placeholder{color:var(--t3)}
-        .ax-try-textarea{font-family:'JetBrains Mono',monospace;font-size:12px;resize:vertical;min-height:100px}
-        .ax-try-send{width:100%;padding:9px;border-radius:var(--r);background:var(--accent);border:none;color:#fff;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;margin-top:12px}
-        .ax-try-send:hover{background:#4f46e5;transform:translateY(-1px);box-shadow:0 4px 16px rgba(99,102,241,.35)}
+        .ax-try-textarea{font-family:'JetBrains Mono',monospace;font-size:16px;resize:vertical;min-height:100px}
+        .ax-try-send{width:100%;padding:9px;border-radius:var(--r);background:var(--accent);border:none;color:var(--accent-on);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;margin-top:12px}
+        .ax-try-send:hover{background:var(--accent-hover);transform:translateY(-1px);box-shadow:var(--glow)}
         .ax-try-send:active{transform:none;box-shadow:none}
         .ax-try-send:disabled{opacity:.5;cursor:not-allowed;transform:none}
 
@@ -692,8 +845,7 @@ final class UiRenderer
         @keyframes axspin{to{transform:rotate(360deg)}}
         .ax-empty{padding:32px 16px;text-align:center;color:var(--t3);font-size:13px}
 
-        /* Environment popover */
-        #axui-env-popover{position:absolute;top:calc(var(--bar-h) + 4px);right:80px;background:var(--bar-bg);border:1px solid var(--border-s);border-radius:10px;padding:8px;min-width:220px;box-shadow:0 16px 48px rgba(0,0,0,.35);backdrop-filter:blur(16px);z-index:1200}
+        /* Environment popover — positioning lives in cssShell() with its wrapper */
         .axui-env-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);padding:4px 8px 8px}
         .axui-env-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:13px;color:var(--t2);cursor:pointer;transition:background .12s}
         .axui-env-item:hover{background:var(--s2);color:var(--t1)}
@@ -701,9 +853,12 @@ final class UiRenderer
         .axui-env-dot{width:7px;height:7px;border-radius:999px;background:var(--border);flex-shrink:0}
         .axui-env-item.active .axui-env-dot{background:var(--accent)}
 
-        /* Toast */
-        #apex-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(8px);background:#1e1e2a;border:1px solid rgba(99,102,241,.3);color:var(--t1);font-size:13px;font-weight:500;padding:8px 18px;border-radius:999px;box-shadow:0 8px 32px rgba(0,0,0,.4);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;white-space:nowrap;z-index:9000}
-        #apex-toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+        /* Toast — deliberately a dark chip in both themes, so the label colour
+           is fixed rather than following --t1, which would go dark-on-dark.
+           Clamped to the viewport and wrapping, because the messages carry full
+           server URLs, and lifted clear of the home indicator. */
+        #apex-toast{position:fixed;bottom:calc(16px + env(safe-area-inset-bottom));left:8px;right:8px;transform:translateY(8px);background:var(--toast-bg);border:1px solid var(--accent-soft-b);color:#f4f4f5;font-size:13px;font-weight:500;padding:8px 18px;border-radius:12px;box-shadow:var(--shadow-1);opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;text-align:center;overflow-wrap:anywhere;z-index:1500}
+        #apex-toast.show{opacity:1;transform:translateY(0)}
 
         /* ── Sidebar group name ── */
         .axg-header{display:flex;align-items:center;padding:6px 12px 6px 14px;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);cursor:pointer;user-select:none;transition:color .15s;gap:5px}
@@ -718,10 +873,10 @@ final class UiRenderer
         .axf-link{color:var(--t3);text-decoration:none;transition:color .15s}.axf-link:hover{color:var(--accent)}
 
         /* ── Deprecated dot in sidebar ── */
-        .axi-depr-dot{font-size:9px;font-weight:700;padding:0 3px;border-radius:3px;background:rgba(245,158,11,.1);color:var(--amber);border:1px solid rgba(245,158,11,.25);flex-shrink:0;line-height:1.4}
+        .axi-depr-dot{font-size:9px;font-weight:700;padding:0 3px;border-radius:3px;background:var(--amber-soft);color:var(--amber-t);border:1px solid var(--amber-b);flex-shrink:0;line-height:1.4}
 
         /* ── Webhook badge ── */
-        .ax-webhook-badge{font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;background:rgba(168,85,247,.1);color:var(--purple);border:1px solid rgba(168,85,247,.25);flex-shrink:0;letter-spacing:.02em}
+        .ax-webhook-badge{font-size:9px;font-weight:700;padding:1px 4px;border-radius:3px;background:var(--purple-soft);color:var(--purple-t);border:1px solid var(--purple-b);flex-shrink:0;letter-spacing:.02em}
 
         /* ── Breadcrumb ── */
         .ax-breadcrumb{display:flex;align-items:center;gap:5px;padding:0 0 16px;font-size:12px;flex-wrap:wrap}
@@ -729,22 +884,24 @@ final class UiRenderer
         .ax-breadcrumb-link{color:var(--t2);cursor:pointer;transition:color .15s}.ax-breadcrumb-link:hover{color:var(--accent)}
         .ax-breadcrumb-sep{color:var(--t3);opacity:.5}
         .ax-breadcrumb-current{font-family:'JetBrains Mono',monospace;font-size:11px;padding:1px 5px;border-radius:4px;background:var(--s1);border:1px solid var(--border)}
-        .ax-breadcrumb-path{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t2)}
+        .ax-breadcrumb-path{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--t2);overflow-wrap:anywhere;min-width:0}
 
         /* ── Security badges ── */
         .ax-sec-badges{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
-        .ax-sec-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:5px;font-size:11.5px;font-weight:500;background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);color:var(--amber)}
-        .ax-sec-open{background:rgba(74,222,128,.07);border-color:rgba(74,222,128,.2);color:var(--green)}
+        .ax-sec-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:5px;font-size:11.5px;font-weight:500;background:var(--amber-soft);border:1px solid var(--amber-b);color:var(--amber-t);overflow-wrap:anywhere}
+        .ax-sec-open{background:var(--green-soft);border-color:var(--green-b);color:var(--green-t)}
         .ax-sec-scopes{font-size:10.5px;opacity:.7;margin-left:2px}
 
-        /* ── Permalink button ── */
-        .ax-permalink-btn{display:inline-flex;align-items:center;padding:2px;border-radius:4px;background:none;border:none;color:var(--t3);cursor:pointer;opacity:0;transition:opacity .15s,color .15s;margin-left:6px;vertical-align:middle}
-        .ax-op-path:hover .ax-permalink-btn,.ax-op-header:hover .ax-permalink-btn{opacity:1}
+        /* ── Permalink button ──
+           Visible by default. The hover-only reveal is gated behind
+           `(hover:hover) and (pointer:fine)` in cssResponsive(), because copying
+           a deep link was otherwise a mouse-only feature. */
+        .ax-permalink-btn{display:inline-flex;align-items:center;padding:2px;border-radius:4px;background:none;border:none;color:var(--t3);cursor:pointer;opacity:1;transition:opacity .15s,color .15s;margin-left:6px;vertical-align:middle}
         .ax-permalink-btn:hover{color:var(--accent)}
 
         /* ── Ext docs link ── */
-        .ax-ext-docs-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--accent);text-decoration:none;margin-bottom:16px;padding:4px 8px;border-radius:5px;background:rgba(99,102,241,.07);border:1px solid rgba(99,102,241,.15);transition:background .15s}
-        .ax-ext-docs-link:hover{background:rgba(99,102,241,.14)}
+        .ax-ext-docs-link{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--accent-t);text-decoration:none;margin-bottom:16px;padding:4px 8px;border-radius:5px;background:var(--accent-soft);border:1px solid var(--accent-soft-b);transition:background .15s}
+        .ax-ext-docs-link:hover{background:var(--s2)}
 
         /* ── Schema collapse button ── */
         .ax-schema-collapse-btn{cursor:pointer;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;border-radius:3px;background:var(--s2);color:var(--t3);font-size:8px;flex-shrink:0;border:none;transition:all .12s;vertical-align:middle}
@@ -779,8 +936,8 @@ final class UiRenderer
 
         /* ── Try-it-out auth type selector ── */
         .ax-try-auth-wrap{display:flex;gap:6px;align-items:stretch;margin-bottom:8px}
-        .ax-try-auth-type{flex:0 0 auto;padding:7px 8px;background:var(--s1);border:1px solid var(--border);border-radius:var(--r);color:var(--t2);font-size:12px;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none}
-        .ax-try-auth-type:focus{border-color:rgba(99,102,241,.5)}
+        .ax-try-auth-type{flex:0 0 auto;padding:7px 8px;background:var(--inset);border:1px solid var(--border);border-radius:var(--r);color:var(--t2);font-size:16px;outline:none;cursor:pointer;font-family:inherit;-webkit-appearance:none;appearance:none}
+        .ax-try-auth-type:focus{border-color:var(--focus)}
 
         /* ── Response headers accordion ── */
         .ax-res-headers{border-bottom:1px solid var(--border)}
@@ -791,19 +948,18 @@ final class UiRenderer
         /* ── Error state ── */
         .ax-error-state{padding:28px 16px;text-align:center}
         .ax-error-icon{font-size:28px;margin-bottom:8px;opacity:.6}
-        .ax-error-title{font-size:14px;font-weight:600;color:var(--red);margin-bottom:4px}
+        .ax-error-title{font-size:14px;font-weight:600;color:var(--red-t);margin-bottom:4px}
         .ax-error-msg{font-size:12px;color:var(--t3)}
 
         /* ── Welcome screen improvements ── */
         .axw-stat-icon{color:var(--t3);flex-shrink:0;margin-right:2px}
-        .axw-server-dot.active{background:var(--green)}
+        .axw-server-dot.active{background:var(--green-t)}
         .axw-contact-block{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px;margin-bottom:16px}
-        .axw-meta-item{font-size:12px;color:var(--t3)}
-        .axw-stats{display:flex;gap:10px;margin-bottom:24px;flex-wrap:wrap}
-        .axw-stat{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--s1);border:1px solid var(--border);border-radius:10px;flex:1;min-width:100px;transition:border-color .15s}
+        .axw-meta-item{font-size:12px;color:var(--t3);overflow-wrap:anywhere}
+        .axw-stats{gap:10px;margin-bottom:24px}
+        .axw-stat{display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--card);border:1px solid var(--border);border-radius:10px;min-width:0;transition:border-color .15s}
         .axw-stat:hover{border-color:var(--border-s)}
 
-        /* ── Responsive ── */
         /* ── Section title row with expand-toggle buttons ── */
         .ax-section-title-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px}
         .ax-expand-toggle{display:inline-flex;gap:4px}
@@ -811,42 +967,42 @@ final class UiRenderer
         .ax-expand-toggle button:hover{background:var(--s2);color:var(--t1)}
 
         /* ── Property badges ── */
-        .ax-prop-badges{display:inline-flex;flex-wrap:wrap;gap:4px;margin-left:6px}
+        .ax-prop-badges{display:inline-flex;flex-wrap:wrap;gap:4px}
         .ax-badge{font-size:9.5px;padding:1px 6px;border-radius:4px;font-weight:600;letter-spacing:.02em;line-height:1.5;border:1px solid transparent;white-space:nowrap}
-        .ax-b-req{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.3);color:#f87171}
-        .ax-b-null{background:rgba(113,113,122,.12);border-color:rgba(113,113,122,.3);color:#a1a1aa}
-        .ax-b-ro{background:rgba(96,165,250,.1);border-color:rgba(96,165,250,.25);color:#60a5fa}
-        .ax-b-wo{background:rgba(168,85,247,.1);border-color:rgba(168,85,247,.25);color:#a78bfa}
-        .ax-b-dep{background:rgba(245,158,11,.12);border-color:rgba(245,158,11,.3);color:#fbbf24}
-        .ax-b-fmt{background:rgba(99,102,241,.1);border-color:rgba(99,102,241,.25);color:#a5b4fc}
-        .ax-b-def{background:rgba(74,222,128,.08);border-color:rgba(74,222,128,.22);color:#86efac}
+        .ax-b-req{background:var(--red-soft);border-color:var(--red-b);color:var(--red-t)}
+        .ax-b-null{background:var(--neutral-soft);border-color:var(--neutral-b);color:var(--neutral-t)}
+        .ax-b-ro{background:var(--blue-soft);border-color:var(--blue-b);color:var(--blue-t)}
+        .ax-b-wo{background:var(--purple-soft);border-color:var(--purple-b);color:var(--purple-t)}
+        .ax-b-dep{background:var(--amber-soft);border-color:var(--amber-b);color:var(--amber-t)}
+        .ax-b-fmt{background:var(--accent-soft);border-color:var(--accent-soft-b);color:var(--accent-t)}
+        .ax-b-def{background:var(--green-soft);border-color:var(--green-b);color:var(--green-t)}
         .ax-b-rng{background:var(--s1);border-color:var(--border);color:var(--t2)}
-        .ax-b-pat{background:rgba(168,85,247,.08);border-color:rgba(168,85,247,.22);color:#c4b5fd;cursor:help}
+        .ax-b-pat{background:var(--purple-soft);border-color:var(--purple-b);color:var(--purple-t);cursor:help}
 
         /* ── Schemas group icon in sidebar ── */
-        .axm-schema{background:rgba(168,85,247,.12);color:#c4b5fd}
+        .axm-schema{background:var(--purple-soft);color:var(--purple-t)}
         .axi-schema .axi-path{font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px}
         .ax-used-list{display:flex;flex-direction:column;gap:4px}
-        .ax-used-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;background:var(--s1);border:1px solid var(--border);transition:background .12s,border-color .12s}
+        .ax-used-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;background:var(--card);border:1px solid var(--border);transition:background .12s,border-color .12s}
         .ax-used-item:hover{background:var(--s2);border-color:var(--border-s)}
 
         /* ── Deprecation banner ── */
-        .ax-dep-banner{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;margin:14px 0 18px;border-radius:10px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.28)}
-        .ax-dep-icon{font-size:22px;color:#fbbf24;line-height:1;flex-shrink:0}
+        .ax-dep-banner{display:flex;gap:14px;align-items:flex-start;padding:14px 16px;margin:14px 0 18px;border-radius:10px;background:var(--amber-soft);border:1px solid var(--amber-b)}
+        .ax-dep-icon{font-size:22px;color:var(--amber-t);line-height:1;flex-shrink:0}
         .ax-dep-body{flex:1;min-width:0}
-        .ax-dep-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#fbbf24;margin-bottom:4px}
+        .ax-dep-title{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--amber-t);margin-bottom:4px}
         .ax-dep-msg{font-size:13px;color:var(--t2);line-height:1.55}
         .ax-dep-sunset{font-size:12px;color:var(--t2);margin-top:8px}
-        .ax-dep-mig{display:inline-block;margin-top:6px;font-size:12px;color:#a5b4fc;text-decoration:none}
+        .ax-dep-mig{display:inline-block;margin-top:6px;font-size:12px;color:var(--accent-t);text-decoration:none}
         .ax-dep-mig:hover{text-decoration:underline}
 
         /* ── Examples switcher ── */
-        .ax-ex-block{margin-top:14px;padding:12px;background:var(--s1);border:1px solid var(--border);border-radius:8px}
+        .ax-ex-block{margin-top:14px;padding:12px;background:var(--card);border:1px solid var(--border);border-radius:8px}
         .ax-ex-title{font-size:11px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
         .ax-ex-tabs{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:10px}
         .ax-ex-tab{font-size:11.5px;padding:4px 10px;background:transparent;border:1px solid var(--border);color:var(--t2);border-radius:5px;cursor:pointer;font-family:inherit;transition:all .12s}
         .ax-ex-tab:hover{background:var(--s2)}
-        .ax-ex-tab.active{background:rgba(99,102,241,.14);border-color:rgba(99,102,241,.4);color:#a5b4fc}
+        .ax-ex-tab.active{background:var(--accent-soft);border-color:var(--accent-soft-b);color:var(--accent-t)}
         .ax-ex-desc{font-size:12px;color:var(--t2);margin-bottom:8px}
 
         /* ── Markdown block styling ── */
@@ -856,22 +1012,22 @@ final class UiRenderer
         .axw-md h4{font-size:13px;margin:10px 0 5px;font-weight:600;color:var(--t2);text-transform:uppercase;letter-spacing:.04em}
         .axw-md ul{margin:6px 0 8px 22px;padding:0;line-height:1.6}
         .axw-md li{margin:2px 0}
-        .axw-md code{font-family:'JetBrains Mono','SF Mono',monospace;font-size:.9em;padding:1px 6px;border-radius:4px;background:var(--s2);border:1px solid var(--border);color:#f0abfc}
-        .axw-md a{color:#a5b4fc;text-decoration:none;border-bottom:1px dashed rgba(165,180,252,.3)}
+        .axw-md code{font-family:'JetBrains Mono','SF Mono',monospace;font-size:.9em;padding:1px 6px;border-radius:4px;background:var(--s2);border:1px solid var(--border);color:var(--brand-3)}
+        .axw-md a{color:var(--accent-t);text-decoration:none;border-bottom:1px dashed var(--accent-soft-b)}
         .axw-md a:hover{border-bottom-style:solid}
         .axw-md strong{color:var(--t1);font-weight:600}
         .axw-md em{font-style:italic;color:var(--t1)}
-        .ax-md-pre{margin:8px 0;padding:10px 12px;background:var(--s1);border:1px solid var(--border);border-radius:6px;overflow-x:auto;font-family:'JetBrains Mono','SF Mono',monospace;font-size:12px;color:var(--t1)}
+        .ax-md-pre{margin:8px 0;padding:10px 12px;background:var(--inset);border:1px solid var(--border);border-radius:6px;overflow-x:auto;font-family:'JetBrains Mono','SF Mono',monospace;font-size:12px;color:var(--t1)}
         .ax-md-pre code{background:transparent;border:none;padding:0;color:inherit}
 
         /* ── Rich response viewer ── */
-        .ax-res-panel{border:1px solid var(--border);border-radius:8px;background:var(--s1);overflow:hidden;margin-top:10px}
+        .ax-res-panel{border:1px solid var(--border);border-radius:8px;background:var(--card);overflow:hidden;margin-top:10px}
         .ax-res-status-bar{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--border);background:var(--s2)}
         .ax-res-status{font-size:12px;font-weight:700;padding:3px 10px;border-radius:5px;letter-spacing:.02em}
-        .ax-res-s-ok{background:rgba(74,222,128,.13);color:#4ade80;border:1px solid rgba(74,222,128,.3)}
-        .ax-res-s-info{background:rgba(96,165,250,.13);color:#60a5fa;border:1px solid rgba(96,165,250,.3)}
-        .ax-res-s-warn{background:rgba(245,158,11,.13);color:#fbbf24;border:1px solid rgba(245,158,11,.3)}
-        .ax-res-s-err{background:rgba(239,68,68,.13);color:#f87171;border:1px solid rgba(239,68,68,.3)}
+        .ax-res-s-ok{background:var(--green-soft);color:var(--green-t);border:1px solid var(--green-b)}
+        .ax-res-s-info{background:var(--blue-soft);color:var(--blue-t);border:1px solid var(--blue-b)}
+        .ax-res-s-warn{background:var(--amber-soft);color:var(--amber-t);border:1px solid var(--amber-b)}
+        .ax-res-s-err{background:var(--red-soft);color:var(--red-t);border:1px solid var(--red-b)}
         .ax-res-meta{font-size:11.5px;color:var(--t3);flex:1;font-family:'JetBrains Mono','SF Mono',monospace}
         .ax-res-copy{padding:4px 10px;font-size:11px;background:transparent;border:1px solid var(--border);color:var(--t2);border-radius:5px;cursor:pointer;font-family:inherit;transition:all .12s}
         .ax-res-copy:hover{background:var(--s3);color:var(--t1)}
@@ -884,7 +1040,7 @@ final class UiRenderer
         .ax-res-pre{padding:12px;margin:0;font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;color:var(--t1)}
         .ax-res-headers-tbl{width:100%;border-collapse:collapse;font-size:11.5px}
         .ax-res-headers-tbl td{padding:6px 12px;border-bottom:1px solid var(--border);vertical-align:top;color:var(--t2);font-family:'JetBrains Mono','SF Mono',monospace}
-        .ax-res-headers-tbl td:first-child{color:var(--t1);font-weight:500;width:35%;white-space:nowrap}
+        .ax-res-headers-tbl td:first-child{color:var(--t1);font-weight:500;width:35%;overflow-wrap:anywhere}
 
         /* ── Request history ── */
         .ax-hist-section{margin-top:18px;padding-top:14px;border-top:1px solid var(--border)}
@@ -893,36 +1049,36 @@ final class UiRenderer
         .ax-hist-toggle{background:none;border:none;color:var(--t3);font-size:11px;cursor:pointer;padding:2px 6px}
         .ax-hist-list{display:flex;flex-direction:column;gap:4px}
         .ax-hist-empty{font-size:11px;color:var(--t3);padding:8px;text-align:center;font-style:italic}
-        .ax-hist-item{display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--s1);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .12s}
+        .ax-hist-item{display:flex;align-items:center;gap:10px;padding:7px 10px;background:var(--card);border:1px solid var(--border);border-radius:6px;cursor:pointer;transition:all .12s}
         .ax-hist-item:hover{background:var(--s2);border-color:var(--border-s)}
         .ax-hist-time{font-size:11px;color:var(--t2);flex:1}
         .ax-hist-ms{font-size:10.5px;color:var(--t3);font-family:'JetBrains Mono','SF Mono',monospace}
         .ax-hist-clear{margin-top:8px;width:100%;padding:5px;background:none;border:1px dashed var(--border);color:var(--t3);font-size:10.5px;border-radius:5px;cursor:pointer;transition:all .12s;font-family:inherit}
-        .ax-hist-clear:hover{background:var(--s1);color:var(--red);border-color:rgba(239,68,68,.4)}
+        .ax-hist-clear:hover{background:var(--s1);color:var(--red-t);border-color:var(--red-b)}
 
         /* ── OAuth helper button ── */
-        .ax-oauth-btn{padding:6px 12px;font-size:11px;background:rgba(99,102,241,.14);border:1px solid rgba(99,102,241,.4);color:#a5b4fc;border-radius:var(--r);cursor:pointer;font-family:inherit;font-weight:500;white-space:nowrap;transition:all .12s}
-        .ax-oauth-btn:hover{background:rgba(99,102,241,.22)}
+        .ax-oauth-btn{padding:6px 12px;font-size:11px;background:var(--accent-soft);border:1px solid var(--accent-soft-b);color:var(--accent-t);border-radius:var(--r);cursor:pointer;font-family:inherit;font-weight:500;white-space:nowrap;transition:all .12s}
+        .ax-oauth-btn:hover{background:var(--s2)}
 
         /* ── Bulk JSON edit toggle ── */
         .ax-bulk-row{display:flex;align-items:center;justify-content:space-between;margin-top:10px;margin-bottom:4px}
         .ax-bulk-row .ax-try-label{margin:0;color:var(--t3)}
         .ax-bulk-btn{font-size:10px;padding:2px 8px;background:transparent;border:1px solid var(--border);color:var(--t2);border-radius:4px;cursor:pointer;font-family:inherit;letter-spacing:.04em;text-transform:uppercase;transition:all .12s}
         .ax-bulk-btn:hover{background:var(--s2);color:var(--t1);border-color:var(--border-s)}
-        .ax-bulk-btn.active{background:rgba(99,102,241,.16);border-color:rgba(99,102,241,.45);color:#a5b4fc}
-        .ax-bulk-area{display:none;width:100%;min-height:80px;padding:8px 10px;font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px;color:var(--t1);background:var(--s1);border:1px solid var(--border);border-radius:var(--r);outline:none;resize:vertical}
-        .ax-bulk-area:focus{border-color:rgba(99,102,241,.5);background:var(--s2)}
+        .ax-bulk-btn.active{background:var(--accent-soft);border-color:var(--accent-soft-b);color:var(--accent-t)}
+        .ax-bulk-area{display:none;width:100%;min-height:80px;padding:8px 10px;font-family:'JetBrains Mono','SF Mono',monospace;font-size:16px;color:var(--t1);background:var(--inset);border:1px solid var(--border);border-radius:var(--r);outline:none;resize:vertical}
+        .ax-bulk-area:focus{border-color:var(--focus);background:var(--s2)}
         .ax-bulk-area.show{display:block}
         .ax-bulk-actions{display:flex;gap:6px;margin-top:6px;margin-bottom:8px}
         .ax-bulk-actions button{flex:1;font-size:10.5px;padding:5px 8px;background:var(--s1);border:1px solid var(--border);color:var(--t2);border-radius:5px;cursor:pointer;font-family:inherit;transition:all .12s}
         .ax-bulk-actions button:hover{background:var(--s2);color:var(--t1)}
         .ax-bulk-fields.hidden{display:none}
-        .ax-bulk-err{font-size:10.5px;color:#f87171;margin-top:4px;padding:0 2px;min-height:14px;font-family:'JetBrains Mono','SF Mono',monospace}
+        .ax-bulk-err{font-size:10.5px;color:var(--red-t);margin-top:4px;padding:0 2px;min-height:14px;font-family:'JetBrains Mono','SF Mono',monospace}
 
         /* ── Error / empty states ── */
         .ax-error-url{font-size:10.5px;color:var(--t3);font-family:'JetBrains Mono','SF Mono',monospace;margin-top:6px;word-break:break-all;padding:0 8px}
-        .ax-error-retry{margin-top:14px;padding:6px 14px;font-size:12px;background:rgba(99,102,241,.16);border:1px solid rgba(99,102,241,.4);color:#a5b4fc;border-radius:6px;cursor:pointer;font-family:inherit}
-        .ax-error-retry:hover{background:rgba(99,102,241,.26)}
+        .ax-error-retry{margin-top:14px;padding:6px 14px;font-size:12px;background:var(--accent-soft);border:1px solid var(--accent-soft-b);color:var(--accent-t);border-radius:6px;cursor:pointer;font-family:inherit}
+        .ax-error-retry:hover{background:var(--s2)}
         .ax-empty-spec{padding:36px 16px;text-align:center}
         .ax-empty-icon{font-size:38px;margin-bottom:10px;opacity:.7}
         .ax-empty-title{font-size:15px;font-weight:600;color:var(--t1);margin-bottom:4px}
@@ -930,9 +1086,9 @@ final class UiRenderer
 
         /* ── Shortcuts modal ── */
         #ax-shortcuts[hidden]{display:none}
-        #ax-shortcuts{position:fixed;inset:0;z-index:10000;display:flex;align-items:center;justify-content:center}
-        .ax-sc-backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(4px)}
-        .ax-sc-box{position:relative;width:min(440px,92vw);max-height:80vh;overflow-y:auto;background:var(--bg);border:1px solid var(--border-s);border-radius:14px;box-shadow:0 24px 70px rgba(0,0,0,.55);padding:18px 22px}
+        #ax-shortcuts{position:fixed;inset:0;z-index:1600;display:flex;align-items:center;justify-content:center;padding:12px}
+        .ax-sc-backdrop{position:absolute;inset:0;background:var(--backdrop)}
+        .ax-sc-box{position:relative;width:min(440px,100%);max-height:calc(100dvh - 24px);overflow-y:auto;background:var(--elev);border:1px solid var(--border-s);border-radius:14px;box-shadow:var(--shadow-2);padding:18px 22px}
         .ax-sc-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
         .ax-sc-header h3{font-size:14px;font-weight:600;color:var(--t1);margin:0}
         .ax-sc-close{background:none;border:none;color:var(--t3);font-size:18px;cursor:pointer;width:28px;height:28px;border-radius:6px;transition:all .12s}
@@ -942,65 +1098,250 @@ final class UiRenderer
         .ax-sc-row kbd{font-family:'JetBrains Mono','SF Mono',monospace;font-size:10.5px;padding:2px 7px;background:var(--s2);border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;color:var(--t1);min-width:18px;text-align:center}
         .ax-sc-row span{margin-left:auto;color:var(--t2)}
 
-        /* ── Mobile sidebar toggle + drawer ── */
-        #axui-sb-toggle{display:none;position:fixed;left:12px;bottom:14px;z-index:9999;width:42px;height:42px;border-radius:50%;background:var(--bar-bg);border:1px solid var(--border-s);backdrop-filter:blur(20px);box-shadow:0 8px 28px rgba(0,0,0,.4)}
-        #axui-sb-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:998}
-        .axui-sb-open #axui-sb-backdrop{display:block}
+        CSS;
+    }
 
-        /* ── Responsive overrides ── */
-        @media(max-width:1100px){
-            #axui-panel{display:none}
+    /**
+     * The nav drawer and every media query, mobile-first.
+     *
+     * The base styles in the parts above ARE the phone styles; the five width
+     * blocks here are declared in ascending order and only ever ADD. Nothing is
+     * `display:none`-ed as the viewport narrows — a control hidden at one width
+     * is reachable from another control at that width. Layout dimensions come
+     * from the tokens in Theme::STRUCTURE, so a breakpoint is a handful of token
+     * writes rather than a pile of per-selector overrides.
+     *
+     * The five queries that are NOT about width follow them, then the single
+     * `dvh` fallback.
+     */
+    private function cssResponsive(): string
+    {
+        return <<<'CSS'
+        /* ══ BASE — phones, 0–599px (design target 320–430px) ══
+           Progressive disclosure first, because it is a pure source-order
+           question: these two classes are also `.apex-icon-btn`s and
+           `.apex-env-wrap`s, which set `display` themselves at the same
+           specificity, so the hide only wins from here — after every part that
+           could set it, and before the width queries that reveal them. */
+        .apex-a-md,.apex-a-lg{display:none}
+
+        /* The document scrolls, everything is one column, and the sidebar is an
+           overlay of the same grid child it is at desktop width — no node moves.
+           `visibility:hidden` (not transform alone) is what takes the filter and
+           the endpoint rows out of the tab order and the accessibility tree
+           while the drawer is shut; axSidebarToggle() adds `inert` on top, and
+           removes it again at >=900px where this node is the static nav. */
+        #axui-sidebar{
+            position:fixed;inset:0 auto 0 0;width:min(88vw,340px);z-index:1200;
+            transform:translateX(-100%);visibility:hidden;
+            transition:transform .22s cubic-bezier(.4,0,.2,1),visibility .22s;
+            box-shadow:var(--shadow-2)
         }
-        @media(max-width:820px){
-            #axui-sidebar{width:240px}
+        /* The state class goes on <html>, which is what lets a *sibling* backdrop
+           and the scroll lock be expressed as CSS at all. The drawer starts at
+           the viewport top on purpose: any offset would have to track the sticky
+           toolbar's runtime position, and no static value is right at every
+           scroll offset. */
+        html.ax-nav-open #axui-sidebar{transform:none;visibility:visible}
+        html.ax-nav-open{overflow:hidden}
+        #axui-sb-backdrop{display:none;position:fixed;inset:0;background:var(--backdrop);z-index:1150}
+        html.ax-nav-open #axui-sb-backdrop{display:block}
+
+        /* ══ >=600px — small tablets and landscape phones ══ */
+        @media (min-width:600px){
+            :root{--gutter:24px}
+            .apex-a-md{display:flex}
+            #apex-more .apex-more-md{display:none}
+            /* Enough width for a real table again, inside its own scroller. */
+            .ax-params{display:table}
+            .ax-params thead{position:static;width:auto;height:auto;clip-path:none}
+            .ax-params tbody{display:table-row-group}
+            .ax-params tr{display:table-row;padding:0;border-bottom:none}
+            .ax-params td{display:table-cell;padding:8px 12px;border-bottom:1px solid var(--border)}
+            .ax-params td::before{content:none}
+            .axw-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+            #apex-palette-footer{display:flex}
+            #apex-palette-close{display:none}
+            /* Anchored to its trigger now that the trigger is in the bar. */
+            #axui-env-popover{position:absolute;left:auto;right:0;top:calc(100% + 6px);bottom:auto;min-width:220px;max-width:min(320px,calc(100vw - 24px))}
         }
-        @media(max-width:768px){
-            #axui-sb-toggle{display:flex;align-items:center;justify-content:center}
-            #axui-sidebar{position:fixed;left:0;top:0;bottom:0;z-index:999;width:84vw;max-width:320px;transform:translateX(-105%);transition:transform .25s cubic-bezier(.4,0,.2,1);box-shadow:0 0 40px rgba(0,0,0,.5)}
-            .axui-sb-open #axui-sidebar{transform:translateX(0)}
-            #axui-content{padding:14px 12px}
-            .ax-op-header{flex-wrap:wrap}
-            .ax-params{font-size:11.5px}
-            .ax-params th,.ax-params td{padding:6px 4px}
-            .ax-section{padding:10px}
-            .axw-stats{flex-direction:column}
-            .ax-res-headers-tbl td:first-child{width:auto}
+
+        /* ══ >=900px — THE APP-SHELL THRESHOLD ══
+           Three panes, three scrollers, and the only place a height is declared:
+           one grid row per band, so nothing can desync from its content. */
+        @media (min-width:900px){
+            :root{--gutter:32px;--ind:16px;--doc-max:820px}
+            body{display:grid;grid-template-rows:auto auto minmax(0,1fr);height:100dvh;overflow:hidden}
+            #apex-banner{grid-row:1}
+            #apex-bar{grid-row:2;position:relative;top:auto}
+            #axui{grid-row:3;display:grid;grid-template-columns:var(--nav-w) minmax(0,1fr);min-height:0}
+            #axui-content{overflow-y:auto;overscroll-behavior:contain;min-height:0}
+            /* Its scrollport already begins under the bar. */
+            #ax-ctx{top:0}
+            /* The drawer reverts to a static column and every ax-nav-open rule
+               above becomes a no-op. */
+            #axui-sidebar{position:static;width:auto;transform:none;visibility:visible;box-shadow:none;transition:none}
+            #axui-sb-backdrop,html.ax-nav-open #axui-sb-backdrop{display:none}
+            #apex-nav-btn,#axui-nav-close{display:none}
+            .apex-a-lg{display:flex}
+            .apex-api-title{display:block}
+            .apex-version{display:inline-block}
+            #axui-filter{font-size:13px}
+            .ax-try-input,.ax-try-auth-type{font-size:13px}
+            .ax-try-textarea{font-size:12px}
+            .ax-bulk-area{font-size:11.5px}
+            /* Back to the designed single-line property row. */
+            .ax-prop-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px}
+            .ax-prop-name{min-width:120px;flex-shrink:0}
+            .ax-prop-type{flex-shrink:0}
+            .ax-prop-badges{margin-left:6px}
+            .ax-prop-desc{flex:1 1 240px;min-width:0;margin-left:4px}
+            .axw-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
         }
-        @media(max-width:680px){
-            .apex-tabs-wrap{display:none}
-            #axui-sidebar{width:90vw}
+
+        /* ══ >=1024px — tablet landscape: panel mode `stack` ══
+           Still in flow under the article, but the segmented control disappears
+           (see cssPanel) and Code sits beside Try it. This is the width the old
+           stylesheet hid the whole panel at. */
+        @media (min-width:1024px){
+            /* :not(:empty) so this cannot outrank the rule that keeps the rail
+               blank on the views with no console. */
+            #axui-panel[data-mode="stack"] #axui-panel-inner:not(:empty){display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
         }
-        @media(max-width:960px){
-            .apex-api-title,.apex-version{display:none}
-            .apex-export-trigger span:not(.apex-chevron){display:none}
+
+        /* ══ >=1200px — panel mode `rail` ══
+           The panel is promoted into a sticky right column by grid placement, not
+           by revealing a hidden node. */
+        @media (min-width:1200px){
+            :root{--nav-w:264px;--rail-w:380px}
+            #axui-content-inner{display:grid;grid-template-columns:minmax(0,1fr) var(--rail-w);align-items:start}
+            #axui-doc{grid-area:1/1}
+            /* #axui-panel-slot must keep overflow:visible and align-self:stretch.
+               Give it any overflow value and it becomes the scroll container for
+               its own sticky child, which degrades the rail to static silently —
+               no error, no console warning. Guarded by a CSS regression test. */
+            #axui-panel-slot{grid-area:1/2;align-self:stretch;border-left:1px solid var(--border)}
+            /* The one height in the stylesheet that is arithmetic: a sticky child
+               pinned at the top of a scrollport must not be taller than that
+               scrollport, and no CSS unit names it. `--banner-h` is therefore
+               measured — see the shell metrics in jsCore(). */
+            #axui-panel{position:sticky;top:0;max-height:calc(100dvh - var(--bar-h) - var(--banner-h));overflow-y:auto;border-top:none;margin-top:0}
+            /* No `display` reset for #axui-panel-inner here: the two-column rule
+               is scoped to data-mode="stack", the modes are mutually exclusive,
+               and an override at this specificity would beat the :empty rule
+               that keeps the rail blank on the views with no console. */
         }
-        @media(prefers-reduced-motion:reduce){
-            *{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
+
+        /* ══ >=1560px — wide desktop ══ */
+        @media (min-width:1560px){
+            :root{--gutter:40px;--rail-w:440px;--doc-max:900px}
+        }
+
+        /* The single fallback: without dvh the shell falls back to vh, which is
+           only wrong while mobile browser chrome is animating — and mobile is
+           the one place the app-shell mode never applies. */
+        @supports not (height:100dvh){
+            body{min-height:100vh}
+            @media (min-width:900px){body{height:100vh}}
+        }
+
+        /* ══ Touch ══
+           A 44px minimum on BOTH axes of everything that is tapped: an icon
+           button is 32px wide, so min-height alone leaves a 32x44 target. The
+           two glyph-sized controls keep their glyph — the 16x16 schema expander
+           is the only way into a nested object and growing it would push a deep
+           tree off the screen; the permalink sits inside an 18px title line —
+           and gain hit-slop instead, which is 44x44 to a finger at zero cost to
+           the layout. */
+        @media (pointer:coarse){
+            .axi,.axg-header,.ax-resp-header,.ax-resp summary,.apex-icon-btn,.apex-export-trigger,
+            .ax-lang-btn,.ax-res-tab,.ax-ex-tab,.ax-resp-ct-btn,.ax-bulk-btn,.axui-env-item,
+            .apex-pal-item,.apex-banner-close,.ax-hist-item,.ax-pseg button,.ax-code-copy-btn,
+            .ax-error-retry,.apex-more-item,.ax-hist-toggle,.ax-expand-toggle button,
+            .ax-try-send{min-height:var(--tap);min-width:var(--tap)}
+            .ax-schema-collapse-btn,.ax-permalink-btn{position:relative}
+            .ax-schema-collapse-btn::after{content:'';position:absolute;inset:-14px}
+            .ax-permalink-btn{padding:8px}
+            .ax-permalink-btn::after{content:'';position:absolute;inset:-8px}
+        }
+
+        /* ══ Fine pointer with hover ══
+           The ONLY place a hover-only reveal is allowed. */
+        @media (hover:hover) and (pointer:fine){
+            .ax-permalink-btn{opacity:0}
+            .ax-op-path:hover .ax-permalink-btn,
+            .ax-op-header:hover .ax-permalink-btn,
+            .ax-permalink-btn:focus-visible{opacity:1}
+        }
+
+        /* ══ Reduced motion ══
+           Stated as intent, per animation, then a blanket net for anything added
+           later. Freezing a rotating arc at 0.01ms reads as a broken graphic, so
+           the spinner becomes a static ring rather than a stopped one. */
+        @media (prefers-reduced-motion:reduce){
+            html{scroll-behavior:auto}
+            #apex-progress-bar{animation:none;background:var(--accent)}
+            .axui-spinner{animation:none;border-color:var(--accent)}
+            .ax-skel{animation:none}
+            *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+        }
+
+        /* ══ Forced colours ══ */
+        @media (forced-colors:active){
+            .axm,.ax-badge,.ax-res-status,.ax-sec-badge,.axg-count,.axi[aria-current]{border:1px solid CanvasText;background:Canvas;color:CanvasText}
+            :focus-visible{outline:2px solid Highlight;outline-offset:2px}
+            .ax-k,.ax-s,.ax-n,.ax-b,.ax-null,.ax-p{forced-color-adjust:none}
+        }
+
+        /* ══ Print ══
+           Because the panel is in the document flow, the printed page keeps the
+           code sample and drops only the interactive form. */
+        @media print{
+            #apex-bar,#axui-sidebar,#axui-sb-backdrop,#apex-progress,#apex-toast,#ax-ctx,
+            .ax-skip,.ax-permalink-btn,.ax-pseg,.ax-try-section,.ax-hist-section{display:none!important}
+            body,#axui,#axui-content,#axui-content-inner,#axui-panel-slot,#axui-panel{
+                display:block;height:auto;max-height:none;overflow:visible;position:static
+            }
+            #axui-doc{max-width:none;padding:0}
+            .ax-section,.ax-resp{break-inside:avoid}
+            a[href^="http"]::after{content:" (" attr(href) ")"}
+            @page{margin:16mm}
         }
         CSS;
     }
 
     // ── JavaScript ────────────────────────────────────────────────────────────
 
+    /**
+     * The behaviour layer, in one method per area of the page. Every part is a
+     * fragment of a single IIFE — jsCore() opens it, jsInit() closes it — so
+     * they are only valid concatenated, in this order.
+     */
     private function js(): string
+    {
+        return implode("\n", [
+            $this->jsCore(),
+            $this->jsChrome(),
+            $this->jsNav(),
+            $this->jsIndex(),
+            $this->jsDoc(),
+            $this->jsSchema(),
+            $this->jsPanel(),
+            $this->jsInit(),
+        ]);
+    }
+
+    /**
+     * Opens the IIFE and defines the primitives the rest of the file calls:
+     * `toast`, the clipboard helpers, the progress bar, the export menu, the
+     * theme cycle, the two write targets every render path goes through, and the
+     * two shell measurements CSS cannot derive on its own.
+     */
+    private function jsCore(): string
     {
         return <<<'JS'
         (function(){
         'use strict';
-
-        /* ── Tab slider ── */
-        var bg=document.getElementById('apexTabBg'),tabsEl=document.getElementById('apexTabs');
-        if(bg&&tabsEl){
-            function moveBg(el){bg.style.left=el.offsetLeft+'px';bg.style.width=el.offsetWidth+'px';}
-            var at=tabsEl.querySelector('.apex-tab.active');
-            if(at){bg.style.transition='none';moveBg(at);requestAnimationFrame(function(){bg.style.transition=''});}
-            tabsEl.querySelectorAll('.apex-tab').forEach(function(t){
-                t.addEventListener('mouseenter',function(){moveBg(t);});
-                t.addEventListener('mouseleave',function(){var a=tabsEl.querySelector('.apex-tab.active');if(a)moveBg(a);});
-            });
-            window.addEventListener('resize',function(){var a=tabsEl.querySelector('.apex-tab.active');if(a){bg.style.transition='none';moveBg(a);requestAnimationFrame(function(){bg.style.transition=''});}});
-        }
-        /* ── NOTE: axg-header CSS override (remove old inline rule if present) ── */
 
         /* ── Loading bar ── */
         var prog=document.getElementById('apex-progress');
@@ -1030,23 +1371,96 @@ final class UiRenderer
             if(expMenu)expMenu.addEventListener('click',function(e){e.stopPropagation();});
         }
 
-        /* ── Theme toggle ── */
+        /* ── Theme ──
+           Re-themes instantly through CSS custom properties, so nothing here
+           needs to reload the page. */
         var themeBtn=document.getElementById('apexThemeBtn');
+        var prefersLight=window.matchMedia?window.matchMedia('(prefers-color-scheme: light)'):null;
         function getTheme(){return localStorage.getItem('apex-theme')||APEX_CFG.theme;}
         function applyTheme(t){
             if(t==='auto')document.documentElement.removeAttribute('data-theme');
             else document.documentElement.setAttribute('data-theme',t);
         }
         applyTheme(getTheme());
-        if(themeBtn){
-            themeBtn.addEventListener('click',function(){
-                var cur=getTheme();
-                var next=cur==='dark'?'light':cur==='light'?'auto':'dark';
-                localStorage.setItem('apex-theme',next);applyTheme(next);
-                toast('Theme: '+next);
+        if(prefersLight&&prefersLight.addEventListener){
+            prefersLight.addEventListener('change',function(){
+                if(getTheme()==='auto'){applyTheme('auto');}
             });
         }
+        /* Global, not just a click handler: with the toolbar hidden #apexThemeBtn
+           never exists, and the `t` shortcut is then the only way to switch. */
+        window.apexThemeCycle=function(){
+            var cur=getTheme();
+            var next=cur==='dark'?'light':cur==='light'?'auto':'dark';
+            localStorage.setItem('apex-theme',next);applyTheme(next);
+            toast('Theme: '+next);
+        };
+        if(themeBtn)themeBtn.addEventListener('click',apexThemeCycle);
 
+        /* ── The two write targets ──
+           #axui-doc is the only node a view may replace, and #axui-panel-inner
+           the only node the request console may replace. They are SIBLINGS, so
+           neither can destroy the other. Writing #axui-content-inner — their
+           parent — instead is what removed the console, and with it the code
+           samples, try-it-out, the response viewer, the history and the schema
+           JSON, from every viewport the moment anything was opened. */
+        function setDoc(html){
+            var doc=document.getElementById('axui-doc');if(!doc)return;
+            doc.innerHTML=html;doc.setAttribute('aria-busy','false');
+        }
+        /* Views with no console pass ''. The rail then paints nothing at all —
+           see `#axui-panel-inner:empty` in cssPanel — rather than leaving a
+           heading and a divider standing over blank space. */
+        function setPanel(html){
+            var inner=document.getElementById('axui-panel-inner');if(!inner)return;
+            inner.innerHTML=html;
+        }
+
+        /* ── Shell metrics ──
+           Everything else about the layout is decided by CSS grid and media
+           queries. These are the two facts CSS cannot state. */
+
+        /* The panel's presentation, published as an attribute so all three modes
+           stay in the stylesheet. Nothing here moves a node. */
+        var _mqStack=window.matchMedia('(min-width:1024px)'),_mqRail=window.matchMedia('(min-width:1200px)');
+        function axPanelMode(){
+            var p=document.getElementById('axui-panel');if(!p)return;
+            p.setAttribute('data-mode',_mqRail.matches?'rail':_mqStack.matches?'stack':'tabs');
+        }
+        axPanelMode();
+        if(_mqStack.addEventListener){_mqStack.addEventListener('change',axPanelMode);_mqRail.addEventListener('change',axPanelMode);}
+
+        /* The banner's height. The >=1200px sticky rail is bounded by the
+           viewport minus the two grid rows above its scrollport; --bar-h is
+           declared, but the banner carries author-supplied HTML that wraps at
+           any width, so its height can only be measured. 0px — the token's
+           default — is already correct when there is no banner. */
+        var banner=document.getElementById('apex-banner');
+        function publishBannerHeight(){
+            document.documentElement.style.setProperty('--banner-h',(banner&&banner.isConnected?banner.offsetHeight:0)+'px');
+        }
+        window.axBannerClose=function(btn){
+            var b=btn.closest('#apex-banner');if(b)b.remove();
+            publishBannerHeight();
+        };
+        if(banner){
+            publishBannerHeight();
+            if(window.ResizeObserver)new ResizeObserver(publishBannerHeight).observe(banner);
+        }
+
+        JS;
+    }
+
+    /**
+     * Chrome around the document: the environment popover (with the shared
+     * `loadSpec` / `_specCache`), the command palette, the global key handler, the
+     * shortcuts modal and the sidebar drawer — plus the shared render helpers
+     * `md`, `propBadges`, request history, auth persistence, the bulk-JSON editor
+     * and the OAuth token helper.
+     */
+    private function jsChrome(): string
+    {
+        return <<<'JS'
         /* ── Environment switcher ── */
         var envBtn=document.getElementById('apexEnvBtn'),envPop=document.getElementById('axui-env-popover');
         var _specCache=null;
@@ -1068,7 +1482,7 @@ final class UiRenderer
                     if(list){
                         list.innerHTML=servers.map(function(s,i){
                             var active=(_activeEnv===s.url||(!_activeEnv&&i===0))?' active':'';
-                            return '<div class="axui-env-item'+active+'" data-url="'+s.url+'" onclick="apexSetEnv(\''+escH(s.url)+'\')">'
+                            return '<div class="axui-env-item'+active+'" data-url="'+escH(s.url)+'" onclick="apexSetEnv(\''+escH(s.url)+'\')">'
                                 +'<span class="axui-env-dot"></span><span>'+escH(s.description||s.url)+'</span></div>';
                         }).join('');
                     }
@@ -1088,7 +1502,7 @@ final class UiRenderer
         var pal=document.getElementById('apex-palette'),palInput=document.getElementById('apex-palette-input'),palResults=document.getElementById('apex-palette-results');
         var _palIdx=document.getElementById('apex-palette-btn');
         var _ops=[];var _palFocus=0;
-        function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+        function escH(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
         function buildIndex(spec){
             _ops=[];
             var paths=spec.paths||{};
@@ -1097,7 +1511,9 @@ final class UiRenderer
                 for(var method in methods){
                     var op=methods[method];
                     if(typeof op!=='object')continue;
-                    _ops.push({method:method.toUpperCase(),path:path,summary:op.summary||'',tag:(op.tags||['General'])[0],operationId:op.operationId||''});
+                    /* `key` keeps the spec's own casing of the method: it is the
+                       fallback deep-link id navigateHash() matches against. */
+                    _ops.push({method:method.toUpperCase(),key:method+'__'+path,path:path,summary:op.summary||'',tag:(op.tags||['General'])[0],operationId:op.operationId||''});
                 }
             }
         }
@@ -1111,7 +1527,9 @@ final class UiRenderer
             for(var tag in byTag){
                 html+='<div class="apex-pal-group">'+escH(tag)+'</div>';
                 byTag[tag].forEach(function(o){
-                    html+='<a class="apex-pal-item" href="?ui=apex#op_'+escH(o.operationId||o.method+'_'+o.path)+'" data-idx="'+idx+'" onclick="apexPaletteClose()">'
+                    /* Real href so the item is copyable and focusable, but the
+                       default navigation is cancelled — see apexPaletteGo. */
+                    html+='<a class="apex-pal-item" href="#op_'+escH(o.operationId||o.key)+'" data-idx="'+idx+'" onclick="return apexPaletteGo(this)">'
                         +'<span class="axm axm-'+o.method.toLowerCase()+'">'+escH(o.method)+'</span>'
                         +'<span class="apex-pal-path">'+escH(o.path)+'</span>'
                         +'<span class="apex-pal-sum">'+escH(o.summary)+'</span>'
@@ -1129,6 +1547,13 @@ final class UiRenderer
             loadSpec(function(spec){buildIndex(spec);renderPalette('');});
         }
         window.apexPaletteClose=function(){pal.hidden=true;};
+        /* Renders in place and returns false to cancel the link: a real navigation
+           would drop a ?theme= override, which is never written to localStorage. */
+        window.apexPaletteGo=function(el){
+            apexPaletteClose();
+            if(_specCache)navigateHash(el.getAttribute('href').slice(1),_specCache);
+            return false;
+        };
         if(_palIdx)_palIdx.addEventListener('click',palOpen);
         if(palInput){
             palInput.addEventListener('input',function(){renderPalette(palInput.value);_palFocus=0;});
@@ -1145,9 +1570,9 @@ final class UiRenderer
         document.addEventListener('keydown',function(e){
             var inField=e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA'||e.target.isContentEditable||e.isComposing;
             if((e.metaKey||e.ctrlKey)&&e.key==='k'){e.preventDefault();palOpen();return;}
-            if(e.key==='Escape'){apexPaletteClose();if(window.axShortcutsClose)axShortcutsClose();if(window.axSidebarClose)axSidebarClose();return;}
+            if(e.key==='Escape'){apexPaletteClose();axShortcutsClose();axSidebarClose();return;}
             if(inField)return;
-            if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault();if(window.axShortcutsOpen)axShortcutsOpen();return;}
+            if(e.key==='?'||(e.shiftKey&&e.key==='/')){e.preventDefault();axShortcutsOpen();return;}
             if(e.key==='/'){e.preventDefault();var f=document.getElementById('axui-filter');if(f){f.focus();f.select();}return;}
             if(e.ctrlKey||e.metaKey||e.altKey)return;
             /* j / k → next / previous endpoint */
@@ -1159,993 +1584,1115 @@ final class UiRenderer
                 if(idx<0)idx=0;items[idx].click();items[idx].scrollIntoView({block:'nearest'});return;
             }
             if(e.key==='g'){if(window.axGoWelcome)axGoWelcome();return;}
-            if(e.key==='t'){var tb=document.getElementById('apexThemeBtn');if(tb)tb.click();return;}
+            if(e.key==='t'){apexThemeCycle();return;}
             if(e.key==='c'){var cb=document.querySelector('.ax-code-copy-btn');if(cb)cb.click();return;}
-            var uis=['apex','scalar','swagger','redoc','stoplight','rapidoc'];
-            var n=parseInt(e.key);if(n>=1&&n<=6){var t=document.querySelector('.apex-tab[data-ui="'+uis[n-1]+'"]');if(t)t.click();}
         });
 
         /* ── Native Apex UI ── */
-        if(APEX_CFG.activeUi==='apex'){
-            var METHODS=['get','post','put','patch','delete','head','options'];
-            var LANGS=['curl','js','python','php','go'];
-            var LANG_LABELS={curl:'cURL',js:'JavaScript',python:'Python',php:'PHP',go:'Go'};
-            var _server=localStorage.getItem('apex-env')||'';
-            var _activeOpKey=null;
-            var _activeSchemaName=null;
-            var _schemaIds=0;
-            var _expandAll=false;
+        var METHODS=['get','post','put','patch','delete','head','options'];
+        var LANGS=['curl','js','python','php','go'];
+        var LANG_LABELS={curl:'cURL',js:'JavaScript',python:'Python',php:'PHP',go:'Go'};
+        var _server=localStorage.getItem('apex-env')||'';
+        var _activeOpKey=null;
+        var _activeSchemaName=null;
+        var _schemaIds=0;
+        var _expandAll=false;
 
-            /* ── Per-spec namespaced storage ── */
-            var _ns='apex:'+(APEX_CFG.specUrl||'default').replace(/[^a-z0-9]/gi,'_');
-            function lsGet(k,d){try{var v=localStorage.getItem(_ns+':'+k);return v==null?d:v;}catch(e){return d;}}
-            function lsSet(k,v){try{localStorage.setItem(_ns+':'+k,v);}catch(e){}}
-            function lsGetJson(k,d){var v=lsGet(k,null);if(v==null)return d;try{return JSON.parse(v);}catch(e){return d;}}
-            function lsSetJson(k,v){lsSet(k,JSON.stringify(v));}
+        /* ── Per-spec namespaced storage ── */
+        var _ns='apex:'+(APEX_CFG.specUrl||'default').replace(/[^a-z0-9]/gi,'_');
+        function lsGet(k,d){try{var v=localStorage.getItem(_ns+':'+k);return v==null?d:v;}catch(e){return d;}}
+        function lsSet(k,v){try{localStorage.setItem(_ns+':'+k,v);}catch(e){}}
+        function lsGetJson(k,d){var v=lsGet(k,null);if(v==null)return d;try{return JSON.parse(v);}catch(e){return d;}}
+        function lsSetJson(k,v){lsSet(k,JSON.stringify(v));}
 
-            /* ── Minimal XSS-safe markdown renderer ── */
-            function md(s){
-                if(s==null||s==='')return '';
-                s=String(s);
-                /* Fenced code blocks first */
-                var blocks=[];
-                s=s.replace(/```([\s\S]*?)```/g,function(_,c){blocks.push(c);return ' B'+(blocks.length-1)+' ';});
-                s=escH(s);
-                /* Headings */
-                s=s.replace(/^### (.+)$/gm,'<h4>$1</h4>')
-                    .replace(/^## (.+)$/gm,'<h3>$1</h3>')
-                    .replace(/^# (.+)$/gm,'<h2>$1</h2>');
-                /* Bold / italic / inline code */
-                s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-                    .replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>')
-                    .replace(/`([^`\n]+)`/g,'<code>$1</code>');
-                /* Links — whitelist http/https/mailto */
-                s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
-                /* Unordered lists */
-                s=s.replace(/(^|\n)((?:[-*] .+\n?)+)/g,function(_,pre,list){
-                    var items=list.trim().split(/\n/).map(function(l){return '<li>'+l.replace(/^[-*] /,'')+'</li>';}).join('');
-                    return pre+'<ul>'+items+'</ul>';
-                });
-                /* Paragraphs / line breaks */
-                s=s.split(/\n{2,}/).map(function(p){
-                    if(/^<(h\d|ul|pre|blockquote)/.test(p.trim()))return p;
-                    return '<p>'+p.replace(/\n/g,'<br>')+'</p>';
-                }).join('');
-                /* Re-inject fenced blocks */
-                s=s.replace(/ B(\d+) /g,function(_,i){return '<pre class="ax-md-pre"><code>'+escH(blocks[+i])+'</code></pre>';});
-                return s;
-            }
+        /* ── Minimal XSS-safe markdown renderer ── */
+        function md(s){
+            if(s==null||s==='')return '';
+            s=String(s);
+            /* Fenced code blocks first */
+            var blocks=[];
+            s=s.replace(/```([\s\S]*?)```/g,function(_,c){blocks.push(c);return ' B'+(blocks.length-1)+' ';});
+            s=escH(s);
+            /* Headings */
+            s=s.replace(/^### (.+)$/gm,'<h4>$1</h4>')
+                .replace(/^## (.+)$/gm,'<h3>$1</h3>')
+                .replace(/^# (.+)$/gm,'<h2>$1</h2>');
+            /* Bold / italic / inline code */
+            s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+                .replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>')
+                .replace(/`([^`\n]+)`/g,'<code>$1</code>');
+            /* Links — whitelist http/https/mailto */
+            s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            /* Unordered lists */
+            s=s.replace(/(^|\n)((?:[-*] .+\n?)+)/g,function(_,pre,list){
+                var items=list.trim().split(/\n/).map(function(l){return '<li>'+l.replace(/^[-*] /,'')+'</li>';}).join('');
+                return pre+'<ul>'+items+'</ul>';
+            });
+            /* Paragraphs / line breaks */
+            s=s.split(/\n{2,}/).map(function(p){
+                if(/^<(h\d|ul|pre|blockquote)/.test(p.trim()))return p;
+                return '<p>'+p.replace(/\n/g,'<br>')+'</p>';
+            }).join('');
+            /* Re-inject fenced blocks */
+            s=s.replace(/ B(\d+) /g,function(_,i){return '<pre class="ax-md-pre"><code>'+escH(blocks[+i])+'</code></pre>';});
+            return s;
+        }
 
-            /* ── Property badges builder ── */
-            function propBadges(pv,isRequired){
-                var b='';
-                if(isRequired)b+='<span class="ax-badge ax-b-req" title="Required">required</span>';
-                if(pv.nullable||(Array.isArray(pv.type)&&pv.type.indexOf('null')!==-1))b+='<span class="ax-badge ax-b-null" title="Nullable">nullable</span>';
-                if(pv.readOnly)b+='<span class="ax-badge ax-b-ro" title="Read-only">readOnly</span>';
-                if(pv.writeOnly)b+='<span class="ax-badge ax-b-wo" title="Write-only">writeOnly</span>';
-                if(pv.deprecated)b+='<span class="ax-badge ax-b-dep" title="Deprecated">deprecated</span>';
-                if(pv.format)b+='<span class="ax-badge ax-b-fmt" title="Format">'+escH(pv.format)+'</span>';
-                if(pv['default']!==undefined)b+='<span class="ax-badge ax-b-def" title="Default value">default: '+escH(JSON.stringify(pv['default']))+'</span>';
-                if(pv.minimum!=null||pv.maximum!=null){var r='';if(pv.minimum!=null)r+='≥'+pv.minimum;if(pv.maximum!=null)r+=(r?' ':'')+'≤'+pv.maximum;b+='<span class="ax-badge ax-b-rng">'+escH(r)+'</span>';}
-                if(pv.minLength!=null||pv.maxLength!=null){var r2='';if(pv.minLength!=null)r2+='≥'+pv.minLength;if(pv.maxLength!=null)r2+=(r2?' ':'')+'≤'+pv.maxLength;b+='<span class="ax-badge ax-b-rng">'+escH(r2)+' chars</span>';}
-                if(pv.pattern)b+='<span class="ax-badge ax-b-pat" title="Pattern: '+escH(pv.pattern)+'">regex</span>';
-                return b;
-            }
+        /* ── Property badges builder ── */
+        function propBadges(pv,isRequired){
+            var b='';
+            if(isRequired)b+='<span class="ax-badge ax-b-req" title="Required">required</span>';
+            if(pv.nullable||(Array.isArray(pv.type)&&pv.type.indexOf('null')!==-1))b+='<span class="ax-badge ax-b-null" title="Nullable">nullable</span>';
+            if(pv.readOnly)b+='<span class="ax-badge ax-b-ro" title="Read-only">readOnly</span>';
+            if(pv.writeOnly)b+='<span class="ax-badge ax-b-wo" title="Write-only">writeOnly</span>';
+            if(pv.deprecated)b+='<span class="ax-badge ax-b-dep" title="Deprecated">deprecated</span>';
+            if(pv.format)b+='<span class="ax-badge ax-b-fmt" title="Format">'+escH(pv.format)+'</span>';
+            if(pv['default']!==undefined)b+='<span class="ax-badge ax-b-def" title="Default value">default: '+escH(JSON.stringify(pv['default']))+'</span>';
+            if(pv.minimum!=null||pv.maximum!=null){var r='';if(pv.minimum!=null)r+='≥'+pv.minimum;if(pv.maximum!=null)r+=(r?' ':'')+'≤'+pv.maximum;b+='<span class="ax-badge ax-b-rng">'+escH(r)+'</span>';}
+            if(pv.minLength!=null||pv.maxLength!=null){var r2='';if(pv.minLength!=null)r2+='≥'+pv.minLength;if(pv.maxLength!=null)r2+=(r2?' ':'')+'≤'+pv.maxLength;b+='<span class="ax-badge ax-b-rng">'+escH(r2)+' chars</span>';}
+            if(pv.pattern)b+='<span class="ax-badge ax-b-pat" title="Pattern: '+escH(pv.pattern)+'">regex</span>';
+            return b;
+        }
 
-            /* ── Request history (per-endpoint, last 10) ── */
-            function histKey(method,path){return 'hist:'+method+':'+path;}
-            function histPush(method,path,entry){
-                var k=histKey(method,path);var arr=lsGetJson(k,[]);
-                entry.ts=Date.now();
-                arr.unshift(entry);arr=arr.slice(0,10);
-                lsSetJson(k,arr);
-            }
-            function histLoad(method,path){return lsGetJson(histKey(method,path),[]);}
-            function histClear(method,path){try{localStorage.removeItem(_ns+':'+histKey(method,path));}catch(e){}}
-            window.axHistClear=function(method,path){histClear(method,path);renderHistory(method,path);toast('History cleared');};
-            window.axHistRestore=function(method,path,idx){
-                var arr=histLoad(method,path);var h=arr[+idx];if(!h)return;
-                if(h.auth!=null){var a=document.getElementById('axi-auth');if(a){a.value=h.auth;authPersist();}}
-                if(h.params){for(var k in h.params){var el=document.getElementById('axi-'+k);if(el)el.value=h.params[k];}}
-                if(h.headers){for(var hk in h.headers){var hel=document.getElementById('axi-h-'+hk);if(hel)hel.value=h.headers[hk];}}
-                if(h.body!=null){var b=document.getElementById('axi-body');if(b)b.value=h.body;}
-                toast('Restored from history');
-            };
-            function renderHistory(method,path){
-                var box=document.getElementById('ax-hist-list');if(!box)return;
-                var arr=histLoad(method,path);
-                if(!arr.length){box.innerHTML='<div class="ax-hist-empty">No history yet — send a request to record it.</div>';return;}
-                box.innerHTML=arr.map(function(h,i){
-                    var ago=Math.round((Date.now()-h.ts)/1000);
-                    var rel=ago<60?ago+'s ago':ago<3600?Math.round(ago/60)+'m ago':Math.round(ago/3600)+'h ago';
-                    var sc=h.status||0;var cls=sc<300?'ax-res-s-ok':sc<400?'ax-res-s-info':sc<500?'ax-res-s-warn':'ax-res-s-err';
-                    return '<div class="ax-hist-item" onclick="axHistRestore(\''+method+'\',\''+escH(path)+'\','+i+')">'
-                        +'<span class="'+cls+'" style="font-size:10px;padding:1px 6px;border-radius:4px">'+escH(String(sc||'—'))+'</span>'
-                        +'<span class="ax-hist-time">'+rel+'</span>'
-                        +(h.ms?'<span class="ax-hist-ms">'+h.ms+'ms</span>':'')
-                        +'</div>';
-                }).join('')+'<button class="ax-hist-clear" onclick="axHistClear(\''+method+'\',\''+escH(path)+'\')">Clear history</button>';
-            }
+        /* ── Request history (per-endpoint, last 10) ── */
+        function histKey(method,path){return 'hist:'+method+':'+path;}
+        function histPush(method,path,entry){
+            var k=histKey(method,path);var arr=lsGetJson(k,[]);
+            entry.ts=Date.now();
+            arr.unshift(entry);arr=arr.slice(0,10);
+            lsSetJson(k,arr);
+        }
+        function histLoad(method,path){return lsGetJson(histKey(method,path),[]);}
+        function histClear(method,path){try{localStorage.removeItem(_ns+':'+histKey(method,path));}catch(e){}}
+        window.axHistClear=function(method,path){histClear(method,path);renderHistory(method,path);toast('History cleared');};
+        window.axHistRestore=function(method,path,idx){
+            var arr=histLoad(method,path);var h=arr[+idx];if(!h)return;
+            if(h.auth!=null){var a=document.getElementById('axi-auth');if(a){a.value=h.auth;authPersist();}}
+            if(h.params){for(var k in h.params){var el=document.getElementById('axi-'+k);if(el)el.value=h.params[k];}}
+            if(h.headers){for(var hk in h.headers){var hel=document.getElementById('axi-h-'+hk);if(hel)hel.value=h.headers[hk];}}
+            if(h.body!=null){var b=document.getElementById('axi-body');if(b)b.value=h.body;}
+            toast('Restored from history');
+        };
+        function renderHistory(method,path){
+            var box=document.getElementById('ax-hist-list');if(!box)return;
+            var arr=histLoad(method,path);
+            if(!arr.length){box.innerHTML='<div class="ax-hist-empty">No history yet — send a request to record it.</div>';return;}
+            box.innerHTML=arr.map(function(h,i){
+                var ago=Math.round((Date.now()-h.ts)/1000);
+                var rel=ago<60?ago+'s ago':ago<3600?Math.round(ago/60)+'m ago':Math.round(ago/3600)+'h ago';
+                var sc=h.status||0;var cls=sc<300?'ax-res-s-ok':sc<400?'ax-res-s-info':sc<500?'ax-res-s-warn':'ax-res-s-err';
+                return '<div class="ax-hist-item" onclick="axHistRestore(\''+method+'\',\''+escH(path)+'\','+i+')">'
+                    +'<span class="'+cls+'" style="font-size:10px;padding:1px 6px;border-radius:4px">'+escH(String(sc||'—'))+'</span>'
+                    +'<span class="ax-hist-time">'+rel+'</span>'
+                    +(h.ms?'<span class="ax-hist-ms">'+h.ms+'ms</span>':'')
+                    +'</div>';
+            }).join('')+'<button class="ax-hist-clear" onclick="axHistClear(\''+method+'\',\''+escH(path)+'\')">Clear history</button>';
+        }
 
-            /* ── Auth token persistence ── */
-            function authPersist(){
-                var a=document.getElementById('axi-auth');var t=document.getElementById('axi-auth-type');
-                if(a)lsSet('auth.token',a.value||'');
-                if(t)lsSet('auth.type',t.value||'bearer');
-            }
-            function authRestore(){
-                var a=document.getElementById('axi-auth');var t=document.getElementById('axi-auth-type');
-                if(t){t.value=lsGet('auth.type','bearer');if(window.axAuthTypeChange)axAuthTypeChange();}
-                if(a){a.value=lsGet('auth.token','');}
-                if(a)a.addEventListener('input',authPersist);
-                if(t)t.addEventListener('change',authPersist);
-            }
+        /* ── Auth token persistence ── */
+        function authPersist(){
+            var a=document.getElementById('axi-auth');var t=document.getElementById('axi-auth-type');
+            if(a)lsSet('auth.token',a.value||'');
+            if(t)lsSet('auth.type',t.value||'bearer');
+        }
+        function authRestore(){
+            var a=document.getElementById('axi-auth');var t=document.getElementById('axi-auth-type');
+            if(t){t.value=lsGet('auth.type','bearer');if(window.axAuthTypeChange)axAuthTypeChange();}
+            if(a){a.value=lsGet('auth.token','');}
+            if(a)a.addEventListener('input',authPersist);
+            if(t)t.addEventListener('change',authPersist);
+        }
 
-            /* ── Bulk JSON edit for header/query/path groups ── */
-            function bulkGroupEl(gid){return document.querySelector('.ax-bulk-group[data-gid="'+gid+'"]');}
-            function bulkReadFields(group){
-                var prefix=group.dataset.prefix;var names=JSON.parse(group.dataset.names||'[]');
-                var out={};
-                names.forEach(function(n){
-                    var el=document.getElementById(prefix+n);
-                    if(el&&el.value!=='')out[n]=el.value;
-                });
-                return out;
-            }
-            function bulkWriteFields(group,obj){
-                var prefix=group.dataset.prefix;var names=JSON.parse(group.dataset.names||'[]');var unknown=[];
-                Object.keys(obj||{}).forEach(function(k){
-                    var el=document.getElementById(prefix+k);
-                    if(el){el.value=obj[k]==null?'':typeof obj[k]==='string'?obj[k]:JSON.stringify(obj[k]);}
-                    else if(names.indexOf(k)===-1){unknown.push(k);}
-                });
-                return unknown;
-            }
-            window.axBulkToggle=function(gid){
-                var g=bulkGroupEl(gid);if(!g)return;
-                var area=document.getElementById(gid+'-area');var btn=g.querySelector('.ax-bulk-btn');
-                var fields=g.querySelector('.ax-bulk-fields');var actions=g.querySelector('.ax-bulk-actions');
-                var on=!area.classList.contains('show');
-                if(on){
-                    area.value=JSON.stringify(bulkReadFields(g),null,2);
-                    area.classList.add('show');actions.style.display='';fields.classList.add('hidden');btn.classList.add('active');
-                    setTimeout(function(){area.focus();area.select();},10);
-                } else {
-                    area.classList.remove('show');actions.style.display='none';fields.classList.remove('hidden');btn.classList.remove('active');
-                    var err=document.getElementById(gid+'-err');if(err)err.textContent='';
-                }
-            };
-            window.axBulkApply=function(gid){
-                var g=bulkGroupEl(gid);if(!g)return;
-                var area=document.getElementById(gid+'-area');var err=document.getElementById(gid+'-err');
-                err.textContent='';
-                var txt=(area.value||'').trim();
-                if(!txt){bulkWriteFields(g,{});axBulkToggle(gid);return;}
-                var parsed;try{parsed=JSON.parse(txt);}catch(e){err.textContent='Invalid JSON: '+e.message;return;}
-                if(typeof parsed!=='object'||Array.isArray(parsed)||parsed===null){err.textContent='Expected a JSON object {…}';return;}
-                /* Clear existing field values first so removed keys are reflected */
-                var prefix=g.dataset.prefix;var names=JSON.parse(g.dataset.names||'[]');
-                names.forEach(function(n){var el=document.getElementById(prefix+n);if(el)el.value='';});
-                var unknown=bulkWriteFields(g,parsed);
-                if(unknown.length){err.textContent='Ignored unknown keys: '+unknown.join(', ');err.style.color='var(--amber)';}
-                else{toast('Applied '+Object.keys(parsed).length+' values');axBulkToggle(gid);}
-            };
-            window.axBulkSyncFromFields=function(gid){
-                var g=bulkGroupEl(gid);if(!g)return;
-                var area=document.getElementById(gid+'-area');
+        /* ── Bulk JSON edit for header/query/path groups ── */
+        function bulkGroupEl(gid){return document.querySelector('.ax-bulk-group[data-gid="'+gid+'"]');}
+        function bulkReadFields(group){
+            var prefix=group.dataset.prefix;var names=JSON.parse(group.dataset.names||'[]');
+            var out={};
+            names.forEach(function(n){
+                var el=document.getElementById(prefix+n);
+                if(el&&el.value!=='')out[n]=el.value;
+            });
+            return out;
+        }
+        function bulkWriteFields(group,obj){
+            var prefix=group.dataset.prefix;var names=JSON.parse(group.dataset.names||'[]');var unknown=[];
+            Object.keys(obj||{}).forEach(function(k){
+                var el=document.getElementById(prefix+k);
+                if(el){el.value=obj[k]==null?'':typeof obj[k]==='string'?obj[k]:JSON.stringify(obj[k]);}
+                else if(names.indexOf(k)===-1){unknown.push(k);}
+            });
+            return unknown;
+        }
+        window.axBulkToggle=function(gid){
+            var g=bulkGroupEl(gid);if(!g)return;
+            var area=document.getElementById(gid+'-area');var btn=g.querySelector('.ax-bulk-btn');
+            var fields=g.querySelector('.ax-bulk-fields');var actions=g.querySelector('.ax-bulk-actions');
+            var on=!area.classList.contains('show');
+            if(on){
                 area.value=JSON.stringify(bulkReadFields(g),null,2);
-                toast('Synced from fields');
-            };
-            window.axBulkCopy=function(gid){
-                var area=document.getElementById(gid+'-area');if(!area)return;
-                if(navigator.clipboard)navigator.clipboard.writeText(area.value).then(function(){toast('Copied JSON');});
-                else{fb(area.value);toast('Copied JSON');}
-            };
-
-            /* ── OAuth2 implicit-flow helper ── */
-            function findOAuth2Scheme(spec){
-                var schemes=(spec.components&&spec.components.securitySchemes)||{};
-                for(var k in schemes){if(schemes[k]&&schemes[k].type==='oauth2')return {name:k,scheme:schemes[k]};}
-                return null;
+                area.classList.add('show');actions.style.display='';fields.classList.add('hidden');btn.classList.add('active');
+                setTimeout(function(){area.focus();area.select();},10);
+            } else {
+                area.classList.remove('show');actions.style.display='none';fields.classList.remove('hidden');btn.classList.remove('active');
+                var err=document.getElementById(gid+'-err');if(err)err.textContent='';
             }
-            function wireOAuthHelper(spec){
-                var found=findOAuth2Scheme(spec);if(!found)return;
-                var authWrap=document.querySelector('.ax-try-auth-wrap');if(!authWrap||authWrap.querySelector('.ax-oauth-btn'))return;
-                var flows=found.scheme.flows||{};
-                var implicit=flows.implicit||flows.authorizationCode;
-                if(!implicit||!implicit.authorizationUrl)return;
-                var btn=document.createElement('button');btn.className='ax-oauth-btn';btn.type='button';btn.textContent='Get token';btn.title='Open OAuth2 authorization';
-                btn.onclick=function(){
-                    var cid=lsGet('oauth.client_id','')||prompt('OAuth2 client_id:','');
-                    if(!cid)return;
-                    lsSet('oauth.client_id',cid);
-                    var scopes=Object.keys(implicit.scopes||{}).join(' ');
-                    var redirect=location.origin+location.pathname;
-                    var url=implicit.authorizationUrl+(implicit.authorizationUrl.indexOf('?')>-1?'&':'?')
-                        +'response_type=token&client_id='+encodeURIComponent(cid)
-                        +'&redirect_uri='+encodeURIComponent(redirect)
-                        +(scopes?'&scope='+encodeURIComponent(scopes):'')
-                        +'&state='+Math.random().toString(36).slice(2);
-                    var w=window.open(url,'apex_oauth','width=600,height=720');
-                    var poll=setInterval(function(){
-                        try{
-                            if(!w||w.closed){clearInterval(poll);return;}
-                            var h=w.location.hash||'';
-                            var m=/access_token=([^&]+)/.exec(h);
-                            if(m){
-                                var token=decodeURIComponent(m[1]);
-                                var a=document.getElementById('axi-auth');if(a){a.value=token;authPersist();toast('Token received');}
-                                w.close();clearInterval(poll);
-                            }
-                        }catch(e){/* cross-origin until redirect lands */}
-                    },500);
-                };
-                authWrap.appendChild(btn);
-            }
+        };
+        window.axBulkApply=function(gid){
+            var g=bulkGroupEl(gid);if(!g)return;
+            var area=document.getElementById(gid+'-area');var err=document.getElementById(gid+'-err');
+            err.textContent='';
+            var txt=(area.value||'').trim();
+            if(!txt){bulkWriteFields(g,{});axBulkToggle(gid);return;}
+            var parsed;try{parsed=JSON.parse(txt);}catch(e){err.textContent='Invalid JSON: '+e.message;return;}
+            if(typeof parsed!=='object'||Array.isArray(parsed)||parsed===null){err.textContent='Expected a JSON object {…}';return;}
+            /* Clear existing field values first so removed keys are reflected */
+            var prefix=g.dataset.prefix;var names=JSON.parse(g.dataset.names||'[]');
+            names.forEach(function(n){var el=document.getElementById(prefix+n);if(el)el.value='';});
+            var unknown=bulkWriteFields(g,parsed);
+            if(unknown.length){err.textContent='Ignored unknown keys: '+unknown.join(', ');err.style.color='var(--amber)';}
+            else{toast('Applied '+Object.keys(parsed).length+' values');axBulkToggle(gid);}
+        };
+        window.axBulkSyncFromFields=function(gid){
+            var g=bulkGroupEl(gid);if(!g)return;
+            var area=document.getElementById(gid+'-area');
+            area.value=JSON.stringify(bulkReadFields(g),null,2);
+            toast('Synced from fields');
+        };
+        window.axBulkCopy=function(gid){
+            var area=document.getElementById(gid+'-area');if(!area)return;
+            if(navigator.clipboard)navigator.clipboard.writeText(area.value).then(function(){toast('Copied JSON');});
+            else{fb(area.value);toast('Copied JSON');}
+        };
 
-            /* ── Shortcuts modal ── */
-            window.axShortcutsOpen=function(){var m=document.getElementById('ax-shortcuts');if(m)m.hidden=false;};
-            window.axShortcutsClose=function(){var m=document.getElementById('ax-shortcuts');if(m)m.hidden=true;};
+        /* ── OAuth2 implicit-flow helper ── */
+        function findOAuth2Scheme(spec){
+            var schemes=(spec.components&&spec.components.securitySchemes)||{};
+            for(var k in schemes){if(schemes[k]&&schemes[k].type==='oauth2')return {name:k,scheme:schemes[k]};}
+            return null;
+        }
+        function wireOAuthHelper(spec){
+            var found=findOAuth2Scheme(spec);if(!found)return;
+            var authWrap=document.querySelector('.ax-try-auth-wrap');if(!authWrap||authWrap.querySelector('.ax-oauth-btn'))return;
+            var flows=found.scheme.flows||{};
+            var implicit=flows.implicit||flows.authorizationCode;
+            if(!implicit||!implicit.authorizationUrl)return;
+            var btn=document.createElement('button');btn.className='ax-oauth-btn';btn.type='button';btn.textContent='Get token';btn.title='Open OAuth2 authorization';
+            btn.onclick=function(){
+                var cid=lsGet('oauth.client_id','')||prompt('OAuth2 client_id:','');
+                if(!cid)return;
+                lsSet('oauth.client_id',cid);
+                var scopes=Object.keys(implicit.scopes||{}).join(' ');
+                var redirect=location.origin+location.pathname;
+                var url=implicit.authorizationUrl+(implicit.authorizationUrl.indexOf('?')>-1?'&':'?')
+                    +'response_type=token&client_id='+encodeURIComponent(cid)
+                    +'&redirect_uri='+encodeURIComponent(redirect)
+                    +(scopes?'&scope='+encodeURIComponent(scopes):'')
+                    +'&state='+Math.random().toString(36).slice(2);
+                var w=window.open(url,'apex_oauth','width=600,height=720');
+                var poll=setInterval(function(){
+                    try{
+                        if(!w||w.closed){clearInterval(poll);return;}
+                        var h=w.location.hash||'';
+                        var m=/access_token=([^&]+)/.exec(h);
+                        if(m){
+                            var token=decodeURIComponent(m[1]);
+                            var a=document.getElementById('axi-auth');if(a){a.value=token;authPersist();toast('Token received');}
+                            w.close();clearInterval(poll);
+                        }
+                    }catch(e){/* cross-origin until redirect lands */}
+                },500);
+            };
+            authWrap.appendChild(btn);
+        }
 
-            /* ── Mobile sidebar drawer ── */
-            window.axSidebarToggle=function(){document.getElementById('axui').classList.toggle('axui-sb-open');};
-            window.axSidebarClose=function(){document.getElementById('axui').classList.remove('axui-sb-open');};
+        /* ── Shortcuts modal ── */
+        window.axShortcutsOpen=function(){var m=document.getElementById('ax-shortcuts');if(m)m.hidden=false;};
+        window.axShortcutsClose=function(){var m=document.getElementById('ax-shortcuts');if(m)m.hidden=true;};
 
-            /* ── Schema browser navigation ── */
-            window.axNavSchema=function(name){
-                _activeSchemaName=name;_activeOpKey=null;
-                var spec=_specCache;if(!spec||!spec.components||!spec.components.schemas)return;
-                var schema=spec.components.schemas[name];if(!schema)return;
+        /* ── Overflow (⋯) menu ──
+           Whatever the current width hides from the toolbar lives here, so this
+           handler is the only thing standing between a narrow viewport and an
+           unreachable control. */
+        var moreBtn=document.getElementById('apex-more-btn'),moreDlg=document.getElementById('apex-more');
+        if(moreBtn&&moreDlg&&moreDlg.showModal){
+            moreBtn.addEventListener('click',function(){
+                /* Anchor the sheet under the whole toolbar, not under the button:
+                   the button is shorter than the bar and centred in it, so its
+                   own bottom edge is inside the bar. One read, at open time, is
+                   the only way a top-layer element can know where a grid row
+                   put the toolbar. */
+                var anchor=moreBtn.closest('#apex-bar')||moreBtn;
+                moreDlg.style.setProperty('--anchor-y',Math.round(anchor.getBoundingClientRect().bottom+6)+'px');
+                moreDlg.showModal();moreBtn.setAttribute('aria-expanded','true');
+            });
+            /* `close` covers Escape and the native cancel path too. */
+            moreDlg.addEventListener('close',function(){moreBtn.setAttribute('aria-expanded','false');moreBtn.focus();});
+            moreDlg.addEventListener('click',function(e){
+                /* The dialog fills the viewport and the sheet is a child, so a
+                   click on the dialog itself is a click outside the sheet. */
+                if(e.target===moreDlg){moreDlg.close();return;}
+                var item=e.target.closest('.apex-more-item');if(!item)return;
+                /* The export links are plain anchors: they download and the menu
+                   closes behind them, with no action to dispatch. */
+                moreDlg.close();
+                /* The document-level click handlers below close the export menu
+                   and the env popover. Letting this click reach them would shut
+                   the popover we are about to open, in the same tick. */
+                e.stopPropagation();
+                var act=item.getAttribute('data-more');
+                if(act==='theme')apexThemeCycle();
+                else if(act==='env'){var eb=document.getElementById('apexEnvBtn');if(eb)eb.click();}
+                else if(act==='kbd')axShortcutsOpen();
+                else if(act==='copy')apexCopy(item);
+            });
+        }
+
+        /* ── Nav drawer ──
+           The state class goes on <html>: the backdrop and the scroll lock are a
+           sibling and an ancestor of the drawer, and only a documentElement-scoped
+           selector reaches all three. `inert` is applied on top of the CSS
+           `visibility:hidden`, but ONLY while this node is the overlay — at
+           >=900px it is the static navigation column and must stay reachable. */
+        var _mqShell=window.matchMedia('(min-width:900px)');
+        function drawerSync(){
+            var open=document.documentElement.classList.contains('ax-nav-open');
+            var btn=document.getElementById('apex-nav-btn');
+            var sb=document.getElementById('axui-sidebar');
+            if(btn)btn.setAttribute('aria-expanded',open?'true':'false');
+            if(sb){if(!_mqShell.matches&&!open)sb.setAttribute('inert','');else sb.removeAttribute('inert');}
+        }
+        window.axSidebarToggle=function(){
+            document.documentElement.classList.toggle('ax-nav-open');drawerSync();
+        };
+        window.axSidebarClose=function(){
+            document.documentElement.classList.remove('ax-nav-open');drawerSync();
+        };
+        drawerSync();
+        if(_mqShell.addEventListener)_mqShell.addEventListener('change',drawerSync);
+
+        JS;
+    }
+
+    /**
+     * Schema-view navigation, `init`, the error and empty states, and the
+     * sidebar: `groupByTag`, `renderSidebar`, the footer and every nav entry point.
+     */
+    private function jsNav(): string
+    {
+        return <<<'JS'
+        /* ── Schema browser navigation ── */
+        window.axNavSchema=function(name){
+            _activeSchemaName=name;_activeOpKey=null;
+            var spec=_specCache;if(!spec||!spec.components||!spec.components.schemas)return;
+            var schema=spec.components.schemas[name];if(!schema)return;
+            renderSidebar(spec);
+            renderSchemaView(name,schema,spec);
+            history.replaceState(null,'','#schema_'+encodeURIComponent(name));
+            var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
+            axSidebarClose();
+        };
+        function renderSchemaView(name,schema,spec){
+            _schemaIds=0;
+            var usedBy=[];
+            for(var p in spec.paths||{}){for(var m in spec.paths[p]){
+                var op=spec.paths[p][m];if(typeof op!=='object')continue;
+                var s=JSON.stringify(op);if(s.indexOf('#/components/schemas/'+name)!==-1)usedBy.push({path:p,method:m,op:op});
+            }}
+            var usedHtml=usedBy.length?'<div class="ax-section"><div class="ax-section-title">Used by ('+usedBy.length+')</div><div class="ax-used-list">'
+                +usedBy.map(function(u){return '<div class="ax-used-item" onclick="axNav(\''+u.method+'__'+escH(u.path)+'\',\''+escH(u.path)+'\',\''+u.method+'\')"><span class="axm axm-'+u.method+'">'+u.method.toUpperCase()+'</span><span>'+escH(u.path)+'</span></div>';}).join('')
+                +'</div></div>':'';
+            setDoc('<div class="ax-breadcrumb"><span class="ax-breadcrumb-item ax-breadcrumb-link" onclick="axGoWelcome()">Schemas</span><span class="ax-breadcrumb-sep">›</span><span class="ax-breadcrumb-current">'+escH(name)+'</span></div>'
+                +'<div class="ax-op-header"><div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(name)+'</div>'
+                +(schema.title?'<div class="ax-op-summary">'+escH(schema.title)+'</div>':'')+'</div></div>'
+                +(schema.description?'<div class="ax-op-desc">'+md(schema.description)+'</div>':'')
+                +'<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Definition</div>'+expandToggle()+'</div>'+renderSchema(schema,spec,0)+'</div>'
+                +usedHtml);
+            setPanel('<div class="ax-panel-section-title">JSON Schema</div><pre class="ax-code">'+hlJson(escH(JSON.stringify(schema,null,2)))+'</pre>');
+        }
+        function expandToggle(){return '<div class="ax-expand-toggle"><button onclick="axExpandAll(true)">Expand all</button><button onclick="axExpandAll(false)">Collapse all</button></div>';}
+        window.axExpandAll=function(open){
+            _expandAll=open;
+            document.querySelectorAll('.ax-ref-expanded,.ax-prop-nested').forEach(function(el){el.style.display=open?'':'none';});
+            document.querySelectorAll('.ax-schema-collapse-btn').forEach(function(b){b.textContent=open?'▼':'▶';});
+        };
+
+        function init(){
+            loadSpec(function(spec){
+                if(!spec||typeof spec!=='object'){renderError('Spec is empty or invalid JSON');return;}
+                _server=_server||(spec.servers&&spec.servers[0]&&spec.servers[0].url)||'';
                 renderSidebar(spec);
-                renderSchemaView(name,schema,spec);
-                history.replaceState(null,'','#schema_'+encodeURIComponent(name));
-                var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
-                axSidebarClose();
-            };
-            function renderSchemaView(name,schema,spec){
-                var wrap=document.getElementById('axui-content-inner');if(!wrap)return;
-                _schemaIds=0;
-                var usedBy=[];
-                for(var p in spec.paths||{}){for(var m in spec.paths[p]){
-                    var op=spec.paths[p][m];if(typeof op!=='object')continue;
-                    var s=JSON.stringify(op);if(s.indexOf('#/components/schemas/'+name)!==-1)usedBy.push({path:p,method:m,op:op});
-                }}
-                var usedHtml=usedBy.length?'<div class="ax-section"><div class="ax-section-title">Used by ('+usedBy.length+')</div><div class="ax-used-list">'
-                    +usedBy.map(function(u){return '<div class="ax-used-item" onclick="axNav(\''+u.method+'__'+escH(u.path)+'\',\''+escH(u.path)+'\',\''+u.method+'\')"><span class="axm axm-'+u.method+'">'+u.method.toUpperCase()+'</span><span>'+escH(u.path)+'</span></div>';}).join('')
-                    +'</div></div>':'';
-                wrap.innerHTML='<div class="ax-breadcrumb"><span class="ax-breadcrumb-item ax-breadcrumb-link" onclick="axGoWelcome()">Schemas</span><span class="ax-breadcrumb-sep">›</span><span class="ax-breadcrumb-current">'+escH(name)+'</span></div>'
-                    +'<div class="ax-op-header"><div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(name)+'</div>'
-                    +(schema.title?'<div class="ax-op-summary">'+escH(schema.title)+'</div>':'')+'</div></div>'
-                    +(schema.description?'<div class="ax-op-desc">'+md(schema.description)+'</div>':'')
-                    +'<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Definition</div>'+expandToggle()+'</div>'+renderSchema(schema,spec,0)+'</div>'
-                    +usedHtml;
-                var panel=document.getElementById('axui-panel-inner');
-                if(panel)panel.innerHTML='<div class="ax-panel-section-title">JSON Schema</div><pre class="ax-code">'+hlJson(escH(JSON.stringify(schema,null,2)))+'</pre>';
-            }
-            function expandToggle(){return '<div class="ax-expand-toggle"><button onclick="axExpandAll(true)">Expand all</button><button onclick="axExpandAll(false)">Collapse all</button></div>';}
-            window.axExpandAll=function(open){
-                _expandAll=open;
-                document.querySelectorAll('.ax-ref-expanded,.ax-prop-nested').forEach(function(el){el.style.display=open?'':'none';});
-                document.querySelectorAll('.ax-schema-collapse-btn').forEach(function(b){b.textContent=open?'▼':'▶';});
-            };
-
-            function init(){
-                loadSpec(function(spec){
-                    if(!spec||typeof spec!=='object'){renderError('Spec is empty or invalid JSON');return;}
-                    _server=_server||(spec.servers&&spec.servers[0]&&spec.servers[0].url)||'';
-                    renderSidebar(spec);
-                    var pathCount=Object.keys(spec.paths||{}).length;
-                    if(pathCount===0&&!Object.keys(spec.webhooks||{}).length){renderEmptySpec(spec);}
-                    else{renderWelcome(spec);}
-                    renderSidebarFooter(spec);
-                    var hash=location.hash.slice(1);if(hash)navigateHash(hash,spec);
-                    var filter=document.getElementById('axui-filter');
-                    if(filter){filter.addEventListener('input',function(){renderSidebar(spec,filter.value);});}
-                },function(err){renderError(err);});
-                /* Fallback */
-                setTimeout(function(){
-                    var body=document.getElementById('axui-sidebar-body');
-                    if(body&&body.querySelector('.axui-loading-state')){renderError('Request timed out after 10s');}
-                },10000);
-            }
-            function renderError(msg){
+                var pathCount=Object.keys(spec.paths||{}).length;
+                if(pathCount===0&&!Object.keys(spec.webhooks||{}).length){renderEmptySpec(spec);}
+                else{renderWelcome(spec);}
+                renderSidebarFooter(spec);
+                var hash=location.hash.slice(1);if(hash)navigateHash(hash,spec);
+                var filter=document.getElementById('axui-filter');
+                if(filter){filter.addEventListener('input',function(){renderSidebar(spec,filter.value);});}
+            },function(err){renderError(err);});
+            /* Fallback */
+            setTimeout(function(){
                 var body=document.getElementById('axui-sidebar-body');
-                if(body)body.innerHTML='<div class="ax-error-state"><div class="ax-error-icon">⚠</div><div class="ax-error-title">Failed to load spec</div><div class="ax-error-msg">'+escH(String(msg||'Unknown error'))+'</div><div class="ax-error-url">'+escH(APEX_CFG.specUrl||'')+'</div><button class="ax-error-retry" onclick="location.reload()">Retry</button></div>';
-                var w=document.getElementById('axui-welcome');if(w)w.innerHTML='';
-            }
-            function renderEmptySpec(spec){
-                var w=document.getElementById('axui-welcome');if(!w)return;
-                w.innerHTML='<div class="axw-title">'+escH((spec.info&&spec.info.title)||'API')+'</div>'
-                    +'<div class="ax-empty-spec"><div class="ax-empty-icon">📭</div><div class="ax-empty-title">No endpoints documented yet</div>'
-                    +'<div class="ax-empty-msg">Add controllers with route attributes, then regenerate the spec.</div></div>';
-            }
+                if(body&&body.querySelector('.axui-loading-state')){renderError('Request timed out after 10s');}
+            },10000);
+        }
+        function renderError(msg){
+            /* Both panes, not just the sidebar: the main area is where the reader
+               is looking, and a spec that failed to load leaves it empty. */
+            var card='<div class="ax-error-state"><div class="ax-error-icon">⚠</div><div class="ax-error-title">Failed to load spec</div><div class="ax-error-msg">'+escH(String(msg||'Unknown error'))+'</div><div class="ax-error-url">'+escH(APEX_CFG.specUrl||'')+'</div><button class="ax-error-retry" onclick="location.reload()">Retry</button></div>';
+            var body=document.getElementById('axui-sidebar-body');
+            if(body)body.innerHTML=card;
+            setDoc(card);setPanel('');
+        }
+        function renderEmptySpec(spec){
+            setDoc('<div class="axw-title">'+escH((spec.info&&spec.info.title)||'API')+'</div>'
+                +'<div class="ax-empty-spec"><div class="ax-empty-icon">📭</div><div class="ax-empty-title">No endpoints documented yet</div>'
+                +'<div class="ax-empty-msg">Add controllers with route attributes, then regenerate the spec.</div></div>');
+            setPanel('');
+        }
 
-            window._axui={setServer:function(url){_server=url;}};
+        window._axui={setServer:function(url){_server=url;}};
 
-            function groupByTag(spec){
-                var g={};
+        function groupByTag(spec){
+            var g={};
+            for(var path in spec.paths||{}){
+                for(var m in spec.paths[path]){
+                    if(!METHODS.includes(m))continue;
+                    var op=spec.paths[path][m];var tag=(op.tags||['General'])[0];
+                    (g[tag]=g[tag]||[]).push({path:path,method:m,op:op,key:m+'__'+path});
+                }
+            }
+            return g;
+        }
+
+        function renderSidebar(spec,filter){
+            var body=document.getElementById('axui-sidebar-body');if(!body)return;
+            var groups=groupByTag(spec);var q=(filter||'').toLowerCase().trim();
+            var html='<div class="axs-overview">'
+                +'<div class="axs-api-title">'+escH(spec.info&&spec.info.title||'API')+'</div>'
+                +(spec.info&&spec.info.description?'<div class="axs-api-desc">'+escH(spec.info.description)+'</div>':'')
+                +'</div>';
+            var anyResult=false;
+            for(var tag in groups){
+                var items=groups[tag];
+                if(q)items=items.filter(function(i){return i.path.toLowerCase().includes(q)||i.method.toLowerCase().includes(q)||(i.op.summary||'').toLowerCase().includes(q)||(i.op.operationId||'').toLowerCase().includes(q);});
+                if(!items.length)continue;
+                anyResult=true;
+                var hasActive=items.some(function(i){return i.key===_activeOpKey;});
+                var open=(q||tag===Object.keys(groups)[0]||hasActive)?' open':'';
+                html+='<div class="axg'+open+'" id="axg-'+escH(tag)+'">'
+                    +'<div class="axg-header" onclick="axToggleGroup(this)">'
+                    +'<span class="axg-arrow">▶</span>'
+                    +'<span class="axg-name">'+escH(tag)+'</span>'
+                    +'<span class="axg-count">'+items.length+'</span>'
+                    +'</div><div class="axg-items">';
+                items.forEach(function(i){
+                    var dep=i.op.deprecated?' axi-depr':'';
+                    html+='<div class="axi'+(i.key===_activeOpKey?' active':'')+dep+'" data-key="'+escH(i.key)+'" data-path="'+escH(i.path)+'" data-method="'+escH(i.method)+'" onclick="axNavEl(this)">'
+                        +'<span class="axm axm-'+i.method+'">'+i.method.toUpperCase()+'</span>'
+                        +'<span class="axi-path">'+escH(i.path)+'</span>'
+                        +(i.op.deprecated?'<span class="axi-depr-dot">D</span>':'')
+                        +'</div>';
+                });
+                html+='</div></div>';
+            }
+            // Schemas section
+            var schemas=(spec.components&&spec.components.schemas)||{};
+            var schemaKeys=Object.keys(schemas);
+            if(q)schemaKeys=schemaKeys.filter(function(n){return n.toLowerCase().includes(q);});
+            if(schemaKeys.length){
+                anyResult=true;
+                var schOpen=(_activeSchemaName||q)?' open':'';
+                html+='<div class="axg'+schOpen+'" id="axg-__schemas__">'
+                    +'<div class="axg-header" onclick="axToggleGroup(this)">'
+                    +'<span class="axg-arrow">▶</span>'
+                    +'<span class="axg-name">Schemas</span>'
+                    +'<span class="axg-count">'+schemaKeys.length+'</span>'
+                    +'</div><div class="axg-items">';
+                schemaKeys.forEach(function(n){
+                    var active=(n===_activeSchemaName)?' active':'';
+                    html+='<div class="axi axi-schema'+active+'" onclick="axNavSchema(\''+escH(n)+'\')">'
+                        +'<span class="axm axm-schema">{}</span>'
+                        +'<span class="axi-path">'+escH(n)+'</span>'
+                        +'</div>';
+                });
+                html+='</div></div>';
+            }
+            // Webhooks section
+            var wh=spec.webhooks||{};var whKeys=Object.keys(wh);
+            if(whKeys.length&&!q){
+                var whActive=_activeOpKey&&_activeOpKey.startsWith('webhook__');
+                html+='<div class="axg'+(whActive?' open':'')+'" id="axg-__webhooks__">'
+                    +'<div class="axg-header" onclick="axToggleGroup(this)">'
+                    +'<span class="axg-arrow">▶</span>'
+                    +'<span class="axg-name">Webhooks</span>'
+                    +'<span class="axg-count">'+whKeys.length+'</span>'
+                    +'</div><div class="axg-items">';
+                whKeys.forEach(function(wname){
+                    var wop=wh[wname];
+                    for(var wm in wop){
+                        if(!METHODS.includes(wm))continue;
+                        html+='<div class="axi" data-key="webhook__'+escH(wname)+'__'+escH(wm)+'" data-wname="'+escH(wname)+'" data-wmethod="'+escH(wm)+'" onclick="axNavWhEl(this)">'
+                            +'<span class="axm axm-'+wm+'">'+wm.toUpperCase()+'</span>'
+                            +'<span class="axi-path">'+escH(wname)+'</span>'
+                            +'<span class="ax-webhook-badge">wh</span>'
+                            +'</div>';
+                    }
+                });
+                html+='</div></div>';
+            }
+            if(q&&!anyResult)html+='<div class="ax-empty">No results for "<strong>'+escH(q)+'</strong>"</div>';
+            body.innerHTML=html;
+        }
+
+        function renderSidebarFooter(spec){
+            var footer=document.getElementById('axui-sidebar-footer');if(!footer)return;
+            var info=spec.info||{};var items=[];
+            if(info.contact){
+                var c=info.contact;var lbl=escH(c.name||c.email||c.url||'Contact');
+                if(c.email)items.push('<div class="axf-item"><a href="mailto:'+escH(c.email)+'" class="axf-link">'+lbl+'</a></div>');
+                else if(c.url)items.push('<div class="axf-item"><a href="'+escH(c.url)+'" class="axf-link" target="_blank" rel="noreferrer">'+lbl+'</a></div>');
+            }
+            if(info.license){
+                var l=info.license;var lname=escH(l.name||l.identifier||'License');
+                items.push('<div class="axf-item">'+(l.url?'<a href="'+escH(l.url)+'" class="axf-link" target="_blank" rel="noreferrer">'+lname+'</a>':lname)+'</div>');
+            }
+            if(info.termsOfService)items.push('<div class="axf-item"><a href="'+escH(info.termsOfService)+'" class="axf-link" target="_blank" rel="noreferrer">Terms of Service</a></div>');
+            footer.innerHTML=items.join('');
+        }
+
+        window.axToggleGroup=function(el){el.closest('.axg').classList.toggle('open');};
+        window.axNavEl=function(el){var g=el.closest('.axg');if(g)g.classList.add('open');axNav(el.dataset.key,el.dataset.path,el.dataset.method);};
+        window.axNavWhEl=function(el){var g=el.closest('.axg');if(g)g.classList.add('open');axNavWebhook(el.dataset.wname,el.dataset.wmethod);};
+
+        /* Every navigation closes the drawer. Tapping an endpoint on a phone that
+           left the nav covering the page it just opened was the whole reason the
+           drawer felt broken. */
+        window.axNav=function(key,path,method){
+            _activeOpKey=key;_activeSchemaName=null;
+            var spec=_specCache;if(!spec)return;
+            var op=spec.paths&&spec.paths[path]&&spec.paths[path][method];if(!op)return;
+            renderSidebar(spec);
+            renderOperation(path,method,op,spec,false);
+            history.replaceState(null,'','#op_'+(op.operationId||key));
+            var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
+            axSidebarClose();
+        };
+
+        window.axNavWebhook=function(name,method){
+            _activeOpKey='webhook__'+name+'__'+method;
+            var spec=_specCache;if(!spec)return;
+            var op=spec.webhooks&&spec.webhooks[name]&&spec.webhooks[name][method];if(!op)return;
+            renderSidebar(spec);
+            renderOperation(name,method,op,spec,true);
+            history.replaceState(null,'','#wh_'+name+'_'+method);
+            var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
+            axSidebarClose();
+        };
+
+        JS;
+    }
+
+    /** Hash resolution: turning a deep link into a rendered view. */
+    private function jsIndex(): string
+    {
+        return <<<'JS'
+        function navigateHash(hash,spec){
+            if(hash.startsWith('op_')){
+                var id=hash.slice(3);
                 for(var path in spec.paths||{}){
                     for(var m in spec.paths[path]){
-                        if(!METHODS.includes(m))continue;
-                        var op=spec.paths[path][m];var tag=(op.tags||['General'])[0];
-                        (g[tag]=g[tag]||[]).push({path:path,method:m,op:op,key:m+'__'+path});
+                        var op=spec.paths[path][m];
+                        if((op.operationId||m+'__'+path)===id||m+'__'+path===id){axNav(m+'__'+path,path,m);return;}
                     }
                 }
-                return g;
             }
-
-            function renderSidebar(spec,filter){
-                var body=document.getElementById('axui-sidebar-body');if(!body)return;
-                var groups=groupByTag(spec);var q=(filter||'').toLowerCase().trim();
-                var html='<div class="axs-overview">'
-                    +'<div class="axs-api-title">'+escH(spec.info&&spec.info.title||'API')+'</div>'
-                    +(spec.info&&spec.info.description?'<div class="axs-api-desc">'+escH(spec.info.description)+'</div>':'')
-                    +'</div>';
-                var anyResult=false;
-                for(var tag in groups){
-                    var items=groups[tag];
-                    if(q)items=items.filter(function(i){return i.path.toLowerCase().includes(q)||i.method.toLowerCase().includes(q)||(i.op.summary||'').toLowerCase().includes(q)||(i.op.operationId||'').toLowerCase().includes(q);});
-                    if(!items.length)continue;
-                    anyResult=true;
-                    var hasActive=items.some(function(i){return i.key===_activeOpKey;});
-                    var open=(q||tag===Object.keys(groups)[0]||hasActive)?' open':'';
-                    html+='<div class="axg'+open+'" id="axg-'+escH(tag)+'">'
-                        +'<div class="axg-header" onclick="axToggleGroup(this)">'
-                        +'<span class="axg-arrow">▶</span>'
-                        +'<span class="axg-name">'+escH(tag)+'</span>'
-                        +'<span class="axg-count">'+items.length+'</span>'
-                        +'</div><div class="axg-items">';
-                    items.forEach(function(i){
-                        var dep=i.op.deprecated?' axi-depr':'';
-                        html+='<div class="axi'+(i.key===_activeOpKey?' active':'')+dep+'" data-key="'+escH(i.key)+'" data-path="'+escH(i.path)+'" data-method="'+escH(i.method)+'" onclick="axNavEl(this)">'
-                            +'<span class="axm axm-'+i.method+'">'+i.method.toUpperCase()+'</span>'
-                            +'<span class="axi-path">'+escH(i.path)+'</span>'
-                            +(i.op.deprecated?'<span class="axi-depr-dot">D</span>':'')
-                            +'</div>';
-                    });
-                    html+='</div></div>';
-                }
-                // Schemas section
-                var schemas=(spec.components&&spec.components.schemas)||{};
-                var schemaKeys=Object.keys(schemas);
-                if(q)schemaKeys=schemaKeys.filter(function(n){return n.toLowerCase().includes(q);});
-                if(schemaKeys.length){
-                    anyResult=true;
-                    var schOpen=(_activeSchemaName||q)?' open':'';
-                    html+='<div class="axg'+schOpen+'" id="axg-__schemas__">'
-                        +'<div class="axg-header" onclick="axToggleGroup(this)">'
-                        +'<span class="axg-arrow">▶</span>'
-                        +'<span class="axg-name">Schemas</span>'
-                        +'<span class="axg-count">'+schemaKeys.length+'</span>'
-                        +'</div><div class="axg-items">';
-                    schemaKeys.forEach(function(n){
-                        var active=(n===_activeSchemaName)?' active':'';
-                        html+='<div class="axi axi-schema'+active+'" onclick="axNavSchema(\''+escH(n)+'\')">'
-                            +'<span class="axm axm-schema">{}</span>'
-                            +'<span class="axi-path">'+escH(n)+'</span>'
-                            +'</div>';
-                    });
-                    html+='</div></div>';
-                }
-                // Webhooks section
-                var wh=spec.webhooks||{};var whKeys=Object.keys(wh);
-                if(whKeys.length&&!q){
-                    var whActive=_activeOpKey&&_activeOpKey.startsWith('webhook__');
-                    html+='<div class="axg'+(whActive?' open':'')+'" id="axg-__webhooks__">'
-                        +'<div class="axg-header" onclick="axToggleGroup(this)">'
-                        +'<span class="axg-arrow">▶</span>'
-                        +'<span class="axg-name">Webhooks</span>'
-                        +'<span class="axg-count">'+whKeys.length+'</span>'
-                        +'</div><div class="axg-items">';
-                    whKeys.forEach(function(wname){
-                        var wop=wh[wname];
-                        for(var wm in wop){
-                            if(!METHODS.includes(wm))continue;
-                            html+='<div class="axi" data-key="webhook__'+escH(wname)+'__'+escH(wm)+'" data-wname="'+escH(wname)+'" data-wmethod="'+escH(wm)+'" onclick="axNavWhEl(this)">'
-                                +'<span class="axm axm-'+wm+'">'+wm.toUpperCase()+'</span>'
-                                +'<span class="axi-path">'+escH(wname)+'</span>'
-                                +'<span class="ax-webhook-badge">wh</span>'
-                                +'</div>';
-                        }
-                    });
-                    html+='</div></div>';
-                }
-                if(q&&!anyResult)html+='<div class="ax-empty">No results for "<strong>'+escH(q)+'</strong>"</div>';
-                body.innerHTML=html;
+            if(hash.startsWith('wh_')){
+                var p2=hash.slice(3).split('_');if(p2.length>=2)axNavWebhook(p2[0],p2[1]);
             }
-
-            function renderSidebarFooter(spec){
-                var footer=document.getElementById('axui-sidebar-footer');if(!footer)return;
-                var info=spec.info||{};var items=[];
-                if(info.contact){
-                    var c=info.contact;var lbl=escH(c.name||c.email||c.url||'Contact');
-                    if(c.email)items.push('<div class="axf-item"><a href="mailto:'+escH(c.email)+'" class="axf-link">'+lbl+'</a></div>');
-                    else if(c.url)items.push('<div class="axf-item"><a href="'+escH(c.url)+'" class="axf-link" target="_blank" rel="noreferrer">'+lbl+'</a></div>');
-                }
-                if(info.license){
-                    var l=info.license;var lname=escH(l.name||l.identifier||'License');
-                    items.push('<div class="axf-item">'+(l.url?'<a href="'+escH(l.url)+'" class="axf-link" target="_blank" rel="noreferrer">'+lname+'</a>':lname)+'</div>');
-                }
-                if(info.termsOfService)items.push('<div class="axf-item"><a href="'+escH(info.termsOfService)+'" class="axf-link" target="_blank" rel="noreferrer">Terms of Service</a></div>');
-                footer.innerHTML=items.join('');
+            if(hash.startsWith('schema_')){
+                var sn=decodeURIComponent(hash.slice(7));axNavSchema(sn);
             }
+        }
 
-            window.axToggleGroup=function(el){el.closest('.axg').classList.toggle('open');};
-            window.axNavEl=function(el){var g=el.closest('.axg');if(g)g.classList.add('open');axNav(el.dataset.key,el.dataset.path,el.dataset.method);};
-            window.axNavWhEl=function(el){var g=el.closest('.axg');if(g)g.classList.add('open');axNavWebhook(el.dataset.wname,el.dataset.wmethod);};
+        JS;
+    }
 
-            window.axNav=function(key,path,method){
-                _activeOpKey=key;_activeSchemaName=null;
-                var spec=_specCache;if(!spec)return;
-                var op=spec.paths&&spec.paths[path]&&spec.paths[path][method];if(!op)return;
-                renderSidebar(spec);
-                renderOperation(path,method,op,spec,false);
-                history.replaceState(null,'','#op_'+(op.operationId||key));
-                var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
-            };
+    /**
+     * `renderWelcome`, `renderOperation` and the controls they emit —
+     * content-type switchers, the response accordion, examples, permalinks.
+     */
+    private function jsDoc(): string
+    {
+        return <<<'JS'
+        function renderWelcome(spec){
+            var info=spec.info||{};var paths=spec.paths||{};
+            var opCount=0;var tagSet=new Set();var deprCount=0;
+            for(var p in paths)for(var m in paths[p])if(METHODS.includes(m)){opCount++;if(paths[p][m].deprecated)deprCount++;(paths[p][m].tags||['General']).forEach(function(t){tagSet.add(t);});}
+            var schemaCount=Object.keys((spec.components&&spec.components.schemas)||{}).length;
+            var whCount=Object.keys(spec.webhooks||{}).length;
+            var svgEp='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><path d="M1 4h14M1 8h14M1 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+            var svgGr='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>';
+            var svgSc='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
+            var svgWh='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><path d="M3 13c0-3 2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/></svg>';
+            var stats='<div class="axw-stats">'
+                +'<div class="axw-stat">'+svgEp+'<div><div class="axw-stat-n">'+opCount+'</div><div class="axw-stat-l">Endpoints</div></div></div>'
+                +'<div class="axw-stat">'+svgGr+'<div><div class="axw-stat-n">'+tagSet.size+'</div><div class="axw-stat-l">Groups</div></div></div>'
+                +(schemaCount?'<div class="axw-stat">'+svgSc+'<div><div class="axw-stat-n">'+schemaCount+'</div><div class="axw-stat-l">Schemas</div></div></div>':'')
+                +(whCount?'<div class="axw-stat">'+svgWh+'<div><div class="axw-stat-n">'+whCount+'</div><div class="axw-stat-l">Webhooks</div></div></div>':'')
+                +'</div>';
+            var servers=(spec.servers||[]).map(function(s,i){
+                var active=(_activeEnv===s.url||(!_activeEnv&&i===0));
+                return '<div class="axw-server"><span class="axw-server-dot'+(active?' active':'')+'"></span>'+escH(s.url)+(s.description?'<span style="margin-left:8px;color:var(--t3);font-size:11px">'+escH(s.description)+'</span>':'')+'</div>';
+            }).join('');
+            var metaHtml='';
+            if(info.contact){
+                var c=info.contact;var lbl=escH(c.name||c.email||c.url||'Contact');
+                if(c.email)metaHtml+='<div class="axw-meta-item">Contact: <a href="mailto:'+escH(c.email)+'" style="color:var(--accent);text-decoration:none">'+lbl+'</a></div>';
+                else if(c.url)metaHtml+='<div class="axw-meta-item">Contact: <a href="'+escH(c.url)+'" target="_blank" style="color:var(--accent);text-decoration:none">'+lbl+'</a></div>';
+            }
+            if(info.license){var l=info.license;var ln=escH(l.name||l.identifier||'License');metaHtml+='<div class="axw-meta-item">License: '+(l.url?'<a href="'+escH(l.url)+'" target="_blank" style="color:var(--accent);text-decoration:none">'+ln+'</a>':ln)+'</div>';}
+            if(info.termsOfService)metaHtml+='<div class="axw-meta-item"><a href="'+escH(info.termsOfService)+'" target="_blank" style="color:var(--accent);text-decoration:none">Terms of Service</a></div>';
+            setDoc('<div class="axw-title">'+escH(info.title||'API')+'</div>'
+                +'<div class="axw-meta"><span class="axw-version">v'+escH(info.version||'1.0')+'</span><span class="axw-openapi">'+escH(spec.openapi||'OpenAPI')+'</span>'+(deprCount?'<span style="font-size:11px;color:var(--amber);padding:2px 6px;border-radius:4px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)">'+deprCount+' deprecated</span>':'')+'</div>'
+                +(info.description?'<div class="axw-desc axw-md">'+md(info.description)+'</div>':'')
+                +stats
+                +(metaHtml?'<div class="axw-contact-block">'+metaHtml+'</div>':'')
+                +(servers?'<div class="axw-servers"><div class="axw-servers-title">Servers</div>'+servers+'</div>':'')
+                +'<div class="axw-hint">Select an endpoint from the sidebar, or press <kbd style="padding:2px 6px;border-radius:4px;background:var(--s2);border:1px solid var(--border);font-family:inherit">⌘K</kbd> to search</div>');
+            /* The overview has no request to make. */
+            setPanel('');
+        }
 
-            window.axNavWebhook=function(name,method){
-                _activeOpKey='webhook__'+name+'__'+method;
-                var spec=_specCache;if(!spec)return;
-                var op=spec.webhooks&&spec.webhooks[name]&&spec.webhooks[name][method];if(!op)return;
-                renderSidebar(spec);
-                renderOperation(name,method,op,spec,true);
-                history.replaceState(null,'','#wh_'+name+'_'+method);
-                var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
-            };
-
-            function navigateHash(hash,spec){
-                if(hash.startsWith('op_')){
-                    var id=hash.slice(3);
-                    for(var path in spec.paths||{}){
-                        for(var m in spec.paths[path]){
-                            var op=spec.paths[path][m];
-                            if((op.operationId||m+'__'+path)===id||m+'__'+path===id){axNav(m+'__'+path,path,m);return;}
-                        }
-                    }
-                }
-                if(hash.startsWith('wh_')){
-                    var p2=hash.slice(3).split('_');if(p2.length>=2)axNavWebhook(p2[0],p2[1]);
-                }
-                if(hash.startsWith('schema_')){
-                    var sn=decodeURIComponent(hash.slice(7));axNavSchema(sn);
+        function renderOperation(path,method,op,spec,isWebhook){
+            _schemaIds=0;
+            var dep=op.deprecated?'<span class="ax-depr-badge">deprecated</span>':'';
+            var tag=(op.tags||['General'])[0];
+            // Breadcrumb
+            var bc='<div class="ax-breadcrumb">'
+                +(isWebhook
+                    ?'<span class="ax-breadcrumb-item">Webhooks</span>'
+                    :'<span class="ax-breadcrumb-item ax-breadcrumb-link" onclick="axGoWelcome()">'+escH(tag)+'</span>')
+                +'<span class="ax-breadcrumb-sep">›</span>'
+                +'<span class="ax-breadcrumb-current">'+method.toUpperCase()+'</span>'
+                +'<span class="ax-breadcrumb-sep">›</span>'
+                +'<span class="ax-breadcrumb-path">'+escH(path)+'</span>'
+                +'</div>';
+            // Security
+            var secHtml='';
+            if(op.security!==undefined){
+                if(!op.security.length){
+                    secHtml='<div class="ax-sec-badges"><span class="ax-sec-badge ax-sec-open">No authentication required</span></div>';
+                } else {
+                    var badges='';
+                    op.security.forEach(function(s){Object.keys(s).forEach(function(sn){var sc=s[sn];badges+='<span class="ax-sec-badge">'+escH(sn)+(sc&&sc.length?'<span class="ax-sec-scopes"> ['+escH(sc.join(', '))+']</span>':'')+'</span>';});});
+                    secHtml='<div class="ax-sec-badges">'+badges+'</div>';
                 }
             }
-
-            function renderWelcome(spec){
-                var info=spec.info||{};var paths=spec.paths||{};
-                var opCount=0;var tagSet=new Set();var deprCount=0;
-                for(var p in paths)for(var m in paths[p])if(METHODS.includes(m)){opCount++;if(paths[p][m].deprecated)deprCount++;(paths[p][m].tags||['General']).forEach(function(t){tagSet.add(t);});}
-                var schemaCount=Object.keys((spec.components&&spec.components.schemas)||{}).length;
-                var whCount=Object.keys(spec.webhooks||{}).length;
-                var svgEp='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><path d="M1 4h14M1 8h14M1 12h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
-                var svgGr='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><rect x="1" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="1" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="1" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/><rect x="10" y="10" width="5" height="5" rx="1" stroke="currentColor" stroke-width="1.4"/></svg>';
-                var svgSc='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><rect x="1" y="3" width="14" height="10" rx="1.5" stroke="currentColor" stroke-width="1.4"/><path d="M5 7h6M5 10h4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>';
-                var svgWh='<svg width="18" height="18" viewBox="0 0 16 16" fill="none" class="axw-stat-icon"><path d="M3 13c0-3 2-5 5-5s5 2 5 5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><circle cx="8" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/></svg>';
-                var stats='<div class="axw-stats">'
-                    +'<div class="axw-stat">'+svgEp+'<div><div class="axw-stat-n">'+opCount+'</div><div class="axw-stat-l">Endpoints</div></div></div>'
-                    +'<div class="axw-stat">'+svgGr+'<div><div class="axw-stat-n">'+tagSet.size+'</div><div class="axw-stat-l">Groups</div></div></div>'
-                    +(schemaCount?'<div class="axw-stat">'+svgSc+'<div><div class="axw-stat-n">'+schemaCount+'</div><div class="axw-stat-l">Schemas</div></div></div>':'')
-                    +(whCount?'<div class="axw-stat">'+svgWh+'<div><div class="axw-stat-n">'+whCount+'</div><div class="axw-stat-l">Webhooks</div></div></div>':'')
-                    +'</div>';
-                var servers=(spec.servers||[]).map(function(s,i){
-                    var active=(_activeEnv===s.url||(!_activeEnv&&i===0));
-                    return '<div class="axw-server"><span class="axw-server-dot'+(active?' active':'')+'"></span>'+escH(s.url)+(s.description?'<span style="margin-left:8px;color:var(--t3);font-size:11px">'+escH(s.description)+'</span>':'')+'</div>';
-                }).join('');
-                var metaHtml='';
-                if(info.contact){
-                    var c=info.contact;var lbl=escH(c.name||c.email||c.url||'Contact');
-                    if(c.email)metaHtml+='<div class="axw-meta-item">Contact: <a href="mailto:'+escH(c.email)+'" style="color:var(--accent);text-decoration:none">'+lbl+'</a></div>';
-                    else if(c.url)metaHtml+='<div class="axw-meta-item">Contact: <a href="'+escH(c.url)+'" target="_blank" style="color:var(--accent);text-decoration:none">'+lbl+'</a></div>';
-                }
-                if(info.license){var l=info.license;var ln=escH(l.name||l.identifier||'License');metaHtml+='<div class="axw-meta-item">License: '+(l.url?'<a href="'+escH(l.url)+'" target="_blank" style="color:var(--accent);text-decoration:none">'+ln+'</a>':ln)+'</div>';}
-                if(info.termsOfService)metaHtml+='<div class="axw-meta-item"><a href="'+escH(info.termsOfService)+'" target="_blank" style="color:var(--accent);text-decoration:none">Terms of Service</a></div>';
-                document.getElementById('axui-welcome').innerHTML=
-                    '<div class="axw-title">'+escH(info.title||'API')+'</div>'
-                    +'<div class="axw-meta"><span class="axw-version">v'+escH(info.version||'1.0')+'</span><span class="axw-openapi">'+escH(spec.openapi||'OpenAPI')+'</span>'+(deprCount?'<span style="font-size:11px;color:var(--amber);padding:2px 6px;border-radius:4px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2)">'+deprCount+' deprecated</span>':'')+'</div>'
-                    +(info.description?'<div class="axw-desc axw-md">'+md(info.description)+'</div>':'')
-                    +stats
-                    +(metaHtml?'<div class="axw-contact-block">'+metaHtml+'</div>':'')
-                    +(servers?'<div class="axw-servers"><div class="axw-servers-title">Servers</div>'+servers+'</div>':'')
-                    +'<div class="axw-hint">Select an endpoint from the sidebar, or press <kbd style="padding:2px 6px;border-radius:4px;background:var(--s2);border:1px solid var(--border);font-family:inherit">⌘K</kbd> to search</div>';
+            // External docs
+            var extHtml=op.externalDocs?'<a href="'+escH(op.externalDocs.url)+'" target="_blank" rel="noreferrer" class="ax-ext-docs-link">'+escH(op.externalDocs.description||'External Docs')+' ↗</a>':'';
+            // Permalink
+            var opId=op.operationId||(isWebhook?'wh_':'op_')+method+'__'+path;
+            var plBtn='<button class="ax-permalink-btn" onclick="axCopyPermalink(\''+escH(opId)+'\')" title="Copy permalink"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M7 9a3 3 0 0 0 4.5.3l2-2A3 3 0 0 0 9.2 3L8.1 4.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 7a3 3 0 0 0-4.5-.3l-2 2A3 3 0 0 0 6.8 13l1.1-1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>';
+            /* Deprecation / sunset banner */
+            var depBanner='';
+            if(op.deprecated||op['x-sunset-date']||op['x-deprecation-notice']||op['x-migration-guide']){
+                var notice=op['x-deprecation-notice']||'This endpoint is deprecated and will be removed in a future version.';
+                var sunset=op['x-sunset-date']?'<div class="ax-dep-sunset">Sunset: <strong>'+escH(op['x-sunset-date'])+'</strong></div>':'';
+                var mig=op['x-migration-guide']?'<a class="ax-dep-mig" href="'+escH(op['x-migration-guide'])+'" target="_blank" rel="noreferrer">Migration guide ↗</a>':'';
+                depBanner='<div class="ax-dep-banner"><div class="ax-dep-icon">⚠</div><div class="ax-dep-body"><div class="ax-dep-title">Deprecated</div><div class="ax-dep-msg axw-md">'+md(notice)+'</div>'+sunset+mig+'</div></div>';
             }
-
-            function renderOperation(path,method,op,spec,isWebhook){
-                var wrap=document.getElementById('axui-content-inner');if(!wrap)return;
-                _schemaIds=0;
-                var dep=op.deprecated?'<span class="ax-depr-badge">deprecated</span>':'';
-                var tag=(op.tags||['General'])[0];
-                // Breadcrumb
-                var bc='<div class="ax-breadcrumb">'
-                    +(isWebhook
-                        ?'<span class="ax-breadcrumb-item">Webhooks</span>'
-                        :'<span class="ax-breadcrumb-item ax-breadcrumb-link" onclick="axGoWelcome()">'+escH(tag)+'</span>')
-                    +'<span class="ax-breadcrumb-sep">›</span>'
-                    +'<span class="ax-breadcrumb-current">'+method.toUpperCase()+'</span>'
-                    +'<span class="ax-breadcrumb-sep">›</span>'
-                    +'<span class="ax-breadcrumb-path">'+escH(path)+'</span>'
-                    +'</div>';
-                // Security
-                var secHtml='';
-                if(op.security!==undefined){
-                    if(!op.security.length){
-                        secHtml='<div class="ax-sec-badges"><span class="ax-sec-badge ax-sec-open">No authentication required</span></div>';
-                    } else {
-                        var badges='';
-                        op.security.forEach(function(s){Object.keys(s).forEach(function(sn){var sc=s[sn];badges+='<span class="ax-sec-badge">'+escH(sn)+(sc&&sc.length?'<span class="ax-sec-scopes"> ['+escH(sc.join(', '))+']</span>':'')+'</span>';});});
-                        secHtml='<div class="ax-sec-badges">'+badges+'</div>';
-                    }
+            var html=bc+depBanner
+                +'<div class="ax-op-header">'
+                +'<span class="axm axm-'+method+'">'+method.toUpperCase()+'</span>'
+                +'<div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(path)+dep+plBtn+'</div>'
+                +(op.summary?'<div class="ax-op-summary">'+escH(op.summary)+'</div>':'')
+                +'</div></div>'
+                +(op.description?'<div class="ax-op-desc axw-md">'+md(op.description)+'</div>':'')
+                +secHtml+extHtml;
+            // Parameters
+            var params=(op.parameters||[]);
+            if(params.length){
+                /* Two presentations, one markup: a table inside its own
+                   horizontal scroller, and below 600px a card per parameter,
+                   where cssDoc() moves each column heading into the cell's
+                   ::before — hence data-label on every td. */
+                html+='<div class="ax-section"><div class="ax-section-title">Parameters</div>'
+                    +'<div class="ax-tablewrap" tabindex="0" role="group" aria-label="Parameters, scrollable">'
+                    +'<table class="ax-params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>';
+                params.forEach(function(p){
+                    var sc=p.schema||{};var t=sc.type||(sc['$ref']?sc['$ref'].split('/').pop():'string');
+                    var enums=sc.enum?'<div class="ax-enum-wrap">'+sc.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div>':'';
+                    html+='<tr><td class="ax-param-name" data-label="Name">'+escH(p.name)+(p.deprecated?'<sup style="color:var(--amber);font-size:9px"> dep</sup>':'')+'</td>'
+                        +'<td data-label="In"><span class="ax-in-badge">'+escH(p.in)+'</span></td>'
+                        +'<td data-label="Type"><span class="ax-type-badge">'+escH(t)+(sc.format?'<span style="opacity:.6"> ('+escH(sc.format)+')</span>':'')+'</span></td>'
+                        +'<td data-label="Required">'+(p.required?'<span class="ax-req-badge">req</span>':'<span style="color:var(--t3);font-size:11px">opt</span>')+'</td>'
+                        +'<td class="axw-md" data-label="Description" style="color:var(--t3)">'+(p.description?md(p.description):'')+enums+'</td></tr>';
+                });
+                html+='</tbody></table></div></div>';
+            }
+            // Request body
+            if(op.requestBody){
+                var ct=op.requestBody.content||{};var ctKeys=Object.keys(ct);
+                html+='<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Request Body'+(op.requestBody.required?'':' <span style="font-size:10px;font-weight:400;color:var(--t3)">(optional)</span>')+'</div>'+expandToggle()+'</div>';
+                if(op.requestBody.description)html+='<div class="axw-md" style="font-size:13px;color:var(--t2);margin-bottom:10px">'+md(op.requestBody.description)+'</div>';
+                if(ctKeys.length>1){
+                    html+='<div class="ax-resp-ct-tabs">';
+                    ctKeys.forEach(function(mime,i){html+='<button class="ax-resp-ct-btn'+(i===0?' active':'')+'" onclick="axSwitchReqCt(this,\''+escH(mime)+'\')">'+escH(mime)+'</button>';});
+                    html+='</div>';
                 }
-                // External docs
-                var extHtml=op.externalDocs?'<a href="'+escH(op.externalDocs.url)+'" target="_blank" rel="noreferrer" class="ax-ext-docs-link">'+escH(op.externalDocs.description||'External Docs')+' ↗</a>':'';
-                // Permalink
-                var opId=op.operationId||(isWebhook?'wh_':'op_')+method+'__'+path;
-                var plBtn='<button class="ax-permalink-btn" onclick="axCopyPermalink(\''+escH(opId)+'\')" title="Copy permalink"><svg width="12" height="12" viewBox="0 0 16 16" fill="none"><path d="M7 9a3 3 0 0 0 4.5.3l2-2A3 3 0 0 0 9.2 3L8.1 4.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M9 7a3 3 0 0 0-4.5-.3l-2 2A3 3 0 0 0 6.8 13l1.1-1.1" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg></button>';
-                /* Deprecation / sunset banner */
-                var depBanner='';
-                if(op.deprecated||op['x-sunset-date']||op['x-deprecation-notice']||op['x-migration-guide']){
-                    var notice=op['x-deprecation-notice']||'This endpoint is deprecated and will be removed in a future version.';
-                    var sunset=op['x-sunset-date']?'<div class="ax-dep-sunset">Sunset: <strong>'+escH(op['x-sunset-date'])+'</strong></div>':'';
-                    var mig=op['x-migration-guide']?'<a class="ax-dep-mig" href="'+escH(op['x-migration-guide'])+'" target="_blank" rel="noreferrer">Migration guide ↗</a>':'';
-                    depBanner='<div class="ax-dep-banner"><div class="ax-dep-icon">⚠</div><div class="ax-dep-body"><div class="ax-dep-title">Deprecated</div><div class="ax-dep-msg axw-md">'+md(notice)+'</div>'+sunset+mig+'</div></div>';
-                }
-                var html=bc+depBanner
-                    +'<div class="ax-op-header">'
-                    +'<span class="axm axm-'+method+'">'+method.toUpperCase()+'</span>'
-                    +'<div class="ax-op-title-wrap"><div class="ax-op-path">'+escH(path)+dep+plBtn+'</div>'
-                    +(op.summary?'<div class="ax-op-summary">'+escH(op.summary)+'</div>':'')
-                    +'</div></div>'
-                    +(op.description?'<div class="ax-op-desc axw-md">'+md(op.description)+'</div>':'')
-                    +secHtml+extHtml;
-                // Parameters
-                var params=(op.parameters||[]);
-                if(params.length){
-                    html+='<div class="ax-section"><div class="ax-section-title">Parameters</div>'
-                        +'<table class="ax-params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>';
-                    params.forEach(function(p){
-                        var sc=p.schema||{};var t=sc.type||(sc['$ref']?sc['$ref'].split('/').pop():'string');
-                        var enums=sc.enum?'<div class="ax-enum-wrap">'+sc.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div>':'';
-                        html+='<tr><td class="ax-param-name">'+escH(p.name)+(p.deprecated?'<sup style="color:var(--amber);font-size:9px"> dep</sup>':'')+'</td>'
-                            +'<td><span class="ax-in-badge">'+escH(p.in)+'</span></td>'
-                            +'<td><span class="ax-type-badge">'+escH(t)+(sc.format?'<span style="opacity:.6"> ('+escH(sc.format)+')</span>':'')+'</span></td>'
-                            +'<td>'+(p.required?'<span class="ax-req-badge">req</span>':'<span style="color:var(--t3);font-size:11px">opt</span>')+'</td>'
-                            +'<td class="axw-md" style="color:var(--t3)">'+(p.description?md(p.description):'')+enums+'</td></tr>';
-                    });
-                    html+='</tbody></table></div>';
-                }
-                // Request body
-                if(op.requestBody){
-                    var ct=op.requestBody.content||{};var ctKeys=Object.keys(ct);
-                    html+='<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Request Body'+(op.requestBody.required?'':' <span style="font-size:10px;font-weight:400;color:var(--t3)">(optional)</span>')+'</div>'+expandToggle()+'</div>';
-                    if(op.requestBody.description)html+='<div class="axw-md" style="font-size:13px;color:var(--t2);margin-bottom:10px">'+md(op.requestBody.description)+'</div>';
-                    if(ctKeys.length>1){
+                ctKeys.forEach(function(mime,i){
+                    html+='<div class="ax-req-ct-panel" data-mime="'+escH(mime)+'" style="'+(i>0?'display:none':'')+'">'
+                        +(ctKeys.length<=1?'<div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-family:monospace">'+escH(mime)+'</div>':'')
+                        +renderSchema(ct[mime].schema||{},spec,0)+'</div>';
+                });
+                html+='</div>';
+            }
+            // Responses
+            if(op.responses){
+                html+='<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Responses</div>'+expandToggle()+'</div>';
+                var rKeys=Object.keys(op.responses);
+                rKeys.forEach(function(status,ri){
+                    var resp=op.responses[status];var sc=parseInt(status);
+                    var cls=sc<300?'axs-2xx':sc<400?'axs-3xx':sc<500?'axs-4xx':'axs-5xx';
+                    var icon=sc<300?'✓':sc<400?'→':'✕';
+                    var isFirst=ri===0;
+                    html+='<div class="ax-resp'+(isFirst?' open':'')+'" id="ax-resp-'+escH(status)+'">'
+                        +'<div class="ax-resp-header" onclick="axToggleResp(this)">'
+                        +'<span class="ax-resp-status '+cls+'">'+icon+' '+escH(status)+'</span>'
+                        +'<span class="ax-resp-desc">'+escH(resp.description||'')+'</span>'
+                        +'<span class="ax-resp-arrow">▶</span>'
+                        +'</div>'
+                        +'<div class="ax-resp-body" style="'+(isFirst?'':'display:none')+'">';
+                    var rc=resp.content||{};var rck=Object.keys(rc);
+                    if(rck.length>1){
                         html+='<div class="ax-resp-ct-tabs">';
-                        ctKeys.forEach(function(mime,i){html+='<button class="ax-resp-ct-btn'+(i===0?' active':'')+'" onclick="axSwitchReqCt(this,\''+escH(mime)+'\')">'+escH(mime)+'</button>';});
+                        rck.forEach(function(mime,i){html+='<button class="ax-resp-ct-btn'+(i===0?' active':'')+'" onclick="axSwitchRespCt(this,\'ax-resp-'+escH(status)+'\',\''+escH(mime)+'\')">'+escH(mime)+'</button>';});
                         html+='</div>';
                     }
-                    ctKeys.forEach(function(mime,i){
-                        html+='<div class="ax-req-ct-panel" data-mime="'+escH(mime)+'" style="'+(i>0?'display:none':'')+'">'
-                            +(ctKeys.length<=1?'<div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-family:monospace">'+escH(mime)+'</div>':'')
-                            +renderSchema(ct[mime].schema||{},spec,0)+'</div>';
-                    });
-                    html+='</div>';
-                }
-                // Responses
-                if(op.responses){
-                    html+='<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Responses</div>'+expandToggle()+'</div>';
-                    var rKeys=Object.keys(op.responses);
-                    rKeys.forEach(function(status,ri){
-                        var resp=op.responses[status];var sc=parseInt(status);
-                        var cls=sc<300?'axs-2xx':sc<400?'axs-3xx':sc<500?'axs-4xx':'axs-5xx';
-                        var icon=sc<300?'✓':sc<400?'→':'✕';
-                        var isFirst=ri===0;
-                        html+='<div class="ax-resp'+(isFirst?' open':'')+'" id="ax-resp-'+escH(status)+'">'
-                            +'<div class="ax-resp-header" onclick="axToggleResp(this)">'
-                            +'<span class="ax-resp-status '+cls+'">'+icon+' '+escH(status)+'</span>'
-                            +'<span class="ax-resp-desc">'+escH(resp.description||'')+'</span>'
-                            +'<span class="ax-resp-arrow">▶</span>'
-                            +'</div>'
-                            +'<div class="ax-resp-body" style="'+(isFirst?'':'display:none')+'">';
-                        var rc=resp.content||{};var rck=Object.keys(rc);
-                        if(rck.length>1){
-                            html+='<div class="ax-resp-ct-tabs">';
-                            rck.forEach(function(mime,i){html+='<button class="ax-resp-ct-btn'+(i===0?' active':'')+'" onclick="axSwitchRespCt(this,\'ax-resp-'+escH(status)+'\',\''+escH(mime)+'\')">'+escH(mime)+'</button>';});
-                            html+='</div>';
+                    rck.forEach(function(mime,i){
+                        var mediaObj=rc[mime]||{};
+                        var examples=mediaObj.examples||{};var exKeys=Object.keys(examples);
+                        var exHtml='';
+                        if(exKeys.length>=2){
+                            var exId='ax-ex-'+escH(status)+'-'+i;
+                            exHtml='<div class="ax-ex-block"><div class="ax-ex-title">Examples</div><div class="ax-ex-tabs">'
+                                +exKeys.map(function(k,j){return '<button class="ax-ex-tab'+(j===0?' active':'')+'" onclick="axExSwitch(\''+exId+'\',\''+escH(k)+'\')">'+escH(examples[k].summary||k)+'</button>';}).join('')
+                                +'</div><div id="'+exId+'" class="ax-ex-panels">'
+                                +exKeys.map(function(k,j){
+                                    var ex=examples[k]||{};
+                                    var val=ex.value!==undefined?ex.value:'';
+                                    var pretty=typeof val==='string'?val:JSON.stringify(val,null,2);
+                                    return '<div class="ax-ex-panel" data-name="'+escH(k)+'" style="'+(j>0?'display:none':'')+'">'
+                                        +(ex.description?'<div class="ax-ex-desc axw-md">'+md(ex.description)+'</div>':'')
+                                        +'<pre class="ax-code">'+hlJson(escH(pretty))+'</pre></div>';
+                                }).join('')+'</div></div>';
+                        } else if(exKeys.length===1){
+                            var only=examples[exKeys[0]];var v=only.value!==undefined?only.value:'';var p=typeof v==='string'?v:JSON.stringify(v,null,2);
+                            exHtml='<div class="ax-ex-block"><div class="ax-ex-title">Example</div>'+(only.description?'<div class="ax-ex-desc axw-md">'+md(only.description)+'</div>':'')+'<pre class="ax-code">'+hlJson(escH(p))+'</pre></div>';
+                        } else if(mediaObj.example!==undefined){
+                            var e=mediaObj.example;var ep=typeof e==='string'?e:JSON.stringify(e,null,2);
+                            exHtml='<div class="ax-ex-block"><div class="ax-ex-title">Example</div><pre class="ax-code">'+hlJson(escH(ep))+'</pre></div>';
                         }
-                        rck.forEach(function(mime,i){
-                            var mediaObj=rc[mime]||{};
-                            var examples=mediaObj.examples||{};var exKeys=Object.keys(examples);
-                            var exHtml='';
-                            if(exKeys.length>=2){
-                                var exId='ax-ex-'+escH(status)+'-'+i;
-                                exHtml='<div class="ax-ex-block"><div class="ax-ex-title">Examples</div><div class="ax-ex-tabs">'
-                                    +exKeys.map(function(k,j){return '<button class="ax-ex-tab'+(j===0?' active':'')+'" onclick="axExSwitch(\''+exId+'\',\''+escH(k)+'\')">'+escH(examples[k].summary||k)+'</button>';}).join('')
-                                    +'</div><div id="'+exId+'" class="ax-ex-panels">'
-                                    +exKeys.map(function(k,j){
-                                        var ex=examples[k]||{};
-                                        var val=ex.value!==undefined?ex.value:'';
-                                        var pretty=typeof val==='string'?val:JSON.stringify(val,null,2);
-                                        return '<div class="ax-ex-panel" data-name="'+escH(k)+'" style="'+(j>0?'display:none':'')+'">'
-                                            +(ex.description?'<div class="ax-ex-desc axw-md">'+md(ex.description)+'</div>':'')
-                                            +'<pre class="ax-code">'+hlJson(escH(pretty))+'</pre></div>';
-                                    }).join('')+'</div></div>';
-                            } else if(exKeys.length===1){
-                                var only=examples[exKeys[0]];var v=only.value!==undefined?only.value:'';var p=typeof v==='string'?v:JSON.stringify(v,null,2);
-                                exHtml='<div class="ax-ex-block"><div class="ax-ex-title">Example</div>'+(only.description?'<div class="ax-ex-desc axw-md">'+md(only.description)+'</div>':'')+'<pre class="ax-code">'+hlJson(escH(p))+'</pre></div>';
-                            } else if(mediaObj.example!==undefined){
-                                var e=mediaObj.example;var ep=typeof e==='string'?e:JSON.stringify(e,null,2);
-                                exHtml='<div class="ax-ex-block"><div class="ax-ex-title">Example</div><pre class="ax-code">'+hlJson(escH(ep))+'</pre></div>';
-                            }
-                            html+='<div class="ax-resp-ct-panel" data-mime="'+escH(mime)+'" style="'+(i>0?'display:none':'')+'">'+renderSchema(mediaObj.schema||{},spec,0)+exHtml+'</div>';
-                        });
-                        html+='</div></div>';
+                        html+='<div class="ax-resp-ct-panel" data-mime="'+escH(mime)+'" style="'+(i>0?'display:none':'')+'">'+renderSchema(mediaObj.schema||{},spec,0)+exHtml+'</div>';
                     });
-                    html+='</div>';
-                }
-                wrap.innerHTML=html;
-                renderPanel(path,method,op,spec);
-            }
-
-            window.axSwitchReqCt=function(btn,mime){
-                var sec=btn.closest('.ax-section');
-                sec.querySelectorAll('.ax-req-ct-panel').forEach(function(el){el.style.display=el.dataset.mime===mime?'':'none';});
-                btn.closest('.ax-resp-ct-tabs').querySelectorAll('.ax-resp-ct-btn').forEach(function(b){b.classList.toggle('active',b===btn);});
-            };
-            window.axSwitchRespCt=function(btn,respId,mime){
-                var r=document.getElementById(respId);if(!r)return;
-                r.querySelectorAll('.ax-resp-ct-panel').forEach(function(el){el.style.display=el.dataset.mime===mime?'':'none';});
-                btn.closest('.ax-resp-ct-tabs').querySelectorAll('.ax-resp-ct-btn').forEach(function(b){b.classList.toggle('active',b===btn);});
-            };
-            window.axToggleResp=function(el){
-                var resp=el.closest('.ax-resp');var body=el.nextElementSibling;
-                var open=resp.classList.toggle('open');
-                body.style.display=open?'':'none';
-            };
-            window.axGoWelcome=function(){
-                _activeOpKey=null;
-                if(_specCache){renderSidebar(_specCache);renderWelcome(_specCache);}
-                var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
-                history.replaceState(null,'',location.pathname);
-            };
-            window.axExSwitch=function(id,name){
-                var box=document.getElementById(id);if(!box)return;
-                box.querySelectorAll('.ax-ex-panel').forEach(function(el){el.style.display=el.dataset.name===name?'':'none';});
-                var parent=box.parentElement;if(parent)parent.querySelectorAll('.ax-ex-tab').forEach(function(t){t.classList.toggle('active',t.textContent.trim()===(box.querySelector('.ax-ex-panel[data-name="'+name+'"]')||{dataset:{name:name}}).dataset.name||t.textContent.includes(name));});
-                /* simpler: mark by index match */
-                var tabs=parent?parent.querySelectorAll('.ax-ex-tab'):[];
-                var panels=box.querySelectorAll('.ax-ex-panel');
-                for(var i=0;i<panels.length;i++){if(panels[i].dataset.name===name){tabs[i]&&tabs[i].classList.add('active');}else{tabs[i]&&tabs[i].classList.remove('active');}}
-            };
-            window.axCopyPermalink=function(id){
-                var url=location.origin+location.pathname+'#op_'+id;
-                if(navigator.clipboard)navigator.clipboard.writeText(url).then(function(){toast('Permalink copied');});
-                else{fb(url);toast('Permalink copied');}
-            };
-
-            function resolveRef(ref,spec){
-                if(!ref||!ref.startsWith('#/'))return null;
-                var parts=ref.slice(2).split('/');var cur=spec;
-                for(var i=0;i<parts.length;i++){cur=cur[parts[i]];if(cur==null)return null;}
-                return cur;
-            }
-
-            function renderSchema(schema,spec,depth){
-                if(!schema)return '';
-                if(schema['$ref']){
-                    var refName=schema['$ref'].split('/').pop();
-                    var resolved=depth<3?resolveRef(schema['$ref'],spec):null;
-                    if(resolved&&depth<3){
-                        var sid='axs'+(++_schemaIds);
-                        return '<div class="ax-ref-wrap">'
-                            +'<button class="ax-schema-collapse-btn" data-schema="'+sid+'" onclick="axToggleSchema(\''+sid+'\')">▼</button>'
-                            +'<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>'
-                            +'<div id="'+sid+'" class="ax-ref-expanded">'+renderSchema(resolved,spec,depth+1)+'</div>'
-                            +'</div>';
-                    }
-                    return '<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>';
-                }
-                if(schema.allOf)return '<div class="ax-schema-obj"><div class="ax-allof-label">allOf</div>'+schema.allOf.map(function(s){return renderSchema(s,spec,depth+1);}).join('')+'</div>';
-                if(schema.oneOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">One of:</div>'+schema.oneOf.map(function(s,i){return '<div class="ax-oneof-item'+(i>0?' ax-oneof-sep':'')+'">'+(i>0?'<div style="font-size:10px;color:var(--t3);margin:2px 0">or</div>':'')+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
-                if(schema.anyOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">Any of:</div>'+schema.anyOf.map(function(s){return '<div class="ax-oneof-item">'+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
-                var type=schema.type;
-                if(Array.isArray(type)){type=type.filter(function(t){return t!=='null';})[0]||'any';}
-                type=type||(schema.properties?'object':'any');
-                if(type==='object'||schema.properties){
-                    if(depth>=3)return '<span class="ax-type-badge">object {…}</span>';
-                    var props=schema.properties||{};var req=schema.required||[];var propKeys=Object.keys(props);
-                    if(!propKeys.length)return '<span class="ax-type-badge">object {}</span>'+(schema.additionalProperties?'<span style="font-size:11px;color:var(--t3);margin-left:6px">+ extra fields</span>':'');
-                    var html='<div class="ax-schema-obj">';
-                    if(schema.description)html+='<div class="ax-schema-desc">'+escH(schema.description)+'</div>';
-                    propKeys.forEach(function(pn){
-                        var pv=props[pn];
-                        /* OpenAPI 3.1 type-arrays: strip null and display the primary type */
-                        var rawType=pv.type;
-                        if(Array.isArray(rawType)){rawType=rawType.filter(function(t){return t!=='null';})[0]||'any';}
-                        var pt=rawType||(pv['$ref']?pv['$ref'].split('/').pop():(pv.properties?'object':'any'));
-                        var isNested=(rawType==='object'||pv.properties)&&depth<2;
-                        var nestedId=isNested?'axs'+(++_schemaIds):'';
-                        var isReq=req.indexOf(pn)!==-1;
-                        html+='<div class="ax-prop-row">'
-                            +(isNested?'<button class="ax-schema-collapse-btn" data-schema="'+nestedId+'" onclick="axToggleSchema(\''+nestedId+'\')">'+(_expandAll?'▼':'▶')+'</button>':'')
-                            +'<span class="ax-prop-name">'+escH(pn)+'</span>'
-                            +'<span class="ax-prop-type ax-type-badge">'+escH(pt)+'</span>'
-                            +'<span class="ax-prop-badges">'+propBadges(pv,isReq)+'</span>'
-                            +(pv.description?'<span class="ax-prop-desc axw-md">'+md(pv.description)+'</span>':'')
-                            +'</div>';
-                        if(pv.enum)html+='<div style="padding:4px 12px 6px 12px"><div class="ax-enum-wrap">'+pv.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div></div>';
-                        if(isNested)html+='<div id="'+nestedId+'" class="ax-prop-nested" style="'+(_expandAll?'':'display:none')+'">'+renderSchema(pv,spec,depth+1)+'</div>';
-                    });
-                    return html+'</div>';
-                }
-                if(type==='array')return '<span class="ax-type-badge">array</span><span style="font-size:11px;color:var(--t3);margin:0 4px">of</span>'+renderSchema(schema.items||{},spec,depth);
-                if(schema.enum)return '<div class="ax-enum-wrap">'+schema.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div>';
-                return '<span class="ax-type-badge">'+escH(type)+(schema.format?'<span style="opacity:.6"> ('+escH(schema.format)+')</span>':'')+'</span>';
-            }
-
-            window.axToggleSchema=function(id){
-                var el=document.getElementById(id);var btn=document.querySelector('[data-schema="'+id+'"]');if(!el)return;
-                var open=el.style.display!=='none';
-                el.style.display=open?'none':'';
-                if(btn)btn.textContent=open?'▶':'▼';
-            };
-
-            /* ── Right panel ── */
-            var _activeLang=APEX_CFG.defaultLanguage||'curl';
-
-            function renderPanel(path,method,op,spec){
-                var panel=document.getElementById('axui-panel-inner');if(!panel)return;
-                var tabs=LANGS.map(function(l){return '<button class="ax-lang-btn'+(l===_activeLang?' active':'')+'" onclick="axLang(\''+l+'\')">'+LANG_LABELS[l]+'</button>';}).join('');
-                var codeHtml='<div class="ax-panel-section-title">Code Sample</div><div class="ax-lang-tabs">'+tabs+'</div><div id="ax-code-wrap"></div>';
-                var tryHtml='';
-                if(APEX_CFG.tryItOut){
-                    var params=op.parameters||[];
-                    var pathParams=params.filter(function(p){return p.in==='path';});
-                    var queryParams=params.filter(function(p){return p.in==='query';});
-                    var headerParams=params.filter(function(p){return p.in==='header';});
-                    var hasBody=['post','put','patch'].includes(method);
-                    var hasSec=op.security===undefined||op.security.length>0;
-                    tryHtml='<div class="ax-try-section"><div class="ax-panel-section-title">Try it out</div>'
-                        +'<div style="font-size:11px;color:var(--t3);margin-bottom:10px;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escH(_server)+'">'+escH(_server||'(no server)')+'</div>';
-                    if(hasSec){
-                        tryHtml+='<label class="ax-try-label">Authorization</label>'
-                            +'<div class="ax-try-auth-wrap">'
-                            +'<select id="axi-auth-type" class="ax-try-auth-type" onchange="axAuthTypeChange()">'
-                            +'<option value="bearer">Bearer</option>'
-                            +'<option value="basic">Basic</option>'
-                            +'<option value="apikey">API Key</option>'
-                            +'</select>'
-                            +'<input class="ax-try-input" id="axi-auth" type="password" placeholder="Token…" style="flex:1">'
-                            +'</div>';
-                    }
-                    function paramFields(list,prefix){
-                        var h='';
-                        list.forEach(function(p){
-                            h+='<label class="ax-try-label" style="font-size:11px;color:var(--t3)">'+escH(p.name)+(p.required?' <span style="color:var(--red)">*</span>':'')+'</label>'
-                                +'<input class="ax-try-input" id="'+(prefix||'axi-')+escH(p.name)+'" placeholder="'+escH(p.example!=null?String(p.example):'')+'"><div style="margin-bottom:4px"></div>';
-                        });
-                        return h;
-                    }
-                    /* Wrap a group of fields with a bulk-JSON edit toggle */
-                    function bulkGroup(title,list,prefix,gid){
-                        if(!list.length)return '';
-                        var names=list.map(function(p){return p.name;});
-                        return '<div class="ax-bulk-group" data-gid="'+gid+'" data-prefix="'+prefix+'" data-names="'+escH(JSON.stringify(names))+'">'
-                            +'<div class="ax-bulk-row"><div class="ax-try-label">'+title+'</div>'
-                            +'<button class="ax-bulk-btn" type="button" onclick="axBulkToggle(\''+gid+'\')">JSON</button></div>'
-                            +'<div class="ax-bulk-fields">'+paramFields(list,prefix)+'</div>'
-                            +'<textarea class="ax-bulk-area" id="'+gid+'-area" spellcheck="false" placeholder=\'{ "key": "value" }\'></textarea>'
-                            +'<div class="ax-bulk-actions" style="display:none">'
-                                +'<button type="button" onclick="axBulkApply(\''+gid+'\')">Apply</button>'
-                                +'<button type="button" onclick="axBulkSyncFromFields(\''+gid+'\')">Refresh from fields</button>'
-                                +'<button type="button" onclick="axBulkCopy(\''+gid+'\')">Copy</button>'
-                            +'</div>'
-                            +'<div class="ax-bulk-err" id="'+gid+'-err"></div>'
-                            +'</div>';
-                    }
-                    if(pathParams.length)tryHtml+=bulkGroup('Path',pathParams,'axi-','axb-path');
-                    if(queryParams.length)tryHtml+=bulkGroup('Query',queryParams,'axi-','axb-query');
-                    if(headerParams.length)tryHtml+=bulkGroup('Headers',headerParams,'axi-h-','axb-hdr');
-                    if(hasBody&&op.requestBody){
-                        var ct=op.requestBody.content||{};var ex='{}';
-                        if(ct['application/json']&&ct['application/json'].schema)ex=JSON.stringify(buildExample(ct['application/json'].schema,spec),null,2);
-                        tryHtml+='<label class="ax-try-label" style="margin-top:8px">Request Body</label><textarea class="ax-try-input ax-try-textarea" id="axi-body">'+escH(ex)+'</textarea>';
-                    }
-                    tryHtml+='<button class="ax-try-send" id="axi-send" onclick="axSend(\''+escH(_server)+'\',\''+escH(path)+'\',\''+escH(method)+'\')">Send Request</button><div id="axi-result"></div></div>';
-                }
-                /* History section */
-                var histHtml='<div class="ax-hist-section"><div class="ax-panel-section-title-row"><div class="ax-panel-section-title">Recent</div><button class="ax-hist-toggle" onclick="this.parentElement.parentElement.classList.toggle(\'collapsed\')">▾</button></div><div id="ax-hist-list" class="ax-hist-list"></div></div>';
-                panel.innerHTML=codeHtml+tryHtml+histHtml;
-                renderCode(path,method,op,spec,_server);
-                /* Restore persisted auth + wire listeners */
-                authRestore();
-                /* Inject OAuth2 "Get token" button if any oauth2 scheme is defined */
-                wireOAuthHelper(spec);
-                /* Populate request history */
-                renderHistory(method,path);
-            }
-
-            window.axAuthTypeChange=function(){
-                var t=document.getElementById('axi-auth-type');var i=document.getElementById('axi-auth');if(!t||!i)return;
-                var ph={bearer:'Token…',basic:'user:password',apikey:'API key…'};
-                i.placeholder=ph[t.value]||'Token…';i.type=t.value==='basic'?'text':'password';
-            };
-
-            window.axLang=function(lang){
-                _activeLang=lang;
-                document.querySelectorAll('.ax-lang-btn').forEach(function(b){b.classList.toggle('active',b.textContent===LANG_LABELS[lang]);});
-                var spec=_specCache;if(!spec)return;
-                var key=_activeOpKey;if(!key)return;
-                var parts=key.split('__');var m=parts[0];var p=parts.slice(1).join('__');
-                var op=spec.paths&&spec.paths[p]&&spec.paths[p][m];
-                if(op)renderCode(p,m,op,spec,_server);
-            };
-
-            function renderCode(path,method,op,spec,server){
-                var wrap=document.getElementById('ax-code-wrap');if(!wrap)return;
-                var code=genCode(_activeLang,server||'http://localhost',path,method,op,spec);
-                wrap.innerHTML='<pre class="ax-code">'+hlJson(escH(code))+'</pre>'
-                    +'<button onclick="apexCopyCode(this)" class="ax-code-copy-btn" data-code="'+escH(code)+'">Copy</button>';
-            }
-
-            window.apexCopyCode=function(btn){
-                fb(btn.dataset.code);btn.textContent='Copied!';btn.style.color='var(--green)';
-                setTimeout(function(){btn.textContent='Copy';btn.style.color='';},1800);
-            };
-
-            function genCode(lang,server,path,method,op,spec){
-                var url=server+path;var hasBody=['post','put','patch'].includes(method);
-                var ct=(op.requestBody&&op.requestBody.content)||{};var bodyObj=null;
-                if(hasBody&&ct['application/json']&&ct['application/json'].schema)bodyObj=buildExample(ct['application/json'].schema,spec);
-                var hasSec=op.security===undefined||(op.security&&op.security.length>0);
-                switch(lang){
-                    case 'curl':{
-                        var c="curl -X "+method.toUpperCase()+" \\\n  '"+url+"'";
-                        c+=" \\\n  -H 'Accept: application/json'";
-                        if(hasSec)c+=" \\\n  -H 'Authorization: Bearer {your_token}'";
-                        if(bodyObj){c+=" \\\n  -H 'Content-Type: application/json'";c+=" \\\n  -d '"+JSON.stringify(bodyObj,null,2)+"'";}
-                        return c;
-                    }
-                    case 'js':{
-                        var o="const response = await fetch('"+url+"', {\n  method: '"+method.toUpperCase()+"',\n  headers: {\n    'Accept': 'application/json',";
-                        if(hasSec)o+="\n    'Authorization': 'Bearer {your_token}',";
-                        if(bodyObj)o+="\n    'Content-Type': 'application/json',";
-                        o+="\n  }"+(bodyObj?",\n  body: JSON.stringify("+JSON.stringify(bodyObj,null,2)+")":"")+"\n});\nconst data = await response.json();";
-                        return o;
-                    }
-                    case 'python':{
-                        var py="import requests\n\nresponse = requests."+method.toLowerCase()+"(\n    '"+url+"',\n    headers={'Accept': 'application/json'"+(hasSec?",'Authorization': 'Bearer {your_token}'":"")+"},"+(bodyObj?"\n    json="+JSON.stringify(bodyObj,null,2):"");
-                        return py+"\n)\ndata = response.json()";
-                    }
-                    case 'php':{
-                        var php="$response = (new \\GuzzleHttp\\Client())\n    ->"+method.toLowerCase()+"('"+url+"', [\n        'headers' => ['Accept' => 'application/json'"+(hasSec?", 'Authorization' => 'Bearer {your_token}'"  :"")+"],"+(bodyObj?"\n        'json' => "+JSON.stringify(bodyObj,null,2):"");
-                        return php+"\n    ]);\n$data = json_decode((string) $response->getBody(), true);";
-                    }
-                    case 'go':{
-                        var go="package main\n\nimport (\n\t\"fmt\"\n\t\"io\"\n\t\"net/http\"\n"+(bodyObj?"\t\"bytes\"\n\t\"encoding/json\"\n":"")+"\n)\n\nfunc main() {\n";
-                        if(bodyObj){go+="\tpayload, _ := json.Marshal("+JSON.stringify(bodyObj)+")\n";go+="\treq, _ := http.NewRequest(\""+method.toUpperCase()+"\", \""+url+"\", bytes.NewBuffer(payload))\n";}
-                        else go+="\treq, _ := http.NewRequest(\""+method.toUpperCase()+"\", \""+url+"\", nil)\n";
-                        go+="\treq.Header.Set(\"Accept\", \"application/json\")\n";
-                        if(hasSec)go+="\treq.Header.Set(\"Authorization\", \"Bearer {your_token}\")\n";
-                        if(bodyObj)go+="\treq.Header.Set(\"Content-Type\", \"application/json\")\n";
-                        go+="\tclient := &http.Client{}\n\tresp, err := client.Do(req)\n\tif err != nil { panic(err) }\n\tdefer resp.Body.Close()\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}";
-                        return go;
-                    }
-                    default: return '// '+lang;
-                }
-            }
-
-            function buildExample(schema,spec,depth){
-                if(!schema)return null;depth=depth||0;if(depth>3)return null;
-                if(schema['$ref']){var r=resolveRef(schema['$ref'],spec);return r?buildExample(r,spec,depth+1):null;}
-                if(schema.example!=null)return schema.example;
-                if(schema.allOf)return buildExample(schema.allOf[0],spec,depth+1);
-                var t=schema.type;
-                if(Array.isArray(t)){t=t.filter(function(x){return x!=='null';})[0]||'any';}
-                t=t||(schema.properties?'object':'any');
-                switch(t){
-                    case 'object':{var o={};for(var k in schema.properties||{})o[k]=buildExample(schema.properties[k],spec,depth+1);return o;}
-                    case 'array':return [buildExample(schema.items||{},spec,depth+1)];
-                    case 'integer':return 1;case 'number':return 1.0;case 'boolean':return true;case 'null':return null;
-                    default:return schema.enum?schema.enum[0]:'string';
-                }
-            }
-
-            window.axSend=function(server,path,method){
-                var btn=document.getElementById('axi-send'),result=document.getElementById('axi-result');
-                if(!btn||!result)return;
-                var authType=document.getElementById('axi-auth-type');
-                var auth=document.getElementById('axi-auth');
-                var body=document.getElementById('axi-body');
-                var url=server+path;
-                var specParams=(_specCache&&_specCache.paths&&_specCache.paths[path]&&_specCache.paths[path][method]&&_specCache.paths[path][method].parameters)||[];
-                specParams.forEach(function(p){
-                    var el=document.getElementById('axi-'+p.name);if(!el||!el.value)return;
-                    if(p.in==='path')url=url.replace('{'+p.name+'}',encodeURIComponent(el.value));
+                    html+='</div></div>';
                 });
-                var qp=specParams.filter(function(p){return p.in==='query';}).map(function(p){var el=document.getElementById('axi-'+p.name);return el&&el.value?p.name+'='+encodeURIComponent(el.value):'';}).filter(Boolean).join('&');
-                if(qp)url+='?'+qp;
-                var headers={'Accept':'application/json'};
-                if(auth&&auth.value){
-                    var at=authType?authType.value:'bearer';
-                    if(at==='bearer')headers['Authorization']='Bearer '+auth.value;
-                    else if(at==='basic')headers['Authorization']='Basic '+btoa(auth.value);
-                    else if(at==='apikey')headers['X-API-Key']=auth.value;
-                }
-                specParams.filter(function(p){return p.in==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headers[p.name]=el.value;});
-                var hasBodyMethod=!['get','head'].includes(method);
-                if(body&&body.value&&hasBodyMethod)headers['Content-Type']='application/json';
-                var opts={method:method.toUpperCase(),headers:headers};
-                if(body&&body.value&&hasBodyMethod)opts.body=body.value;
-                btn.disabled=true;btn.textContent='Sending…';
-                var t0=Date.now();
-                result.innerHTML='<div class="axui-loading-state"><div class="axui-spinner"></div><span>Waiting for response…</span></div>';
-                /* Snapshot of params for history */
-                var paramSnap={};specParams.forEach(function(p){var el=document.getElementById('axi-'+p.name);if(el&&el.value)paramSnap[p.name]=el.value;});
-                var headerSnap={};specParams.filter(function(p){return p.in==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headerSnap[p.name]=el.value;});
-                fetch(url,opts).then(function(r){
-                    var ms=Date.now()-t0;var sc=r.status;
-                    var cls=sc<300?'ax-res-s-ok':sc<400?'ax-res-s-info':sc<500?'ax-res-s-warn':'ax-res-s-err';
-                    var hdrPairs=[];r.headers.forEach(function(v,n){hdrPairs.push([n,v]);});
-                    var ctype=(r.headers.get('content-type')||'').toLowerCase();
-                    return r.text().then(function(raw){
-                        var size=raw.length;var sizeStr=size<1024?size+' B':size<1048576?(size/1024).toFixed(1)+' KB':(size/1048576).toFixed(2)+' MB';
-                        var isJson=ctype.indexOf('json')!==-1;var fmt=raw;
-                        if(isJson){try{fmt=JSON.stringify(JSON.parse(raw),null,2);}catch(e){}}
-                        var bodyHtml=isJson?'<pre class="ax-res-pre">'+hlJson(escH(fmt))+'</pre>':'<pre class="ax-res-pre">'+escH(fmt)+'</pre>';
-                        var hdrTable='<table class="ax-res-headers-tbl">'+hdrPairs.map(function(kv){return '<tr><td>'+escH(kv[0])+'</td><td>'+escH(kv[1])+'</td></tr>';}).join('')+'</table>';
-                        var rid='axres-'+(Date.now());
-                        result.innerHTML='<div class="ax-res-panel">'
-                            +'<div class="ax-res-status-bar">'
-                                +'<span class="ax-res-status '+cls+'">'+sc+' '+escH(r.statusText)+'</span>'
-                                +'<span class="ax-res-meta">'+ms+'ms · '+sizeStr+'</span>'
-                                +'<button class="ax-res-copy" onclick="apexCopyText(this,\''+rid+'-body\')" title="Copy body">Copy</button>'
-                            +'</div>'
-                            +'<div class="ax-res-tabs">'
-                                +'<button class="ax-res-tab active" data-t="body" onclick="axResTab(\''+rid+'\',\'body\')">Body</button>'
-                                +'<button class="ax-res-tab" data-t="headers" onclick="axResTab(\''+rid+'\',\'headers\')">Headers ('+hdrPairs.length+')</button>'
-                                +'<button class="ax-res-tab" data-t="raw" onclick="axResTab(\''+rid+'\',\'raw\')">Raw</button>'
-                            +'</div>'
-                            +'<div id="'+rid+'" class="ax-res-body-wrap">'
-                                +'<div class="ax-res-pane" data-pane="body" id="'+rid+'-body" data-raw="'+escH(fmt)+'">'+bodyHtml+'</div>'
-                                +'<div class="ax-res-pane" data-pane="headers" style="display:none">'+hdrTable+'</div>'
-                                +'<div class="ax-res-pane" data-pane="raw" style="display:none"><pre class="ax-res-pre">'+escH(raw)+'</pre></div>'
-                            +'</div></div>';
-                        histPush(method,path,{status:sc,ms:ms,auth:(auth&&auth.value)||null,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
-                        renderHistory(method,path);
-                    });
-                }).catch(function(err){
-                    result.innerHTML='<div class="ax-res-panel"><div class="ax-res-status-bar"><span class="ax-res-status ax-res-s-err">Network Error</span><span class="ax-res-meta">'+escH(err.message)+'</span></div><div class="ax-res-body-wrap"><div class="ax-res-pane">'
-                        +'<div style="font-size:12px;color:var(--t3);padding:10px;line-height:1.6">'
-                        +'<strong>Possible causes:</strong><ul style="margin:6px 0 0 18px;padding:0"><li>The server is offline or unreachable.</li><li>CORS is not configured to allow this origin.</li><li>The URL is wrong: <code>'+escH(url)+'</code></li></ul></div></div></div></div>';
-                    histPush(method,path,{status:0,ms:Date.now()-t0,auth:(auth&&auth.value)||null,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
-                    renderHistory(method,path);
-                }).finally(function(){btn.disabled=false;btn.textContent='Send Request';});
-            };
-            window.axResTab=function(rid,t){
-                var box=document.getElementById(rid);if(!box)return;
-                box.querySelectorAll('.ax-res-pane').forEach(function(el){el.style.display=el.dataset.pane===t?'':'none';});
-                var tabs=box.parentElement.querySelectorAll('.ax-res-tab');
-                tabs.forEach(function(tb){tb.classList.toggle('active',tb.dataset.t===t);});
-            };
-            window.apexCopyText=function(btn,id){
-                var el=document.getElementById(id);if(!el)return;
-                var raw=el.dataset.raw||el.textContent;
-                if(navigator.clipboard)navigator.clipboard.writeText(raw).then(function(){btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);});
-                else{fb(raw);btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);}
-            };
-
-            function hlJson(s){
-                return s.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,function(m){
-                    var c='ax-n';
-                    if(/^"/.test(m)){c=/:$/.test(m)?'ax-k':'ax-s';}
-                    else if(/true|false/.test(m))c='ax-b';
-                    else if(/null/.test(m))c='ax-null';
-                    return '<span class="'+c+'">'+m+'</span>';
-                });
+                html+='</div>';
             }
-
-            init();
+            setDoc(html);
+            renderPanel(path,method,op,spec);
         }
+
+        window.axSwitchReqCt=function(btn,mime){
+            var sec=btn.closest('.ax-section');
+            sec.querySelectorAll('.ax-req-ct-panel').forEach(function(el){el.style.display=el.dataset.mime===mime?'':'none';});
+            btn.closest('.ax-resp-ct-tabs').querySelectorAll('.ax-resp-ct-btn').forEach(function(b){b.classList.toggle('active',b===btn);});
+        };
+        window.axSwitchRespCt=function(btn,respId,mime){
+            var r=document.getElementById(respId);if(!r)return;
+            r.querySelectorAll('.ax-resp-ct-panel').forEach(function(el){el.style.display=el.dataset.mime===mime?'':'none';});
+            btn.closest('.ax-resp-ct-tabs').querySelectorAll('.ax-resp-ct-btn').forEach(function(b){b.classList.toggle('active',b===btn);});
+        };
+        window.axToggleResp=function(el){
+            var resp=el.closest('.ax-resp');var body=el.nextElementSibling;
+            var open=resp.classList.toggle('open');
+            body.style.display=open?'':'none';
+        };
+        window.axGoWelcome=function(){
+            _activeOpKey=null;
+            if(_specCache){renderSidebar(_specCache);renderWelcome(_specCache);}
+            var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
+            history.replaceState(null,'',location.pathname);
+        };
+        window.axExSwitch=function(id,name){
+            var box=document.getElementById(id);if(!box)return;
+            box.querySelectorAll('.ax-ex-panel').forEach(function(el){el.style.display=el.dataset.name===name?'':'none';});
+            var parent=box.parentElement;if(parent)parent.querySelectorAll('.ax-ex-tab').forEach(function(t){t.classList.toggle('active',t.textContent.trim()===(box.querySelector('.ax-ex-panel[data-name="'+name+'"]')||{dataset:{name:name}}).dataset.name||t.textContent.includes(name));});
+            /* simpler: mark by index match */
+            var tabs=parent?parent.querySelectorAll('.ax-ex-tab'):[];
+            var panels=box.querySelectorAll('.ax-ex-panel');
+            for(var i=0;i<panels.length;i++){if(panels[i].dataset.name===name){tabs[i]&&tabs[i].classList.add('active');}else{tabs[i]&&tabs[i].classList.remove('active');}}
+        };
+        window.axCopyPermalink=function(id){
+            var url=location.origin+location.pathname+'#op_'+id;
+            if(navigator.clipboard)navigator.clipboard.writeText(url).then(function(){toast('Permalink copied');});
+            else{fb(url);toast('Permalink copied');}
+        };
+
+        JS;
+    }
+
+    /** `resolveRef`, the recursive `renderSchema` and its expanders. */
+    private function jsSchema(): string
+    {
+        return <<<'JS'
+        function resolveRef(ref,spec){
+            if(!ref||!ref.startsWith('#/'))return null;
+            var parts=ref.slice(2).split('/');var cur=spec;
+            for(var i=0;i<parts.length;i++){cur=cur[parts[i]];if(cur==null)return null;}
+            return cur;
+        }
+
+        function renderSchema(schema,spec,depth){
+            if(!schema)return '';
+            if(schema['$ref']){
+                var refName=schema['$ref'].split('/').pop();
+                var resolved=depth<3?resolveRef(schema['$ref'],spec):null;
+                if(resolved&&depth<3){
+                    var sid='axs'+(++_schemaIds);
+                    return '<div class="ax-ref-wrap">'
+                        +'<button class="ax-schema-collapse-btn" data-schema="'+sid+'" onclick="axToggleSchema(\''+sid+'\')">▼</button>'
+                        +'<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>'
+                        +'<div id="'+sid+'" class="ax-ref-expanded">'+renderSchema(resolved,spec,depth+1)+'</div>'
+                        +'</div>';
+                }
+                return '<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>';
+            }
+            if(schema.allOf)return '<div class="ax-schema-obj"><div class="ax-allof-label">allOf</div>'+schema.allOf.map(function(s){return renderSchema(s,spec,depth+1);}).join('')+'</div>';
+            if(schema.oneOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">One of:</div>'+schema.oneOf.map(function(s,i){return '<div class="ax-oneof-item'+(i>0?' ax-oneof-sep':'')+'">'+(i>0?'<div style="font-size:10px;color:var(--t3);margin:2px 0">or</div>':'')+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
+            if(schema.anyOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">Any of:</div>'+schema.anyOf.map(function(s){return '<div class="ax-oneof-item">'+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
+            var type=schema.type;
+            if(Array.isArray(type)){type=type.filter(function(t){return t!=='null';})[0]||'any';}
+            type=type||(schema.properties?'object':'any');
+            if(type==='object'||schema.properties){
+                if(depth>=3)return '<span class="ax-type-badge">object {…}</span>';
+                var props=schema.properties||{};var req=schema.required||[];var propKeys=Object.keys(props);
+                if(!propKeys.length)return '<span class="ax-type-badge">object {}</span>'+(schema.additionalProperties?'<span style="font-size:11px;color:var(--t3);margin-left:6px">+ extra fields</span>':'');
+                var html='<div class="ax-schema-obj">';
+                if(schema.description)html+='<div class="ax-schema-desc">'+escH(schema.description)+'</div>';
+                propKeys.forEach(function(pn){
+                    var pv=props[pn];
+                    /* OpenAPI 3.1 type-arrays: strip null and display the primary type */
+                    var rawType=pv.type;
+                    if(Array.isArray(rawType)){rawType=rawType.filter(function(t){return t!=='null';})[0]||'any';}
+                    var pt=rawType||(pv['$ref']?pv['$ref'].split('/').pop():(pv.properties?'object':'any'));
+                    var isNested=(rawType==='object'||pv.properties)&&depth<2;
+                    var nestedId=isNested?'axs'+(++_schemaIds):'';
+                    var isReq=req.indexOf(pn)!==-1;
+                    html+='<div class="ax-prop-row">'
+                        +(isNested?'<button class="ax-schema-collapse-btn" data-schema="'+nestedId+'" onclick="axToggleSchema(\''+nestedId+'\')">'+(_expandAll?'▼':'▶')+'</button>':'')
+                        +'<span class="ax-prop-name">'+escH(pn)+'</span>'
+                        +'<span class="ax-prop-type ax-type-badge">'+escH(pt)+'</span>'
+                        +'<span class="ax-prop-badges">'+propBadges(pv,isReq)+'</span>'
+                        +(pv.description?'<span class="ax-prop-desc axw-md">'+md(pv.description)+'</span>':'')
+                        +'</div>';
+                    if(pv.enum)html+='<div style="padding:4px 12px 6px 12px"><div class="ax-enum-wrap">'+pv.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div></div>';
+                    if(isNested)html+='<div id="'+nestedId+'" class="ax-prop-nested" style="'+(_expandAll?'':'display:none')+'">'+renderSchema(pv,spec,depth+1)+'</div>';
+                });
+                return html+'</div>';
+            }
+            if(type==='array')return '<span class="ax-type-badge">array</span><span style="font-size:11px;color:var(--t3);margin:0 4px">of</span>'+renderSchema(schema.items||{},spec,depth);
+            if(schema.enum)return '<div class="ax-enum-wrap">'+schema.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div>';
+            return '<span class="ax-type-badge">'+escH(type)+(schema.format?'<span style="opacity:.6"> ('+escH(schema.format)+')</span>':'')+'</span>';
+        }
+
+        window.axToggleSchema=function(id){
+            var el=document.getElementById(id);var btn=document.querySelector('[data-schema="'+id+'"]');if(!el)return;
+            var open=el.style.display!=='none';
+            el.style.display=open?'none':'';
+            if(btn)btn.textContent=open?'▶':'▼';
+        };
+
+        JS;
+    }
+
+    /**
+     * `renderPanel`, the code generators, `buildExample`, `axSend`, the response
+     * viewer tabs and the JSON highlighter.
+     */
+    private function jsPanel(): string
+    {
+        return <<<'JS'
+        /* ── Right panel ── */
+        var _activeLang=APEX_CFG.defaultLanguage||'curl';
+
+        function renderPanel(path,method,op,spec){
+            var tabs=LANGS.map(function(l){return '<button class="ax-lang-btn'+(l===_activeLang?' active':'')+'" onclick="axLang(\''+l+'\')">'+LANG_LABELS[l]+'</button>';}).join('');
+            var codeHtml='<div class="ax-panel-section-title">Code Sample</div><div class="ax-lang-tabs">'+tabs+'</div><div id="ax-code-wrap"></div>';
+            var tryHtml='';
+            if(APEX_CFG.tryItOut){
+                var params=op.parameters||[];
+                var pathParams=params.filter(function(p){return p.in==='path';});
+                var queryParams=params.filter(function(p){return p.in==='query';});
+                var headerParams=params.filter(function(p){return p.in==='header';});
+                var hasBody=['post','put','patch'].includes(method);
+                var hasSec=op.security===undefined||op.security.length>0;
+                tryHtml='<div class="ax-try-section"><div class="ax-panel-section-title">Try it out</div>'
+                    +'<div style="font-size:11px;color:var(--t3);margin-bottom:10px;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+escH(_server)+'">'+escH(_server||'(no server)')+'</div>';
+                if(hasSec){
+                    tryHtml+='<label class="ax-try-label">Authorization</label>'
+                        +'<div class="ax-try-auth-wrap">'
+                        +'<select id="axi-auth-type" class="ax-try-auth-type" onchange="axAuthTypeChange()">'
+                        +'<option value="bearer">Bearer</option>'
+                        +'<option value="basic">Basic</option>'
+                        +'<option value="apikey">API Key</option>'
+                        +'</select>'
+                        +'<input class="ax-try-input" id="axi-auth" type="password" placeholder="Token…" style="flex:1">'
+                        +'</div>';
+                }
+                function paramFields(list,prefix){
+                    var h='';
+                    list.forEach(function(p){
+                        h+='<label class="ax-try-label" style="font-size:11px;color:var(--t3)">'+escH(p.name)+(p.required?' <span style="color:var(--red)">*</span>':'')+'</label>'
+                            +'<input class="ax-try-input" id="'+(prefix||'axi-')+escH(p.name)+'" placeholder="'+escH(p.example!=null?String(p.example):'')+'"><div style="margin-bottom:4px"></div>';
+                    });
+                    return h;
+                }
+                /* Wrap a group of fields with a bulk-JSON edit toggle */
+                function bulkGroup(title,list,prefix,gid){
+                    if(!list.length)return '';
+                    var names=list.map(function(p){return p.name;});
+                    return '<div class="ax-bulk-group" data-gid="'+gid+'" data-prefix="'+prefix+'" data-names="'+escH(JSON.stringify(names))+'">'
+                        +'<div class="ax-bulk-row"><div class="ax-try-label">'+title+'</div>'
+                        +'<button class="ax-bulk-btn" type="button" onclick="axBulkToggle(\''+gid+'\')">JSON</button></div>'
+                        +'<div class="ax-bulk-fields">'+paramFields(list,prefix)+'</div>'
+                        +'<textarea class="ax-bulk-area" id="'+gid+'-area" spellcheck="false" placeholder=\'{ "key": "value" }\'></textarea>'
+                        +'<div class="ax-bulk-actions" style="display:none">'
+                            +'<button type="button" onclick="axBulkApply(\''+gid+'\')">Apply</button>'
+                            +'<button type="button" onclick="axBulkSyncFromFields(\''+gid+'\')">Refresh from fields</button>'
+                            +'<button type="button" onclick="axBulkCopy(\''+gid+'\')">Copy</button>'
+                        +'</div>'
+                        +'<div class="ax-bulk-err" id="'+gid+'-err"></div>'
+                        +'</div>';
+                }
+                if(pathParams.length)tryHtml+=bulkGroup('Path',pathParams,'axi-','axb-path');
+                if(queryParams.length)tryHtml+=bulkGroup('Query',queryParams,'axi-','axb-query');
+                if(headerParams.length)tryHtml+=bulkGroup('Headers',headerParams,'axi-h-','axb-hdr');
+                if(hasBody&&op.requestBody){
+                    var ct=op.requestBody.content||{};var ex='{}';
+                    if(ct['application/json']&&ct['application/json'].schema)ex=JSON.stringify(buildExample(ct['application/json'].schema,spec),null,2);
+                    tryHtml+='<label class="ax-try-label" style="margin-top:8px">Request Body</label><textarea class="ax-try-input ax-try-textarea" id="axi-body">'+escH(ex)+'</textarea>';
+                }
+                tryHtml+='<button class="ax-try-send" id="axi-send" onclick="axSend(\''+escH(_server)+'\',\''+escH(path)+'\',\''+escH(method)+'\')">Send Request</button><div id="axi-result"></div></div>';
+            }
+            /* History section */
+            var histHtml='<div class="ax-hist-section"><div class="ax-panel-section-title-row"><div class="ax-panel-section-title">Recent</div><button class="ax-hist-toggle" onclick="this.parentElement.parentElement.classList.toggle(\'collapsed\')">▾</button></div><div id="ax-hist-list" class="ax-hist-list"></div></div>';
+            setPanel(codeHtml+tryHtml+histHtml);
+            renderCode(path,method,op,spec,_server);
+            /* Restore persisted auth + wire listeners */
+            authRestore();
+            /* Inject OAuth2 "Get token" button if any oauth2 scheme is defined */
+            wireOAuthHelper(spec);
+            /* Populate request history */
+            renderHistory(method,path);
+        }
+
+        window.axAuthTypeChange=function(){
+            var t=document.getElementById('axi-auth-type');var i=document.getElementById('axi-auth');if(!t||!i)return;
+            var ph={bearer:'Token…',basic:'user:password',apikey:'API key…'};
+            i.placeholder=ph[t.value]||'Token…';i.type=t.value==='basic'?'text':'password';
+        };
+
+        window.axLang=function(lang){
+            _activeLang=lang;
+            document.querySelectorAll('.ax-lang-btn').forEach(function(b){b.classList.toggle('active',b.textContent===LANG_LABELS[lang]);});
+            var spec=_specCache;if(!spec)return;
+            var key=_activeOpKey;if(!key)return;
+            var parts=key.split('__');var m=parts[0];var p=parts.slice(1).join('__');
+            var op=spec.paths&&spec.paths[p]&&spec.paths[p][m];
+            if(op)renderCode(p,m,op,spec,_server);
+        };
+
+        function renderCode(path,method,op,spec,server){
+            var wrap=document.getElementById('ax-code-wrap');if(!wrap)return;
+            var code=genCode(_activeLang,server||'http://localhost',path,method,op,spec);
+            wrap.innerHTML='<pre class="ax-code">'+hlJson(escH(code))+'</pre>'
+                +'<button onclick="apexCopyCode(this)" class="ax-code-copy-btn" data-code="'+escH(code)+'">Copy</button>';
+        }
+
+        window.apexCopyCode=function(btn){
+            fb(btn.dataset.code);btn.textContent='Copied!';btn.style.color='var(--green)';
+            setTimeout(function(){btn.textContent='Copy';btn.style.color='';},1800);
+        };
+
+        function genCode(lang,server,path,method,op,spec){
+            var url=server+path;var hasBody=['post','put','patch'].includes(method);
+            var ct=(op.requestBody&&op.requestBody.content)||{};var bodyObj=null;
+            if(hasBody&&ct['application/json']&&ct['application/json'].schema)bodyObj=buildExample(ct['application/json'].schema,spec);
+            var hasSec=op.security===undefined||(op.security&&op.security.length>0);
+            switch(lang){
+                case 'curl':{
+                    var c="curl -X "+method.toUpperCase()+" \\\n  '"+url+"'";
+                    c+=" \\\n  -H 'Accept: application/json'";
+                    if(hasSec)c+=" \\\n  -H 'Authorization: Bearer {your_token}'";
+                    if(bodyObj){c+=" \\\n  -H 'Content-Type: application/json'";c+=" \\\n  -d '"+JSON.stringify(bodyObj,null,2)+"'";}
+                    return c;
+                }
+                case 'js':{
+                    var o="const response = await fetch('"+url+"', {\n  method: '"+method.toUpperCase()+"',\n  headers: {\n    'Accept': 'application/json',";
+                    if(hasSec)o+="\n    'Authorization': 'Bearer {your_token}',";
+                    if(bodyObj)o+="\n    'Content-Type': 'application/json',";
+                    o+="\n  }"+(bodyObj?",\n  body: JSON.stringify("+JSON.stringify(bodyObj,null,2)+")":"")+"\n});\nconst data = await response.json();";
+                    return o;
+                }
+                case 'python':{
+                    var py="import requests\n\nresponse = requests."+method.toLowerCase()+"(\n    '"+url+"',\n    headers={'Accept': 'application/json'"+(hasSec?",'Authorization': 'Bearer {your_token}'":"")+"},"+(bodyObj?"\n    json="+JSON.stringify(bodyObj,null,2):"");
+                    return py+"\n)\ndata = response.json()";
+                }
+                case 'php':{
+                    var php="$response = (new \\GuzzleHttp\\Client())\n    ->"+method.toLowerCase()+"('"+url+"', [\n        'headers' => ['Accept' => 'application/json'"+(hasSec?", 'Authorization' => 'Bearer {your_token}'"  :"")+"],"+(bodyObj?"\n        'json' => "+JSON.stringify(bodyObj,null,2):"");
+                    return php+"\n    ]);\n$data = json_decode((string) $response->getBody(), true);";
+                }
+                case 'go':{
+                    var go="package main\n\nimport (\n\t\"fmt\"\n\t\"io\"\n\t\"net/http\"\n"+(bodyObj?"\t\"bytes\"\n\t\"encoding/json\"\n":"")+"\n)\n\nfunc main() {\n";
+                    if(bodyObj){go+="\tpayload, _ := json.Marshal("+JSON.stringify(bodyObj)+")\n";go+="\treq, _ := http.NewRequest(\""+method.toUpperCase()+"\", \""+url+"\", bytes.NewBuffer(payload))\n";}
+                    else go+="\treq, _ := http.NewRequest(\""+method.toUpperCase()+"\", \""+url+"\", nil)\n";
+                    go+="\treq.Header.Set(\"Accept\", \"application/json\")\n";
+                    if(hasSec)go+="\treq.Header.Set(\"Authorization\", \"Bearer {your_token}\")\n";
+                    if(bodyObj)go+="\treq.Header.Set(\"Content-Type\", \"application/json\")\n";
+                    go+="\tclient := &http.Client{}\n\tresp, err := client.Do(req)\n\tif err != nil { panic(err) }\n\tdefer resp.Body.Close()\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}";
+                    return go;
+                }
+                default: return '// '+lang;
+            }
+        }
+
+        function buildExample(schema,spec,depth){
+            if(!schema)return null;depth=depth||0;if(depth>3)return null;
+            if(schema['$ref']){var r=resolveRef(schema['$ref'],spec);return r?buildExample(r,spec,depth+1):null;}
+            if(schema.example!=null)return schema.example;
+            if(schema.allOf)return buildExample(schema.allOf[0],spec,depth+1);
+            var t=schema.type;
+            if(Array.isArray(t)){t=t.filter(function(x){return x!=='null';})[0]||'any';}
+            t=t||(schema.properties?'object':'any');
+            switch(t){
+                case 'object':{var o={};for(var k in schema.properties||{})o[k]=buildExample(schema.properties[k],spec,depth+1);return o;}
+                case 'array':return [buildExample(schema.items||{},spec,depth+1)];
+                case 'integer':return 1;case 'number':return 1.0;case 'boolean':return true;case 'null':return null;
+                default:return schema.enum?schema.enum[0]:'string';
+            }
+        }
+
+        window.axSend=function(server,path,method){
+            var btn=document.getElementById('axi-send'),result=document.getElementById('axi-result');
+            if(!btn||!result)return;
+            var authType=document.getElementById('axi-auth-type');
+            var auth=document.getElementById('axi-auth');
+            var body=document.getElementById('axi-body');
+            var url=server+path;
+            var specParams=(_specCache&&_specCache.paths&&_specCache.paths[path]&&_specCache.paths[path][method]&&_specCache.paths[path][method].parameters)||[];
+            specParams.forEach(function(p){
+                var el=document.getElementById('axi-'+p.name);if(!el||!el.value)return;
+                if(p.in==='path')url=url.replace('{'+p.name+'}',encodeURIComponent(el.value));
+            });
+            var qp=specParams.filter(function(p){return p.in==='query';}).map(function(p){var el=document.getElementById('axi-'+p.name);return el&&el.value?p.name+'='+encodeURIComponent(el.value):'';}).filter(Boolean).join('&');
+            if(qp)url+='?'+qp;
+            var headers={'Accept':'application/json'};
+            if(auth&&auth.value){
+                var at=authType?authType.value:'bearer';
+                if(at==='bearer')headers['Authorization']='Bearer '+auth.value;
+                else if(at==='basic')headers['Authorization']='Basic '+btoa(auth.value);
+                else if(at==='apikey')headers['X-API-Key']=auth.value;
+            }
+            specParams.filter(function(p){return p.in==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headers[p.name]=el.value;});
+            var hasBodyMethod=!['get','head'].includes(method);
+            if(body&&body.value&&hasBodyMethod)headers['Content-Type']='application/json';
+            var opts={method:method.toUpperCase(),headers:headers};
+            if(body&&body.value&&hasBodyMethod)opts.body=body.value;
+            btn.disabled=true;btn.textContent='Sending…';
+            var t0=Date.now();
+            result.innerHTML='<div class="axui-loading-state"><div class="axui-spinner"></div><span>Waiting for response…</span></div>';
+            /* Snapshot of params for history */
+            var paramSnap={};specParams.forEach(function(p){var el=document.getElementById('axi-'+p.name);if(el&&el.value)paramSnap[p.name]=el.value;});
+            var headerSnap={};specParams.filter(function(p){return p.in==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headerSnap[p.name]=el.value;});
+            fetch(url,opts).then(function(r){
+                var ms=Date.now()-t0;var sc=r.status;
+                var cls=sc<300?'ax-res-s-ok':sc<400?'ax-res-s-info':sc<500?'ax-res-s-warn':'ax-res-s-err';
+                var hdrPairs=[];r.headers.forEach(function(v,n){hdrPairs.push([n,v]);});
+                var ctype=(r.headers.get('content-type')||'').toLowerCase();
+                return r.text().then(function(raw){
+                    var size=raw.length;var sizeStr=size<1024?size+' B':size<1048576?(size/1024).toFixed(1)+' KB':(size/1048576).toFixed(2)+' MB';
+                    var isJson=ctype.indexOf('json')!==-1;var fmt=raw;
+                    if(isJson){try{fmt=JSON.stringify(JSON.parse(raw),null,2);}catch(e){}}
+                    var bodyHtml=isJson?'<pre class="ax-res-pre">'+hlJson(escH(fmt))+'</pre>':'<pre class="ax-res-pre">'+escH(fmt)+'</pre>';
+                    var hdrTable='<table class="ax-res-headers-tbl">'+hdrPairs.map(function(kv){return '<tr><td>'+escH(kv[0])+'</td><td>'+escH(kv[1])+'</td></tr>';}).join('')+'</table>';
+                    var rid='axres-'+(Date.now());
+                    result.innerHTML='<div class="ax-res-panel">'
+                        +'<div class="ax-res-status-bar">'
+                            +'<span class="ax-res-status '+cls+'">'+sc+' '+escH(r.statusText)+'</span>'
+                            +'<span class="ax-res-meta">'+ms+'ms · '+sizeStr+'</span>'
+                            +'<button class="ax-res-copy" onclick="apexCopyText(this,\''+rid+'-body\')" title="Copy body">Copy</button>'
+                        +'</div>'
+                        +'<div class="ax-res-tabs">'
+                            +'<button class="ax-res-tab active" data-t="body" onclick="axResTab(\''+rid+'\',\'body\')">Body</button>'
+                            +'<button class="ax-res-tab" data-t="headers" onclick="axResTab(\''+rid+'\',\'headers\')">Headers ('+hdrPairs.length+')</button>'
+                            +'<button class="ax-res-tab" data-t="raw" onclick="axResTab(\''+rid+'\',\'raw\')">Raw</button>'
+                        +'</div>'
+                        +'<div id="'+rid+'" class="ax-res-body-wrap">'
+                            +'<div class="ax-res-pane" data-pane="body" id="'+rid+'-body" data-raw="'+escH(fmt)+'">'+bodyHtml+'</div>'
+                            +'<div class="ax-res-pane" data-pane="headers" style="display:none">'+hdrTable+'</div>'
+                            +'<div class="ax-res-pane" data-pane="raw" style="display:none"><pre class="ax-res-pre">'+escH(raw)+'</pre></div>'
+                        +'</div></div>';
+                    histPush(method,path,{status:sc,ms:ms,auth:(auth&&auth.value)||null,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
+                    renderHistory(method,path);
+                });
+            }).catch(function(err){
+                result.innerHTML='<div class="ax-res-panel"><div class="ax-res-status-bar"><span class="ax-res-status ax-res-s-err">Network Error</span><span class="ax-res-meta">'+escH(err.message)+'</span></div><div class="ax-res-body-wrap"><div class="ax-res-pane">'
+                    +'<div style="font-size:12px;color:var(--t3);padding:10px;line-height:1.6">'
+                    +'<strong>Possible causes:</strong><ul style="margin:6px 0 0 18px;padding:0"><li>The server is offline or unreachable.</li><li>CORS is not configured to allow this origin.</li><li>The URL is wrong: <code>'+escH(url)+'</code></li></ul></div></div></div></div>';
+                histPush(method,path,{status:0,ms:Date.now()-t0,auth:(auth&&auth.value)||null,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
+                renderHistory(method,path);
+            }).finally(function(){btn.disabled=false;btn.textContent='Send Request';});
+        };
+        window.axResTab=function(rid,t){
+            var box=document.getElementById(rid);if(!box)return;
+            box.querySelectorAll('.ax-res-pane').forEach(function(el){el.style.display=el.dataset.pane===t?'':'none';});
+            var tabs=box.parentElement.querySelectorAll('.ax-res-tab');
+            tabs.forEach(function(tb){tb.classList.toggle('active',tb.dataset.t===t);});
+        };
+        window.apexCopyText=function(btn,id){
+            var el=document.getElementById(id);if(!el)return;
+            var raw=el.dataset.raw||el.textContent;
+            if(navigator.clipboard)navigator.clipboard.writeText(raw).then(function(){btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);});
+            else{fb(raw);btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);}
+        };
+
+        /* Highlights JSON that has ALREADY been HTML-escaped — every call site
+           passes escH(...) output. Two consequences the naive version got wrong:
+           string delimiters arrive as &quot;, not ", so nothing was ever marked
+           up as a key or a string; and the digits inside an entity like &#39;
+           matched the number pattern, so the entity was split by a <span> and
+           the browser printed a literal "&#39;" in every cURL sample. */
+        function hlJson(s){
+            var pattern=/(&quot;(?:\\.|(?!&quot;).)*&quot;(?:\s*:)?|&[a-zA-Z]+;|&#\d+;|\b(?:true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g;
+            return s.replace(pattern,function(m){
+                if(m.charAt(0)==='&'&&m.indexOf('&quot;')!==0)return m; /* an entity: pass through untouched */
+                var c='ax-n';
+                if(m.indexOf('&quot;')===0)c=/:$/.test(m)?'ax-k':'ax-s';
+                else if(m==='true'||m==='false')c='ax-b';
+                else if(m==='null')c='ax-null';
+                return '<span class="'+c+'">'+m+'</span>';
+            });
+        }
+
+        JS;
+    }
+
+    /** Boots the UI and closes the IIFE. */
+    private function jsInit(): string
+    {
+        return <<<'JS'
+        init();
 
         })();
         JS;
@@ -2186,6 +2733,11 @@ final class UiRenderer
     private function iconSun(): string
     {
         return '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="3" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+    }
+
+    private function iconKeyboard(): string
+    {
+        return '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="8" cy="8" r="6.5" stroke="currentColor" stroke-width="1.4"/><path d="M6.2 6.2c.3-1 1.1-1.6 2-1.6 1.1 0 1.9.7 1.9 1.7 0 .9-.5 1.3-1.3 1.6-.7.3-.9.7-.9 1.3" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" fill="none"/><circle cx="8" cy="11.6" r=".8" fill="currentColor"/></svg>';
     }
 
     private function iconServer(): string
