@@ -8,7 +8,7 @@ use ApexDocs\Config;
 
 /**
  * Renders the full API documentation page.
- * Pure PHP — no template engine, and the page makes no outbound request.
+ * Pure PHP  no template engine, and the page makes no outbound request.
  */
 final class UiRenderer
 {
@@ -71,7 +71,7 @@ final class UiRenderer
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width,initial-scale=1">
             <meta name="color-scheme" content="dark light">
-            <title>{$title} — Docs</title>
+            <title>{$title}  Docs</title>
             <style>{$this->css()}</style>
             {$customCss}
         </head>
@@ -93,7 +93,7 @@ final class UiRenderer
     }
 
     /**
-     * Author-supplied CSS goes into the page verbatim — HTML-escaping it would
+     * Author-supplied CSS goes into the page verbatim  HTML-escaping it would
      * mangle ordinary selectors (`.a > .b` becomes `.a &gt; .b`). Only a
      * `</style` sequence, which would end the block and open the door to
      * markup injection, is neutralised.
@@ -168,7 +168,7 @@ final class UiRenderer
             ? '<img src="'.htmlspecialchars($config->customLogo, ENT_QUOTES, 'UTF-8').'" class="apex-custom-logo" alt="Logo">'
             : $this->iconBolt();
 
-        // The docs root, derived from the spec URL — "." would resolve to the
+        // The docs root, derived from the spec URL  "." would resolve to the
         // site root whenever the docs are mounted without a trailing slash.
         $home = htmlspecialchars(
             preg_replace('#/spec\.json$#', '', $specUrlRaw) ?: '.',
@@ -222,7 +222,7 @@ final class UiRenderer
         //
         // The env hide sits on the BUTTON, not on `.apex-env-wrap`: the wrapper is
         // the popover's positioned parent, and a display:none wrapper would take
-        // the popover with it — leaving the `⋯` menu's Server entry with nothing
+        // the popover with it  leaving the `⋯` menu's Server entry with nothing
         // to open.
         return <<<HTML
         <div class="apex-right">
@@ -420,7 +420,7 @@ final class UiRenderer
     private function cssShell(): string
     {
         return <<<'CSS'
-        /* ── Z-INDEX LADDER — the only place these numbers are decided ──
+        /* ── Z-INDEX LADDER  the only place these numbers are decided ──
            400  #apex-progress
            1000 #apex-bar
            1150 #axui-sb-backdrop
@@ -428,7 +428,7 @@ final class UiRenderer
            1400 toolbar popovers: .apex-export-menu, #axui-env-popover
            1500 #apex-toast
            1600 overlays that still hand-roll their own backdrop
-                (#apex-palette, #ax-shortcuts, .ax-skip) — WS3 replaces these
+                (#apex-palette, #ax-shortcuts, .ax-skip)  WS3 replaces these
                 with <dialog>, whose top layer sits above everything anyway.
            Inside #axui-content there is a second, local sticky stack, topped by
            #ax-ctx at 6. Nothing there may exceed 9. */
@@ -438,7 +438,7 @@ final class UiRenderer
         html{background:var(--bg)}
         body{min-height:100dvh;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,'Inter',sans-serif;-webkit-font-smoothing:antialiased;color:var(--t1)}
 
-        /* Visually hidden but announced — labels, live regions, glyph names. */
+        /* Visually hidden but announced  labels, live regions, glyph names. */
         .ax-sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
 
         /* ── Skip link ── */
@@ -453,7 +453,7 @@ final class UiRenderer
         /* ── Announcement banner ──
            min-height, never height: the message is author-supplied and wraps on
            a phone. It is grid row 1, so its real height is what pushes the rest
-           of the page down — and removing the node collapses the row. */
+           of the page down  and removing the node collapses the row. */
         #apex-banner{
             display:flex;align-items:center;gap:10px;padding:9px 16px;min-height:40px;
             font-size:13px;font-weight:500;
@@ -477,7 +477,7 @@ final class UiRenderer
             background:linear-gradient(90deg,transparent,var(--accent) 25%,var(--accent2) 75%,transparent);opacity:.55;
             pointer-events:none}
 
-        /* Brand — `.apex-left` is the flexible half so the fixed-width action
+        /* Brand  `.apex-left` is the flexible half so the fixed-width action
            cluster on the right can never be pushed off the viewport. */
         .apex-left{display:flex;align-items:center;gap:9px;flex:1 1 auto;min-width:0;overflow:hidden}
         .apex-brand{display:flex;align-items:center;gap:7px;text-decoration:none;flex-shrink:0;padding:4px 6px;border-radius:var(--r);transition:background .15s}
@@ -526,7 +526,7 @@ final class UiRenderer
            where the banner pushed the toolbar: `--anchor-y` is the toolbar's
            measured bottom edge, written once per open. A static offset from the
            viewport origin painted the sheet over the bar whenever a banner was
-           present. `display:flex` needs the :not([open]) guard — an id-level
+           present. `display:flex` needs the :not([open]) guard  an id-level
            `display` would otherwise beat the UA rule that hides a shut
            dialog. */
         #apex-more{border:none;padding:var(--anchor-y,64px) 8px 8px;background:none;max-width:none;max-height:none;width:100%;height:100%;color:inherit;display:flex;align-items:flex-start;justify-content:flex-end}
@@ -647,7 +647,7 @@ final class UiRenderer
         #axui-content::-webkit-scrollbar-thumb{background:var(--s3);border-radius:4px}
         #axui-content-inner{min-width:0}
         /* clip, not hidden: `hidden` makes the article a scroll CONTAINER, which
-           the browser is then free to scroll — focusing an off-screen cell in a
+           the browser is then free to scroll  focusing an off-screen cell in a
            wide table would slide the whole article sideways, with no scrollbar
            to undo it. `clip` clips at the same edge without creating a
            scrollport. Anything genuinely wide gets its own `.ax-tablewrap`. */
@@ -656,7 +656,7 @@ final class UiRenderer
 
         /* ── Operation context bar (filled in by the operation renderer) ──
            Below 900px the document is the scroller and #apex-bar is sticky at
-           the viewport top, so this must pin BELOW it — `top:0` would put it
+           the viewport top, so this must pin BELOW it  `top:0` would put it
            behind the bar, which outranks it by 994 z-index tiers. At >=900px it
            is inside the #axui-content scrollport, whose own top already sits
            under the bar, so the offset goes back to 0 (see cssResponsive). */
@@ -764,8 +764,8 @@ final class UiRenderer
     }
 
     /**
-     * The right panel and everything reached from it — code sample tabs, the
-     * try-it form, the response viewer, history, the bulk-JSON editor — followed
+     * The right panel and everything reached from it  code sample tabs, the
+     * try-it form, the response viewer, history, the bulk-JSON editor  followed
      * by the refinements that were appended after it: sidebar footer,
      * breadcrumbs, badges, markdown, error states and the shortcuts modal.
      */
@@ -776,7 +776,7 @@ final class UiRenderer
            ONE node with three presentations and no fourth: in flow below the
            article (`tabs`), in flow as two columns (`stack`), or promoted into a
            sticky right rail by grid placement (`rail`). It is never
-           display:none — it holds the code samples, try-it-out, the response
+           display:none  it holds the code samples, try-it-out, the response
            viewer, history and the schema JSON, so hiding it at any width makes
            all of them unreachable. `data-mode` is published by axPanelMode();
            what each mode shows is decided here, where it stays width-agnostic,
@@ -787,8 +787,8 @@ final class UiRenderer
         #axui-panel-inner::-webkit-scrollbar{width:4px}
         #axui-panel-inner::-webkit-scrollbar-thumb{background:var(--s3);border-radius:4px}
         /* The welcome, empty and error views have no console. The node still
-           has to exist — hiding #axui-panel is what made every control inside it
-           unreachable — so instead nothing it draws survives an empty inner: no
+           has to exist  hiding #axui-panel is what made every control inside it
+           unreachable  so instead nothing it draws survives an empty inner: no
            heading, no divider, no top border over blank space. */
         #axui-panel-inner:empty{display:none}
         #axui-panel:has(#axui-panel-inner:empty){border-top-width:0;margin-top:0}
@@ -796,7 +796,7 @@ final class UiRenderer
         #axui-panel-slot:has(#axui-panel-inner:empty){border-left-color:transparent}
         /* The segmented control belongs to `tabs` mode only: `stack` and `rail`
            show all three panes at once, so the control would switch nothing.
-           It is visible by DEFAULT and suppressed by mode — the reverse would
+           It is visible by DEFAULT and suppressed by mode  the reverse would
            leave the only route to the Try-it and Response panes hidden if
            axPanelMode() never ran. The panes are emitted by renderPanel(); until
            they exist the panel stacks its sections, which is the correct narrow
@@ -845,7 +845,7 @@ final class UiRenderer
         @keyframes axspin{to{transform:rotate(360deg)}}
         .ax-empty{padding:32px 16px;text-align:center;color:var(--t3);font-size:13px}
 
-        /* Environment popover — positioning lives in cssShell() with its wrapper */
+        /* Environment popover  positioning lives in cssShell() with its wrapper */
         .axui-env-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);padding:4px 8px 8px}
         .axui-env-item{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:6px;font-size:13px;color:var(--t2);cursor:pointer;transition:background .12s}
         .axui-env-item:hover{background:var(--s2);color:var(--t1)}
@@ -853,7 +853,7 @@ final class UiRenderer
         .axui-env-dot{width:7px;height:7px;border-radius:999px;background:var(--border);flex-shrink:0}
         .axui-env-item.active .axui-env-dot{background:var(--accent)}
 
-        /* Toast — deliberately a dark chip in both themes, so the label colour
+        /* Toast  deliberately a dark chip in both themes, so the label colour
            is fixed rather than following --t1, which would go dark-on-dark.
            Clamped to the viewport and wrapping, because the messages carry full
            server URLs, and lifted clear of the home indicator. */
@@ -1106,7 +1106,7 @@ final class UiRenderer
      *
      * The base styles in the parts above ARE the phone styles; the five width
      * blocks here are declared in ascending order and only ever ADD. Nothing is
-     * `display:none`-ed as the viewport narrows — a control hidden at one width
+     * `display:none`-ed as the viewport narrows  a control hidden at one width
      * is reachable from another control at that width. Layout dimensions come
      * from the tokens in Theme::STRUCTURE, so a breakpoint is a handful of token
      * writes rather than a pile of per-selector overrides.
@@ -1117,16 +1117,16 @@ final class UiRenderer
     private function cssResponsive(): string
     {
         return <<<'CSS'
-        /* ══ BASE — phones, 0–599px (design target 320–430px) ══
+        /* ══ BASE  phones, 0–599px (design target 320–430px) ══
            Progressive disclosure first, because it is a pure source-order
            question: these two classes are also `.apex-icon-btn`s and
            `.apex-env-wrap`s, which set `display` themselves at the same
-           specificity, so the hide only wins from here — after every part that
+           specificity, so the hide only wins from here  after every part that
            could set it, and before the width queries that reveal them. */
         .apex-a-md,.apex-a-lg{display:none}
 
         /* The document scrolls, everything is one column, and the sidebar is an
-           overlay of the same grid child it is at desktop width — no node moves.
+           overlay of the same grid child it is at desktop width  no node moves.
            `visibility:hidden` (not transform alone) is what takes the filter and
            the endpoint rows out of the tab order and the accessibility tree
            while the drawer is shut; axSidebarToggle() adds `inert` on top, and
@@ -1147,7 +1147,7 @@ final class UiRenderer
         #axui-sb-backdrop{display:none;position:fixed;inset:0;background:var(--backdrop);z-index:1150}
         html.ax-nav-open #axui-sb-backdrop{display:block}
 
-        /* ══ >=600px — small tablets and landscape phones ══ */
+        /* ══ >=600px  small tablets and landscape phones ══ */
         @media (min-width:600px){
             :root{--gutter:24px}
             .apex-a-md{display:flex}
@@ -1166,7 +1166,7 @@ final class UiRenderer
             #axui-env-popover{position:absolute;left:auto;right:0;top:calc(100% + 6px);bottom:auto;min-width:220px;max-width:min(320px,calc(100vw - 24px))}
         }
 
-        /* ══ >=900px — THE APP-SHELL THRESHOLD ══
+        /* ══ >=900px  THE APP-SHELL THRESHOLD ══
            Three panes, three scrollers, and the only place a height is declared:
            one grid row per band, so nothing can desync from its content. */
         @media (min-width:900px){
@@ -1199,7 +1199,7 @@ final class UiRenderer
             .axw-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
         }
 
-        /* ══ >=1024px — tablet landscape: panel mode `stack` ══
+        /* ══ >=1024px  tablet landscape: panel mode `stack` ══
            Still in flow under the article, but the segmented control disappears
            (see cssPanel) and Code sits beside Try it. This is the width the old
            stylesheet hid the whole panel at. */
@@ -1209,7 +1209,7 @@ final class UiRenderer
             #axui-panel[data-mode="stack"] #axui-panel-inner:not(:empty){display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
         }
 
-        /* ══ >=1200px — panel mode `rail` ══
+        /* ══ >=1200px  panel mode `rail` ══
            The panel is promoted into a sticky right column by grid placement, not
            by revealing a hidden node. */
         @media (min-width:1200px){
@@ -1218,13 +1218,13 @@ final class UiRenderer
             #axui-doc{grid-area:1/1}
             /* #axui-panel-slot must keep overflow:visible and align-self:stretch.
                Give it any overflow value and it becomes the scroll container for
-               its own sticky child, which degrades the rail to static silently —
+               its own sticky child, which degrades the rail to static silently 
                no error, no console warning. Guarded by a CSS regression test. */
             #axui-panel-slot{grid-area:1/2;align-self:stretch;border-left:1px solid var(--border)}
             /* The one height in the stylesheet that is arithmetic: a sticky child
                pinned at the top of a scrollport must not be taller than that
                scrollport, and no CSS unit names it. `--banner-h` is therefore
-               measured — see the shell metrics in jsCore(). */
+               measured  see the shell metrics in jsCore(). */
             #axui-panel{position:sticky;top:0;max-height:calc(100dvh - var(--bar-h) - var(--banner-h));overflow-y:auto;border-top:none;margin-top:0}
             /* No `display` reset for #axui-panel-inner here: the two-column rule
                is scoped to data-mode="stack", the modes are mutually exclusive,
@@ -1232,13 +1232,13 @@ final class UiRenderer
                that keeps the rail blank on the views with no console. */
         }
 
-        /* ══ >=1560px — wide desktop ══ */
+        /* ══ >=1560px  wide desktop ══ */
         @media (min-width:1560px){
             :root{--gutter:40px;--rail-w:440px;--doc-max:900px}
         }
 
         /* The single fallback: without dvh the shell falls back to vh, which is
-           only wrong while mobile browser chrome is animating — and mobile is
+           only wrong while mobile browser chrome is animating  and mobile is
            the one place the app-shell mode never applies. */
         @supports not (height:100dvh){
             body{min-height:100vh}
@@ -1248,9 +1248,9 @@ final class UiRenderer
         /* ══ Touch ══
            A 44px minimum on BOTH axes of everything that is tapped: an icon
            button is 32px wide, so min-height alone leaves a 32x44 target. The
-           two glyph-sized controls keep their glyph — the 16x16 schema expander
+           two glyph-sized controls keep their glyph  the 16x16 schema expander
            is the only way into a nested object and growing it would push a deep
-           tree off the screen; the permalink sits inside an 18px title line —
+           tree off the screen; the permalink sits inside an 18px title line 
            and gain hit-slop instead, which is 44x44 to a finger at zero cost to
            the layout. */
         @media (pointer:coarse){
@@ -1314,7 +1314,7 @@ final class UiRenderer
 
     /**
      * The behaviour layer, in one method per area of the page. Every part is a
-     * fragment of a single IIFE — jsCore() opens it, jsInit() closes it — so
+     * fragment of a single IIFE  jsCore() opens it, jsInit() closes it  so
      * they are only valid concatenated, in this order.
      */
     private function js(): string
@@ -1400,16 +1400,16 @@ final class UiRenderer
         /* ── The two write targets ──
            #axui-doc is the only node a view may replace, and #axui-panel-inner
            the only node the request console may replace. They are SIBLINGS, so
-           neither can destroy the other. Writing #axui-content-inner — their
-           parent — instead is what removed the console, and with it the code
+           neither can destroy the other. Writing #axui-content-inner  their
+           parent  instead is what removed the console, and with it the code
            samples, try-it-out, the response viewer, the history and the schema
            JSON, from every viewport the moment anything was opened. */
         function setDoc(html){
             var doc=document.getElementById('axui-doc');if(!doc)return;
             doc.innerHTML=html;doc.setAttribute('aria-busy','false');
         }
-        /* Views with no console pass ''. The rail then paints nothing at all —
-           see `#axui-panel-inner:empty` in cssPanel — rather than leaving a
+        /* Views with no console pass ''. The rail then paints nothing at all 
+           see `#axui-panel-inner:empty` in cssPanel  rather than leaving a
            heading and a divider standing over blank space. */
         function setPanel(html){
             var inner=document.getElementById('axui-panel-inner');if(!inner)return;
@@ -1433,8 +1433,8 @@ final class UiRenderer
         /* The banner's height. The >=1200px sticky rail is bounded by the
            viewport minus the two grid rows above its scrollport; --bar-h is
            declared, but the banner carries author-supplied HTML that wraps at
-           any width, so its height can only be measured. 0px — the token's
-           default — is already correct when there is no banner. */
+           any width, so its height can only be measured. 0px  the token's
+           default  is already correct when there is no banner. */
         var banner=document.getElementById('apex-banner');
         function publishBannerHeight(){
             document.documentElement.style.setProperty('--banner-h',(banner&&banner.isConnected?banner.offsetHeight:0)+'px');
@@ -1454,7 +1454,7 @@ final class UiRenderer
     /**
      * Chrome around the document: the environment popover (with the shared
      * `loadSpec` / `_specCache`), the command palette, the global key handler, the
-     * shortcuts modal and the sidebar drawer — plus the shared render helpers
+     * shortcuts modal and the sidebar drawer  plus the shared render helpers
      * `md`, `propBadges`, request history, auth persistence, the bulk-JSON editor
      * and the OAuth token helper.
      */
@@ -1528,7 +1528,7 @@ final class UiRenderer
                 html+='<div class="apex-pal-group">'+escH(tag)+'</div>';
                 byTag[tag].forEach(function(o){
                     /* Real href so the item is copyable and focusable, but the
-                       default navigation is cancelled — see apexPaletteGo. */
+                       default navigation is cancelled  see apexPaletteGo. */
                     html+='<a class="apex-pal-item" href="#op_'+escH(o.operationId||o.key)+'" data-idx="'+idx+'" onclick="return apexPaletteGo(this)">'
                         +'<span class="axm axm-'+o.method.toLowerCase()+'">'+escH(o.method)+'</span>'
                         +'<span class="apex-pal-path">'+escH(o.path)+'</span>'
@@ -1621,7 +1621,7 @@ final class UiRenderer
             s=s.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
                 .replace(/(^|[^*])\*([^*\n]+)\*/g,'$1<em>$2</em>')
                 .replace(/`([^`\n]+)`/g,'<code>$1</code>');
-            /* Links — whitelist http/https/mailto */
+            /* Links  whitelist http/https/mailto */
             s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
             /* Unordered lists */
             s=s.replace(/(^|\n)((?:[-*] .+\n?)+)/g,function(_,pre,list){
@@ -1676,13 +1676,13 @@ final class UiRenderer
         function renderHistory(method,path){
             var box=document.getElementById('ax-hist-list');if(!box)return;
             var arr=histLoad(method,path);
-            if(!arr.length){box.innerHTML='<div class="ax-hist-empty">No history yet — send a request to record it.</div>';return;}
+            if(!arr.length){box.innerHTML='<div class="ax-hist-empty">No history yet  send a request to record it.</div>';return;}
             box.innerHTML=arr.map(function(h,i){
                 var ago=Math.round((Date.now()-h.ts)/1000);
                 var rel=ago<60?ago+'s ago':ago<3600?Math.round(ago/60)+'m ago':Math.round(ago/3600)+'h ago';
                 var sc=h.status||0;var cls=sc<300?'ax-res-s-ok':sc<400?'ax-res-s-info':sc<500?'ax-res-s-warn':'ax-res-s-err';
                 return '<div class="ax-hist-item" onclick="axHistRestore(\''+method+'\',\''+escH(path)+'\','+i+')">'
-                    +'<span class="'+cls+'" style="font-size:10px;padding:1px 6px;border-radius:4px">'+escH(String(sc||'—'))+'</span>'
+                    +'<span class="'+cls+'" style="font-size:10px;padding:1px 6px;border-radius:4px">'+escH(String(sc||''))+'</span>'
                     +'<span class="ax-hist-time">'+rel+'</span>'
                     +(h.ms?'<span class="ax-hist-ms">'+h.ms+'ms</span>':'')
                     +'</div>';
@@ -1851,7 +1851,7 @@ final class UiRenderer
            The state class goes on <html>: the backdrop and the scroll lock are a
            sibling and an ancestor of the drawer, and only a documentElement-scoped
            selector reaches all three. `inert` is applied on top of the CSS
-           `visibility:hidden`, but ONLY while this node is the overlay — at
+           `visibility:hidden`, but ONLY while this node is the overlay  at
            >=900px it is the static navigation column and must stay reachable. */
         var _mqShell=window.matchMedia('(min-width:900px)');
         function drawerSync(){
@@ -2118,7 +2118,7 @@ final class UiRenderer
     }
 
     /**
-     * `renderWelcome`, `renderOperation` and the controls they emit —
+     * `renderWelcome`, `renderOperation` and the controls they emit 
      * content-type switchers, the response accordion, examples, permalinks.
      */
     private function jsDoc(): string
@@ -2215,7 +2215,7 @@ final class UiRenderer
                 /* Two presentations, one markup: a table inside its own
                    horizontal scroller, and below 600px a card per parameter,
                    where cssDoc() moves each column heading into the cell's
-                   ::before — hence data-label on every td. */
+                   ::before  hence data-label on every td. */
                 html+='<div class="ax-section"><div class="ax-section-title">Parameters</div>'
                     +'<div class="ax-tablewrap" tabindex="0" role="group" aria-label="Parameters, scrollable">'
                     +'<table class="ax-params"><thead><tr><th>Name</th><th>In</th><th>Type</th><th>Required</th><th>Description</th></tr></thead><tbody>';
@@ -2667,7 +2667,7 @@ final class UiRenderer
             else{fb(raw);btn.textContent='Copied!';setTimeout(function(){btn.textContent='Copy';},1500);}
         };
 
-        /* Highlights JSON that has ALREADY been HTML-escaped — every call site
+        /* Highlights JSON that has ALREADY been HTML-escaped  every call site
            passes escH(...) output. Two consequences the naive version got wrong:
            string delimiters arrive as &quot;, not ", so nothing was ever marked
            up as a key or a string; and the digits inside an entity like &#39;

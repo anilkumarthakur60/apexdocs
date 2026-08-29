@@ -11,7 +11,7 @@ use Symfony\Component\Config\Definition\ConfigurationInterface;
  * Symfony bundle configuration schema.
  *
  * Matches the structural shape of {@see \ApexDocs\Config::fromArray()} so the
- * underlying core stays framework-agnostic — this class is the only thing that
+ * underlying core stays framework-agnostic  this class is the only thing that
  * understands Symfony's config tree.
  */
 final class Configuration implements ConfigurationInterface

@@ -102,7 +102,7 @@ final class TypeInferrer
         }
 
         if (! in_array(strtolower(ClassName::short($base)), self::ITERABLE_GENERICS, true)) {
-            // Unknown generic wrapper — document the wrapper class itself
+            // Unknown generic wrapper  document the wrapper class itself
             // rather than guessing at its shape.
             return $base;
         }

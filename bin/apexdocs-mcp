@@ -17,7 +17,7 @@ declare(strict_types=1);
  *
  *   vendor/bin/apexdocs-mcp --bootstrap=apexdocs.php --snapshot
  *
- * prints one JSON snapshot and exits — this is what the subprocess mode runs.
+ * prints one JSON snapshot and exits  this is what the subprocess mode runs.
  */
 
 $autoloads = [

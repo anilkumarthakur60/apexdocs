@@ -7,7 +7,7 @@ namespace ApexDocs\Validation;
 /**
  * Structural validation of a generated OpenAPI 3.1 document.
  *
- * Framework-agnostic — takes the document as an array and returns errors and
+ * Framework-agnostic  takes the document as an array and returns errors and
  * warnings as plain strings. Used by `apexdocs:validate` and the MCP server so
  * both report exactly the same findings.
  *
@@ -61,9 +61,9 @@ final class SpecValidator
         }
 
         // OpenAPI 3.1 tolerates a document with no paths, but for a generator
-        // it always means misconfiguration — fail rather than ship an empty API.
+        // it always means misconfiguration  fail rather than ship an empty API.
         if (empty($spec['paths'])) {
-            $this->errors[] = 'Missing required field: paths (no routes matched — check api_path_prefix and exclude_paths)';
+            $this->errors[] = 'Missing required field: paths (no routes matched  check api_path_prefix and exclude_paths)';
         }
 
         foreach ($spec['servers'] ?? [] as $i => $server) {
@@ -157,7 +157,7 @@ final class SpecValidator
     }
 
     /**
-     * Every local $ref must resolve — a dangling pointer is the most common way
+     * Every local $ref must resolve  a dangling pointer is the most common way
      * a generated document fails downstream tooling.
      *
      * @param  array<string, mixed>  $spec

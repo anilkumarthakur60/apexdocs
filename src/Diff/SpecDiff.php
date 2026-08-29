@@ -7,7 +7,7 @@ namespace ApexDocs\Diff;
 /**
  * Compares two OpenAPI documents and classifies the differences.
  *
- * Framework-agnostic — used by `apexdocs:diff` and the MCP server.
+ * Framework-agnostic  used by `apexdocs:diff` and the MCP server.
  *
  * Breaking: a path or method removed, a new required parameter, a new required
  * request-body field, a 2xx/3xx response removed.

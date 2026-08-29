@@ -6,7 +6,7 @@ namespace ApexDocs\Bridge\Laravel;
 
 /**
  * Converts Laravel validation rules to an OpenAPI schema.
- * Pure PHP — no Illuminate runtime required for the parsing logic itself.
+ * Pure PHP  no Illuminate runtime required for the parsing logic itself.
  *
  * Dotted rule keys become nested schemas, matching the JSON payload Laravel
  * actually validates:
@@ -46,7 +46,7 @@ final class RuleParser
         }
 
         // An empty PHP array encodes as `[]`, and `properties: []` is not a
-        // valid JSON Schema — drop the key instead.
+        // valid JSON Schema  drop the key instead.
         if (($schema['properties'] ?? null) === []) {
             unset($schema['properties']);
         }
@@ -111,7 +111,7 @@ final class RuleParser
 
         // Parent must be an object to hold a named child. Compare on the primary
         // type: `nullable|array` produces the 3.1 type-array form
-        // (["array","null"]), which a string comparison would miss — leaving
+        // (["array","null"]), which a string comparison would miss  leaving
         // `items` and `properties` side by side and the nested fields ignored.
         if (self::primaryType($node) !== 'object') {
             $node['type'] = self::retype($node, 'object');
@@ -190,7 +190,7 @@ final class RuleParser
         $merged = array_merge($leaf, $node);
 
         // `items`/`properties` established by nested rules describe the shape
-        // better than the leaf's placeholder — and keywords belonging to the
+        // better than the leaf's placeholder  and keywords belonging to the
         // type we are discarding have to go with it.
         if (isset($node['properties'])) {
             $merged['type'] = self::retype($merged, 'object');
@@ -250,7 +250,7 @@ final class RuleParser
             }
             $values = $this->splitList(substr($r, 3));
             if ($values !== []) {
-                // `enum: []` allows nothing at all — worse than saying nothing.
+                // `enum: []` allows nothing at all  worse than saying nothing.
                 $schema['enum'] = $this->castEnum($values, $type);
             }
         }
@@ -379,7 +379,7 @@ final class RuleParser
      *
      * Rule objects (`Rule::in(...)`, `Password::defaults()`) are stringified
      * only when they can be. A closure rule or a `ValidationRule` object with
-     * no __toString must never be cast — that raises an Error and would kill
+     * no __toString must never be cast  that raises an Error and would kill
      * the whole documentation build.
      *
      * @return list<string>

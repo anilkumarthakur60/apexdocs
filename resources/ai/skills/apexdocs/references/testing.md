@@ -45,7 +45,7 @@ it('has no breaking changes against the baseline', function () {
 ```
 
 HTTP-level: `$this->get('/documentation/api/spec.json')->assertOk()->assertJsonPath('info.title', 'My API');`
-— set `config(['apexdocs.environments' => ['testing']])` (or `[]`) so the routes exist, and
+ set `config(['apexdocs.environments' => ['testing']])` (or `[]`) so the routes exist, and
 `apexdocs.cache.enabled = false` to avoid cross-test caching.
 
 ## Framework-agnostic

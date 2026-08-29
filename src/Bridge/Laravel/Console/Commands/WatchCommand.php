@@ -47,7 +47,7 @@ class WatchCommand extends Command
 
             $hash = $this->hash($dirs);
             if ($hash !== $lastHash) {
-                $this->line('['.date('H:i:s').'] Change detected — regenerating...');
+                $this->line('['.date('H:i:s').'] Change detected  regenerating...');
                 $this->regenerate($apexDocs, $exporter, $output);
                 $lastHash = $hash;
             }

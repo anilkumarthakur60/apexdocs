@@ -8,7 +8,7 @@ use JsonSerializable;
 
 /**
  * OpenAPI 3.1 root document.
- * Pure PHP — no framework dependency.
+ * Pure PHP  no framework dependency.
  */
 final class Document implements JsonSerializable
 {
@@ -38,7 +38,7 @@ final class Document implements JsonSerializable
     /**
      * Faithfully reconstruct a Document from its array form (as produced by
      * {@see toArray()}). Used by {@see \ApexDocs\Cache\SpecCache} so cached
-     * specs round-trip every section — not just paths.
+     * specs round-trip every section  not just paths.
      *
      * @param  array<string, mixed>  $data
      */
@@ -104,7 +104,7 @@ final class Document implements JsonSerializable
 
     public function addServer(string $url, string $description = '', array $variables = []): self
     {
-        // `url` is the only required field of a Server Object — keep it even if
+        // `url` is the only required field of a Server Object  keep it even if
         // empty rather than emitting a server object that cannot be valid.
         $server = ['url' => $url];
         if ($description !== '') {

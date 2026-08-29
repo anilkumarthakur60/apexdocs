@@ -17,7 +17,7 @@ class MockCommand extends Command
 
     /**
      * Path to the framework-agnostic mock router. The router reads the spec
-     * from a sidecar JSON file referenced via env var — the spec is NEVER
+     * from a sidecar JSON file referenced via env var  the spec is NEVER
      * embedded in PHP source. See resources/mock/server.php.
      */
     private const ROUTER = __DIR__.'/../../../../../resources/mock/server.php';
@@ -61,7 +61,7 @@ class MockCommand extends Command
             return self::FAILURE;
         }
 
-        // Pass the spec path via the environment, NOT the command line — keeps
+        // Pass the spec path via the environment, NOT the command line  keeps
         // it out of process listings and avoids shell quoting entirely. Using
         // proc_open with an explicit env array also works on Windows, where
         // "VAR=value cmd" is not valid shell syntax.

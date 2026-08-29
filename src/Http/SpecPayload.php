@@ -16,10 +16,10 @@ use ApexDocs\Spec\Document;
  * Single source of truth for the bytes + headers we serve out of any HTTP
  * adapter (PSR-15 {@see Handler}, Laravel {@see \ApexDocs\Bridge\Laravel\DocsController},
  * future Symfony controller, etc.). Adapters just translate this value
- * object into their framework's native response — they no longer duplicate
+ * object into their framework's native response  they no longer duplicate
  * exporter wiring or content-type tables.
  *
- * Immutable, intentionally — readonly + named constructors so callers can
+ * Immutable, intentionally  readonly + named constructors so callers can
  * pattern-match by kind and never need to mutate.
  */
 final readonly class SpecPayload
@@ -86,7 +86,7 @@ final readonly class SpecPayload
 
     /**
      * Accepting a built {@see Document} as well as the generator lets callers
-     * serve a cached spec — and reuse one build across several formats — while
+     * serve a cached spec  and reuse one build across several formats  while
      * every adapter keeps calling the same named constructors.
      */
     private static function document(ApexDocs|Document $spec): Document

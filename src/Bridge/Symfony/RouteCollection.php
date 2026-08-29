@@ -74,7 +74,7 @@ final class RouteCollection implements RouteCollectionInterface
     {
         $requirements = [];
 
-        // Optional format suffix — not part of the documented resource path.
+        // Optional format suffix  not part of the documented resource path.
         $path = (string) preg_replace('/\{\.[A-Za-z_][A-Za-z0-9_]*\}/', '', $path);
 
         $path = (string) preg_replace_callback(

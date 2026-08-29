@@ -6,7 +6,7 @@ namespace ApexDocs\Spec;
 
 /**
  * OpenAPI operation object.
- * Pure PHP — no framework dependency.
+ * Pure PHP  no framework dependency.
  */
 final class Operation
 {
@@ -100,7 +100,7 @@ final class Operation
     public function externalDocs(string $url, string $description = ''): self
     {
         // `url` is the only required field of an External Documentation Object,
-        // and "0" is a legitimate value — so filter on emptiness, not falsiness.
+        // and "0" is a legitimate value  so filter on emptiness, not falsiness.
         if ($url === '') {
             return $this;
         }

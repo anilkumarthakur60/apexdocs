@@ -10,7 +10,7 @@ use ApexDocs\ApexDocs;
  * Builds the snapshot in the current process.
  *
  * Fast and dependency-free, but PHP cannot reload a class that has already
- * been autoloaded — so edits to controllers or DTOs made while the server is
+ * been autoloaded  so edits to controllers or DTOs made while the server is
  * running are not seen until the server restarts. Prefer
  * {@see SubprocessSnapshotProvider} where a CLI can rebuild the application.
  */

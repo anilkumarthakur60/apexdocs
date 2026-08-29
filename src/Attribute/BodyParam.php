@@ -7,7 +7,7 @@ namespace ApexDocs\Attribute;
 use Attribute;
 
 /**
- * Document an individual request body field — like #[QueryParam] but for the body.
+ * Document an individual request body field  like #[QueryParam] but for the body.
  * Use when you don't have a dedicated DTO class.
  *
  * #[BodyParam('name', type: 'string', required: true)]

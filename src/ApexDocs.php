@@ -15,7 +15,7 @@ use ApexDocs\Spec\Document;
 use Closure;
 
 /**
- * Main entry point. Framework-agnostic — works with any PHP project.
+ * Main entry point. Framework-agnostic  works with any PHP project.
  *
  * Usage (standalone):
  *   $docs = ApexDocs::build($config, $routeCollection);

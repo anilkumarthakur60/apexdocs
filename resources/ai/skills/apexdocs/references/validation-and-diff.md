@@ -1,12 +1,12 @@
-# Validation & diff — exact rules
+# Validation & diff  exact rules
 
 ## `SpecValidator` (`apexdocs:validate`, MCP `validate_spec`)
 
 | Message | Cause | Fix |
 |---|---|---|
-| `Missing required field: openapi/info` | not produced by the generator — corrupt baseline / transformer removed it | check document transformers |
+| `Missing required field: openapi/info` | not produced by the generator  corrupt baseline / transformer removed it | check document transformers |
 | `Missing required field: info.title/version` | empty `info.title`/`version` config | set `info.*` |
-| `Missing required field: paths (no routes matched — …)` | nothing passed the route gates | `list_routes`; fix `api_path_prefix`/`exclude_paths`/`spec_group` |
+| `Missing required field: paths (no routes matched  …)` | nothing passed the route gates | `list_routes`; fix `api_path_prefix`/`exclude_paths`/`spec_group` |
 | `servers[i]: missing url` | server entry without url (core drops those; a transformer may add one) | |
 | `METHOD /path: no responses` | transformer removed responses | |
 | `… response N has no description (required by the spec)` | `#[ApiResponse]` with empty description **and** unknown status (no reason phrase), or a transformer | add `description:` |

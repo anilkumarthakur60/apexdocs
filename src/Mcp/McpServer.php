@@ -15,7 +15,7 @@ use ApexDocs\Spec\Document;
 use ApexDocs\Validation\SpecValidator;
 
 /**
- * Model Context Protocol server for ApexDocs — stdio transport, newline-
+ * Model Context Protocol server for ApexDocs  stdio transport, newline-
  * delimited JSON-RPC 2.0, no dependencies beyond the core.
  *
  * Lets an AI coding agent see the API documentation exactly as the generator
@@ -852,7 +852,7 @@ final class McpServer
         return <<<MD
         Document {$verb} {$path} to production quality with anil/apexdocs.
 
-        1. `describe_operation` (path "{$path}", method "{$method}") — note what is already inferred (summary from PHPDoc, response from return type, body from FormRequest, security from middleware).
+        1. `describe_operation` (path "{$path}", method "{$method}")  note what is already inferred (summary from PHPDoc, response from return type, body from FormRequest, security from middleware).
         2. Read `read_reference` topics `attributes` and `schemas-and-types`.
         3. Prefer code over annotations: give the action a typed DTO/Resource return with `@return Dto[]` or `Collection<int, Dto>` where it returns a list; make sure a FormRequest is type-hinted for writes.
         4. Add only the attributes inference cannot produce: `#[Endpoint(summary:)]` if the PHPDoc first line is poor, `#[QueryParam]` for each query key the action reads, `#[ApiResponse]` for non-2xx statuses it really returns (404, 403, 409…), `#[Example]` with realistic but fake data, `#[Security]`/`#[NoSecurity]` only if middleware detection is wrong.
@@ -867,7 +867,7 @@ final class McpServer
         Make `validate_spec` (strict: true) pass for this application.
 
         1. Run `validate_spec` with strict=true and group the findings by kind.
-        2. Read `read_reference` topic `validation-and-diff` — it lists the cause and fix for every message.
+        2. Read `read_reference` topic `validation-and-diff`  it lists the cause and fix for every message.
         3. Fix causes in code/config, never in generated output: missing summary → PHPDoc first line or `#[Endpoint]`; duplicate operationId → give routes distinct names; unmatched path param → fix the route template or the `#[PathParam]` name; undefined security scheme → declare it under `security.schemes` or fix `#[Security(scheme:)]`; unresolved $ref → the referenced class no longer exists or is excluded by max_depth; no paths → `api_path_prefix` / `exclude_paths`.
         4. Re-run `validate_spec` until clean; report what changed.
         MD;
@@ -878,9 +878,9 @@ final class McpServer
         return <<<MD
         The route {$path} does not appear in the generated documentation. Find out why and fix it.
 
-        1. `list_routes` with path_contains "{$path}" — read `included` and `reason`.
+        1. `list_routes` with path_contains "{$path}"  read `included` and `reason`.
         2. Reasons and fixes: `api_path_prefix` → the path is outside the configured prefixes (config `api_path_prefix`, or add the prefix); `exclude_paths` → a glob/regex in config matches it; `spec_group` → the controller/method carries `#[ApiGroup]` for a different group than `spec_group`; `filterRoutes` → a closure in the app excludes it (search for `filterRoutes(`); `hidden` → `#[Hidden]` on the class/method, or the route only answers HEAD/OPTIONS/non-standard verbs.
-        3. If the route is not listed at all, the framework does not register it (route cache, environment, closure route with no handler) — check `php artisan route:list` / the router.
+        3. If the route is not listed at all, the framework does not register it (route cache, environment, closure route with no handler)  check `php artisan route:list` / the router.
         4. Apply the smallest fix, then `describe_operation` to confirm and `validate_spec`.
         MD;
     }

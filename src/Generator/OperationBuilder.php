@@ -36,7 +36,7 @@ use ReflectionMethod;
 
 /**
  * Builds a single OpenAPI Operation from a Route.
- * Pure PHP — uses only the contract interfaces for framework-specific parts.
+ * Pure PHP  uses only the contract interfaces for framework-specific parts.
  */
 final class OperationBuilder
 {
@@ -192,7 +192,7 @@ final class OperationBuilder
     ): void {
         $requestExamples = ResponseExtractor::normaliseExamples($this->examplesFor($method, 'request'));
 
-        // 1. Explicit #[RequestBody] attribute — works in any framework
+        // 1. Explicit #[RequestBody] attribute  works in any framework
         $rbAttr = AttributeReader::first($method, RequestBodyAttr::class);
         if ($rbAttr !== null) {
             $schema = $this->schemaBuilder->fromClass($rbAttr->class);
@@ -209,7 +209,7 @@ final class OperationBuilder
             return;
         }
 
-        // 2. Inline #[BodyParam] attributes — build request body from individual fields
+        // 2. Inline #[BodyParam] attributes  build request body from individual fields
         $bodyParams = array_merge(
             AttributeReader::all($class, BodyParam::class),
             AttributeReader::all($method, BodyParam::class),
@@ -386,7 +386,7 @@ final class OperationBuilder
     }
 
     /**
-     * #[ResponseHeader] documents headers on the success response — where the
+     * #[ResponseHeader] documents headers on the success response  where the
      * OpenAPI Response Object expects them.
      *
      * @param  array<string, array<string, mixed>>  $responses
@@ -435,7 +435,7 @@ final class OperationBuilder
 
         $responses[$status]['description'] ??= 'OK';
         // Not array_merge: a header called "123" is a numeric-string key, and
-        // array_merge would renumber it — collapsing the map into a list.
+        // array_merge would renumber it  collapsing the map into a list.
         $existingHeaders = is_array($responses[$status]['headers'] ?? null) ? $responses[$status]['headers'] : [];
         $headerMap = [];
         foreach ($built + $existingHeaders as $name => $header) {
@@ -603,7 +603,7 @@ final class OperationBuilder
         if ($route->name() !== '') {
             $id = preg_replace('/[^A-Za-z0-9_]+/', '_', $route->name()) ?? $route->name();
 
-            // One named route can serve several verbs — keep the ids distinct.
+            // One named route can serve several verbs  keep the ids distinct.
             $id = count($route->documentedMethods()) > 1
                 ? $httpMethod.'_'.$id
                 : $id;

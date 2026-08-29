@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `apexdocs://spec.json`, `apexdocs://config`, one per reference topic;
   prompts `document-endpoint`, `fix-validation`, `missing-endpoint`.
 - `ApexDocs\Validation\SpecValidator`, `ApexDocs\Diff\SpecDiff` and
-  `ApexDocs\Generator\RouteSelector` — the logic behind `apexdocs:validate`,
+  `ApexDocs\Generator\RouteSelector`  the logic behind `apexdocs:validate`,
   `apexdocs:diff` and route selection, now public framework-agnostic classes
   (the commands delegate to them). `RouteSelector::exclusionReason()` explains
   why a route is left out.
@@ -43,16 +43,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Stoplight Elements, RapiDoc) and the whole multi-UI system with them. The
   native UI is now the only UI. Each backend pulled a bundle from a third-party
   CDN, forced `script-src`/`style-src` to name that host, and brought its own UX
-  conventions — five ways to expand a schema, five keyboard maps, five ideas of
+  conventions  five ways to expand a schema, five keyboard maps, five ideas of
   what "try it out" means. The page now issues **zero outbound requests** in
   every state, which is the property the rest of the UI work depends on.
-- `?ui=` is no longer read anywhere. `?theme=dark|light|auto` stays — it is a
+- `?ui=` is no longer read anywhere. `?theme=dark|light|auto` stays  it is a
   supported deep-link override and is covered by tests.
 - Removed public API: `UiRenderer::UIS`, `UiRenderer::normalizeUi()`,
   `Theme::isDark()`, the `$ui` first argument of `UiRenderer::render()`, and the
   `Config::$defaultUi` property.
 - Removed configuration: `ui.default`, the `APEXDOCS_UI` environment variable,
-  and `ui.show_ui_switcher` (renamed — see below).
+  and `ui.show_ui_switcher` (renamed  see below).
 - Removed the `1`…`6` "switch UI backend" keyboard shortcut and its row in the
   shortcuts dialog.
 
@@ -69,7 +69,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `?theme=` override on the way. It now resolves the hash in place, exactly like
   a sidebar click, and the deep-link theme survives.
 - The `t` shortcut toggled the theme by clicking the toolbar button, so it did
-  nothing when `ui.show_toolbar` was `false` — the one configuration where it is
+  nothing when `ui.show_toolbar` was `false`  the one configuration where it is
   the only way to switch. It now calls the theme cycle directly.
 
 ### Internal
@@ -90,7 +90,7 @@ Initial public release.
 
 ApexDocs generates OpenAPI 3.1 documents from PHP source: routes, controller
 signatures, PHP 8 attributes, PHPDoc annotations, and framework validation
-rules. The core has no framework dependency — Laravel and Symfony are bridges
+rules. The core has no framework dependency  Laravel and Symfony are bridges
 over five small interfaces.
 
 ### Generating
@@ -129,7 +129,7 @@ attributes work at class or method level, with method-level winning.
   source (`ApexDocs\Http\Theme`), so the explicit choice and the
   `prefers-color-scheme` fallback cannot drift. Every token that carries text is
   contrast-checked against the surface it sits on, and the suite fails if a pair
-  drops below the WCAG AA ratio of 4.5:1 — method badges, JSON syntax
+  drops below the WCAG AA ratio of 4.5:1  method badges, JSON syntax
   highlighting, status pills, and property badges all pass in both themes.
   Raised surfaces (cards) and recessed ones (code blocks, inputs) are separate
   tokens, so light mode reads as layered rather than flat.
@@ -142,7 +142,7 @@ attributes work at class or method level, with method-level winning.
 - **PSR-15 handler** for Slim, Mezzio, or any PSR-7 stack, serving the UI, the
   spec, and every export from one mount point.
 - **Exports**: OpenAPI JSON/YAML, Postman Collection v2.1, Insomnia v4, and
-  Bruno — with request bodies generated from the referenced schemas and auth
+  Bruno  with request bodies generated from the referenced schemas and auth
   mapped from the declared security scheme type.
 
 ### Laravel bridge
@@ -151,8 +151,8 @@ attributes work at class or method level, with method-level winning.
   config file.
 - **FormRequest rules → request-body schema.** Dotted and wildcard keys
   (`author.name`, `items.*.sku`) build nested structures; ~40 rules map onto
-  JSON Schema keywords. Rules that carry no documentable metadata — closures,
-  `ValidationRule` objects — are skipped rather than crashing the build.
+  JSON Schema keywords. Rules that carry no documentable metadata  closures,
+  `ValidationRule` objects  are skipped rather than crashing the build.
 - **Sanctum / Passport / JWT detection** from route middleware. Every scheme an
   operation requires is guaranteed to be declared in the document.
 - **Spec caching** through any PSR-16 store, shared across the spec routes and
@@ -163,7 +163,7 @@ attributes work at class or method level, with method-level winning.
 - **Artisan commands**: `apexdocs:generate` (clean stdout, so redirection
   works), `apexdocs:validate` (`--strict` for CI), `apexdocs:export`,
   `apexdocs:diff` for breaking-change detection, `apexdocs:watch`, and
-  `apexdocs:mock` — a mock server answering with examples from the spec.
+  `apexdocs:mock`  a mock server answering with examples from the spec.
 
 ### Symfony bridge
 

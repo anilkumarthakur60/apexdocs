@@ -26,7 +26,7 @@ automatically), `getTags()`, `get(key, default)`, `toArray()`.
 `addOperation(path, method, Operation)`, `hasOperation(path, method)`, `getPaths()`, `addWebhook(name, spec)`,
 `components(): Components`, `addGlobalSecurity(scheme, scopes)`, `addTag(name, description)`,
 `extend(key, value)`, `toArray()`, `toJson(pretty)`, `jsonSerialize()`, `Document::fromArray(array)`
-(round-trips everything — used by the cache).
+(round-trips everything  used by the cache).
 
 ## `Components` API
 `addSchema`, `hasSchema`, `addResponse`, `addParameter`, `addExample`, `addRequestBody`,
@@ -34,7 +34,7 @@ automatically), `getTags()`, `get(key, default)`, `toArray()`.
 `^[a-zA-Z0-9._-]+$`.
 
 ## Route filtering
-`filterRoutes(Closure(Route): bool)` — runs after prefix/exclude/group filtering; return `false`
+`filterRoutes(Closure(Route): bool)`  runs after prefix/exclude/group filtering; return `false`
 to drop. Only one filter is kept (a later call replaces it).
 
 ## Webhooks

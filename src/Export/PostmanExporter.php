@@ -32,7 +32,7 @@ final class PostmanExporter
             'item' => [],
         ];
 
-        // Postman validates `auth` against a strict shape — omit it entirely
+        // Postman validates `auth` against a strict shape  omit it entirely
         // rather than emitting null when the API declares no bearer scheme.
         $auth = $this->globalAuth($spec);
         if ($auth !== null) {

@@ -16,9 +16,9 @@ use PHPStan\PhpDocParser\Parser\TypeParser;
  * No framework dependencies.
  *
  * Supports both major versions of the parser: v2 threads a ParserConfig
- * through every constructor, v1 takes none. Getting this wrong is silent —
+ * through every constructor, v1 takes none. Getting this wrong is silent 
  * construction throws, parsing returns null, and every @return annotation in
- * the project stops contributing to the spec — so the two wirings are chosen
+ * the project stops contributing to the spec  so the two wirings are chosen
  * explicitly rather than discovered by exception.
  */
 final class DocBlockReader
@@ -64,7 +64,7 @@ final class DocBlockReader
         }
 
         // phpdoc-parser ^1
-        /** @phpstan-ignore-next-line — v1 constructors take no ParserConfig */
+        /** @phpstan-ignore-next-line  v1 constructors take no ParserConfig */
         $constExpr = new ConstExprParser;
         /** @phpstan-ignore-next-line */
         self::$lexer = new Lexer;
@@ -84,12 +84,12 @@ final class DocBlockReader
         try {
             return $parser->parse(new TokenIterator($lexer->tokenize($docComment)));
         } catch (\Throwable) {
-            // Malformed annotation — the rest of the docblock is not worth losing.
+            // Malformed annotation  the rest of the docblock is not worth losing.
             return null;
         }
     }
 
-    /** First non-tag, non-empty line — used as summary. */
+    /** First non-tag, non-empty line  used as summary. */
     public static function summary(string|false $docComment): string
     {
         if (! $docComment) {

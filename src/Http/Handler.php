@@ -12,7 +12,7 @@ use Psr\Http\Message\StreamFactoryInterface;
 use Psr\Http\Server\RequestHandlerInterface;
 
 /**
- * PSR-15 request handler — serves the docs UI, spec files, and exports.
+ * PSR-15 request handler  serves the docs UI, spec files, and exports.
  * Works with any PSR-7/PSR-15 compatible framework or middleware stack.
  *
  * Routes it handles (relative to the prefix you mount it on):
@@ -25,7 +25,7 @@ use Psr\Http\Server\RequestHandlerInterface;
  *
  * Payload construction is delegated to {@see SpecPayload} so this handler
  * and the Laravel {@see \ApexDocs\Bridge\Laravel\DocsController} stay in
- * lockstep — same bytes, same headers, no drift.
+ * lockstep  same bytes, same headers, no drift.
  */
 final class Handler implements RequestHandlerInterface
 {

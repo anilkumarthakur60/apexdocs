@@ -8,7 +8,7 @@ use Throwable;
 
 /**
  * Thrown when an exporter (JSON/YAML/Postman/Insomnia/Bruno) fails to write
- * its output — typically a filesystem permission or unencodable value.
+ * its output  typically a filesystem permission or unencodable value.
  */
 final class ExporterException extends ApexDocsRuntimeException
 {

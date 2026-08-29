@@ -15,7 +15,7 @@ use ReflectionNamedType;
 
 /**
  * Extracts path, query, header, and cookie parameters.
- * Pure PHP — reads PHP 8 attributes, route URI patterns, and the handler signature.
+ * Pure PHP  reads PHP 8 attributes, route URI patterns, and the handler signature.
  *
  * Precedence, strongest first: method attributes → class attributes → values
  * derived from the route itself.
@@ -42,7 +42,7 @@ final class ParameterExtractor
         foreach ($buckets as $bucket) {
             foreach ($bucket as $param) {
                 // "Each template expression in the path MUST correspond to a
-                // path parameter" — and the converse: a path parameter with no
+                // path parameter"  and the converse: a path parameter with no
                 // template expression makes the document invalid. A class-level
                 // #[PathParam] naturally does not apply to every route.
                 if ($param['in'] === 'path' && ! in_array($param['name'], $template, true)) {
@@ -60,7 +60,7 @@ final class ParameterExtractor
     }
 
     /**
-     * Path parameters derivable from the route alone — for handlers that cannot
+     * Path parameters derivable from the route alone  for handlers that cannot
      * be reflected, such as closure routes.
      *
      * @return list<array<string, mixed>>
@@ -105,7 +105,7 @@ final class ParameterExtractor
 
             $description = $descriptions[$name] ?? '';
             if ($optional) {
-                $description = trim($description.' (optional segment — the route also matches without it)');
+                $description = trim($description.' (optional segment  the route also matches without it)');
             }
             if ($description !== '') {
                 $param['description'] = $description;
@@ -149,7 +149,7 @@ final class ParameterExtractor
 
     /**
      * Scalar parameter types declared on the controller action, keyed by name.
-     * Route-model-bound and service parameters are skipped — their JSON shape
+     * Route-model-bound and service parameters are skipped  their JSON shape
      * is the bound key, not the object.
      *
      * @return array<string, string>

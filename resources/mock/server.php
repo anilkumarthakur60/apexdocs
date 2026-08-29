@@ -74,7 +74,7 @@ foreach ($spec['paths'] ?? [] as $specPathTpl => $methods) {
         continue;
     }
     // Quote the literal parts of the template so a path containing regex
-    // metacharacters cannot break — or widen — the pattern.
+    // metacharacters cannot break  or widen  the pattern.
     $quoted = preg_quote($specPathTpl, '#');
     $pattern = '#^/?'.preg_replace('/\\\\\{[A-Za-z_][A-Za-z0-9_]*\\\\}/', '[^/]+', $quoted).'/?$#';
     if (preg_match($pattern, $path) !== 1) {
@@ -131,7 +131,7 @@ return true;
 
 /**
  * Pick which documented response to serve: the caller's choice if it exists,
- * otherwise the lowest success status. Never the first key — an operation that
+ * otherwise the lowest success status. Never the first key  an operation that
  * documents 404 before 200 must still answer 200 by default.
  */
 function apexdocs_mock_status(array $responses, ?string $wanted): string

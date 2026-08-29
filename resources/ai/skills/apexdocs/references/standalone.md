@@ -12,7 +12,7 @@ $routes = (new ArrayRouteCollection)                       // also: new ArrayRou
     ->push(new Route(['DELETE'], '/api/users/{id}', UserController::class.'@destroy'));
 
 $apex = ApexDocs::make(['title' => 'My API', 'version' => '2.0.0'])   // Config|array; array → Config::fromArray
-    ->routes($routes)                                                  // required — generate() throws MissingRouteCollectionException otherwise
+    ->routes($routes)                                                  // required  generate() throws MissingRouteCollectionException otherwise
     ->validation($extractor)          // ?ValidationExtractorInterface
     ->security($detector)             // ?SecurityDetectorInterface
     ->filterRoutes(fn (Route $r) => true)
@@ -38,7 +38,7 @@ joined; bare class → `__invoke`), `middleware`, `metadata` (`name`, `wheres`, 
 |---|---|---|
 | `RouteCollectionInterface` | `all()` | `list<Route>` |
 | `ValidationExtractorInterface` | `extract(ReflectionMethod $handler, Route $route)` | Request Body Object array or null |
-| `SecurityDetectorInterface` | `schemes()` / `forRoute(Route, ReflectionMethod)` | `{name: Security Scheme}` / `list<{name: scopes}>` or null — every name returned by `forRoute` must exist in `schemes()` |
+| `SecurityDetectorInterface` | `schemes()` / `forRoute(Route, ReflectionMethod)` | `{name: Security Scheme}` / `list<{name: scopes}>` or null  every name returned by `forRoute` must exist in `schemes()` |
 | `DocumentTransformerInterface` | `transform(Document $document): void` | mutate in place |
 | `OperationTransformerInterface` | `transform(Operation $operation): void` | mutate in place |
 
@@ -50,7 +50,7 @@ $app->get('/docs/{path:.*}', $handler);   // Slim example
 ```
 Dispatch by path suffix: `/spec.json`, `/spec.yaml`, `/postman`, `/insomnia`, `/bruno`
 (downloads), anything else → the HTML UI pointing at `<path>/spec.json`; `?theme=` honoured.
-The spec is generated per request — wrap with `SpecCache` yourself if needed.
+The spec is generated per request  wrap with `SpecCache` yourself if needed.
 
 `SpecPayload::json|yaml|postman|insomnia|bruno(ApexDocs|Document)` and `::html(string)` give
 `body`, `contentType`, `headers`, `downloadName` for any framework's response object.

@@ -70,7 +70,7 @@ final class ApexDocsExtension extends Extension
             $container->register($exporter, $exporter)->setPublic(true);
         }
 
-        // The fluent ApexDocs façade — built via a factory so the cloning
+        // The fluent ApexDocs façade  built via a factory so the cloning
         // fluent setters yield the final configured instance.
         $container->register('apex_docs.factory', ApexDocsFactory::class)
             ->setArguments([

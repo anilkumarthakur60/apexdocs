@@ -11,7 +11,7 @@ use ReflectionMethod;
 
 /**
  * Extracts OpenAPI responses from attributes, return type, and route middleware.
- * Pure PHP — no framework dependency.
+ * Pure PHP  no framework dependency.
  */
 final class ResponseExtractor
 {
@@ -40,7 +40,7 @@ final class ResponseExtractor
             $responses[$this->responseKey($attr->status)] = $this->buildFromAttribute($attr);
         }
 
-        // 2. Infer a success response from the return type — but only when the
+        // 2. Infer a success response from the return type  but only when the
         //    author has not already declared one. An endpoint documented as
         //    201 Created must not also sprout a phantom 200.
         if (! $this->hasSuccessResponse($responses)) {

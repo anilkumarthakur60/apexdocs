@@ -8,7 +8,7 @@ use ApexDocs\Attribute\Webhook;
 
 /**
  * Scans PHP files for classes annotated with #[Webhook].
- * No framework dependency — just filesystem and Reflection.
+ * No framework dependency  just filesystem and Reflection.
  */
 final class WebhookScanner
 {
@@ -142,7 +142,7 @@ final class WebhookScanner
     }
 
     /**
-     * Skip `::class` — that's a class-name resolution constant, not a class
+     * Skip `::class`  that's a class-name resolution constant, not a class
      * declaration.
      *
      * @param  list<array{0:int,1:string,2:int}|string>  $tokens
