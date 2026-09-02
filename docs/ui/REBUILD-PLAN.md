@@ -100,7 +100,9 @@ BASE — 0–599px (design target 320–430px). Single column. Document scroll. 
 
 >=1200px — panel `data-mode="rail"`: promoted into the sticky right column by grid placement. `--rail-w:380px; --nav-w:264px`. `#ax-ctx` drops its `[Code][Try it]` buttons. This is the only place the layout gains a third column, and it gains it by grid placement, not by revealing a hidden node.
 
->=1560px — `--rail-w:440px; --doc-max:900px; --gutter:40px`.
+>=1560px — `--rail-w:440px; --gutter:40px`.
+
+**Amended after WS2 landed.** `--doc-max` applies only below the rail threshold. From 1200px up, `#axui-doc` is a grid item and the plan's `margin-inline:auto` cancelled its stretch: an auto inline margin sizes a grid item to fit-content, so the article rendered 592px wide inside a 1216px cell — narrower than the 900px measure meant to bound it — and the slack showed as dead space between the documentation and the console. The rail rule is now `#axui-doc{grid-area:1/1;max-width:none;margin-inline:0}`: the cell is already bounded by the rail, so the article fills it and the `--doc-max` measure stays where it is needed, in flow. Both halves are guarded by CSS regression tests.
 
 ORTHOGONAL QUERIES (not width):
 - `@media (pointer:coarse)` — `min-height:var(--tap)` on `.axi, .axg-header, .ax-resp summary, .apex-icon-btn, .ax-lang-btn, .ax-res-tab, .ax-ex-tab, .ax-resp-ct-btn, .ax-bulk-btn, .axui-env-item, .apex-pal-item, .apex-banner-close, .ax-hist-item, .ax-pseg button`. The 16×16 schema expander — the *only* way to open a nested object — keeps its 16px glyph and gains hit-slop: `position:relative` + `::after{content:'';position:absolute;inset:-14px}`, so the target is 44×44 with zero change to tree density.
