@@ -376,3 +376,36 @@ it('marks every decorative glyph hidden from assistive tech', function () {
     expect(uiPage())->not->toMatch('/<svg(?![^>]*aria-hidden)/')
         ->and(uiScript())->not->toMatch('/<svg(?![^>]*aria-hidden)/');
 });
+
+it('makes every $ref a link to the schema it names', function () {
+    // A reader looking at `carrier: CarrierResource` wants that schema, and the
+    // badge is where they are standing. Built from the ref itself — no name is
+    // special — and only linked when the component is really published, so a
+    // dangling ref cannot become a dead link.
+    $js = uiScript();
+
+    $href = <<<'JS'
+href="#schema_'+escH(encodeURIComponent(name))+'"
+JS;
+    $guard = <<<'JS'
+spec.components.schemas&&spec.components.schemas[name]
+JS;
+    $arrayOfRefs = <<<'JS'
+itemRef.split('/').pop()+'[]'
+JS;
+
+    expect($js)->toContain('function refBadge(ref,spec,extraClass,label)')
+        ->and($js)->toContain(trim($href))
+        ->and($js)->toContain(trim($guard))
+        // `array` alone named nothing: an array of $refs now says what is in it.
+        ->and($js)->toContain(trim($arrayOfRefs))
+        // The reverse direction — "Used by" — was a <div onclick>, so it was
+        // unreachable by keyboard as well as unlinkable.
+        ->and($js)->toContain('<a class="ax-used-item" href="#')
+        ->and($js)->not->toContain('<div class="ax-used-item"');
+});
+
+it('shows a $ref badge as navigable at rest, not only under the pointer', function () {
+    // A reader cannot hover every badge to discover which of them go somewhere.
+    expect(uiStylesheet())->toContain('.ax-ref-link{cursor:pointer;text-decoration:underline dotted');
+});

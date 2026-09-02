@@ -18,6 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that enum's schema. Duck-typed on the declarations, so it costs nothing
   outside Laravel. Also typed now: `__()`/`trans()`, and the collection
   pipelines (`map`, `filter`, `pluck`, `flatten`, …).
+- **A `$ref` is now a link.** Every reference in a schema — a property, an
+  array's items, a response or request body, a `oneOf` branch — navigates to
+  that component's own view, and an array of references names its item type
+  (`CarrierResource[]`) where it used to say only `array`. Derived from the ref
+  itself, so it holds for any schema; linked only when the component is really
+  published, so a dangling reference cannot become a dead link. The reverse
+  direction, a schema's "Used by" list, is now links too — it was a
+  `<div onclick>`, so it was unreachable by keyboard.
 - **A documentation UI that can be used with a keyboard.** Measured before:
   211 endpoint rows in the navigation and 34 group headers, none reachable by
   Tab; response accordions unreachable; no `:focus-visible` rule anywhere, so
