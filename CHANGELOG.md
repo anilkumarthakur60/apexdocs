@@ -18,6 +18,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that enum's schema. Duck-typed on the declarations, so it costs nothing
   outside Laravel. Also typed now: `__()`/`trans()`, and the collection
   pipelines (`map`, `filter`, `pluck`, `flatten`, …).
+- **Response headers and links are rendered.** The package's own
+  `#[ResponseHeader]` output — `Retry-After`, `X-RateLimit-*`, `Location`,
+  pagination cursors — was dropped by its own UI. A Links Object now lists the
+  operations reachable from a response, linked where it names an `operationId`.
+- **Markdown in descriptions:** pipe tables (an OpenAPI description routinely
+  carries an error-code catalogue as one, and it rendered as literal pipes),
+  ordered lists, blockquotes and thematic breaks. Code fences are re-injected
+  *before* the paragraph pass — after it, a `<pre>` sat inside a `<p>`, which is
+  invalid, and the browser closed the paragraph early.
+- **A `$ref` is now a link.** Every reference in a schema — a property, an
+  array's items, a response or request body, a `oneOf` branch — navigates to
+  that component's own view, and an array of references names its item type
+  (`CarrierResource[]`) where it used to say only `array`. Derived from the ref
+  itself, so it holds for any schema; linked only when the component is really
+  published, so a dangling reference cannot become a dead link. The reverse
+  direction, a schema's "Used by" list, is now links too — it was a
+  `<div onclick>`, so it was unreachable by keyboard.
 - **A documentation UI that can be used with a keyboard.** Measured before:
   211 endpoint rows in the navigation and 34 group headers, none reachable by
   Tab; response accordions unreachable; no `:focus-visible` rule anywhere, so
@@ -116,6 +133,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Path Item parameters were dropped on every method.** A parameter declared
+  once for a path applies to all of its operations; the UI read only
+  `operation.parameters`, and a `$ref`-ed parameter rendered a row with
+  `undefined` name and `undefined` location. Both are resolved and merged now,
+  deduped by name+location with the operation winning, as the spec requires.
+- **An API that declares its security once, at the root, read as
+  unauthenticated on every operation.** Document-level `security` is now the
+  default when an operation declares none, and `servers` on the document or the
+  Path Item is honoured by the try-it panel and the code samples.
+- **`default` and `2XX` response keys rendered as red 5xx errors** —
+  `parseInt('default')` is NaN, which lost every comparison and fell through to
+  the 5xx branch. Response keys are now classified properly and ordered
+  numeric → wildcard → `default`.
+- **Try-it sent the wrong values.** Path and query fields shared the `axi-`
+  id prefix, so two same-named parameters collided on one id: `getElementById`
+  returned the first, Send posted the path value as the query value, and the
+  Path bulk editor wrote into the Query field. The groups are namespaced
+  (`axi-p-`/`axi-q-`/`axi-h-`), history entries are versioned (v1 entries keyed
+  by bare name are no longer replayed into the wrong field), and the bearer
+  token is no longer written into every entry.
+- **Send kept hitting the previous host after switching environment** — the
+  server was baked into the button at render time. It, and the operation's
+  resolved parameters, are read at click time.
+- **A copied code sample could not be run:** `{userId}` was left literal, the
+  query string was omitted entirely, and every language claimed
+  `Authorization: Bearer` regardless of the scheme. Path parameters are
+  substituted from their examples, documented query parameters appended, and the
+  header derived from `securitySchemes` (Basic, an API key's own header name,
+  OAuth2), or omitted when the endpoint needs no auth.
+- **"Collapse all" in one section collapsed every other section** — each
+  section emits its own pair of buttons but they all called one page-global
+  function. Scoped to the clicked section now.
+- **"Used by" listed operations that never used the schema.** It matched
+  `JSON.stringify(op).indexOf('#/components/schemas/User')` — a substring test,
+  so `User` was used by everything touching `UserProfile`. The index is
+  structural, compares whole references, and follows a reference through another
+  schema, so a nested model finally lists its real callers.
+- A `$ref`-valued property was an un-openable name badge, and `array of array
+  of …` escaped the depth cap by recursing at the same depth.
+- **The spec request the UI gave up on kept running**, so an 11-second response
+  painted the whole page over the timeout error, and every later consumer
+  re-fetched a spec that had already failed. One abortable in-flight request
+  now, with a Retry that re-fetches instead of reloading the page.
+- **Nothing ever expired what the UI stores**, and a bearer token was persisted
+  in plaintext with no way to forget it. The per-endpoint keys are LRU-pruned to
+  60 on load, and the shortcuts dialog carries a *Clear stored data* control.
+- **The `auto` theme looked exactly like `dark`** — the glyph swap keys on
+  `data-theme`, which `auto` removes. It now tracks what is actually rendered
+  and marks itself as automatic.
+- The fence sentinel in `UiRenderer` was a literal NUL byte, which made the
+  largest file in the package grep as binary. It is a PUA code point written as
+  a JS escape, so the source stays ASCII.
 - **Nearly half of a real spec's response bodies were wrong.** Measured on a
   205-operation Laravel app: 95 operations documented their 200 as
   `$ref: JsonResponse` — that is, `{original, exception}`, the internals of

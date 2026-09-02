@@ -301,13 +301,20 @@ it('resolves a $ref-ed response, parameter and body before rendering them', func
     // hides it, and clicking the row looks like a dead control.
     $js = uiScript();
 
-    expect($js)->toContain('op=derefOp(op,spec)')
+    expect($js)->toContain('op=derefOp(op,spec,pathItem)')
         ->and($js)->toContain('out.responses=resolved')
         ->and($js)->toContain('out.requestBody=deref(out.requestBody,spec)')
-        ->and($js)->toContain('out.parameters=out.parameters.map')
+        // Path Item parameters apply to every method under it and were dropped
+        // on all of them; merged, they dedupe by name+in with the operation
+        // winning, as the spec requires.
+        ->and($js)->toContain('pathItem.parameters:[]')
+        ->and($js)->toContain("var key=(p.name||'')+'\u0000'+(p['in']||'')")
+        // An API that declares security once at the root read as unauthenticated
+        // on every operation.
+        ->and($js)->toContain('if(out.security===undefined&&Array.isArray(spec&&spec.security))out.security=spec.security')
         // The panel is fed the resolved operation, so the code samples and the
         // try-it body see a $ref-ed request body too.
-        ->and(strpos($js, 'op=derefOp(op,spec)'))->toBeLessThan(strpos($js, 'renderPanel(path,method,op,spec)'));
+        ->and(strpos($js, 'op=derefOp(op,spec,pathItem)'))->toBeLessThan(strpos($js, 'renderPanel(path,method,op,spec)'));
 });
 
 /**
@@ -375,4 +382,164 @@ it('marks every decorative glyph hidden from assistive tech', function () {
     // text that already says what it means.
     expect(uiPage())->not->toMatch('/<svg(?![^>]*aria-hidden)/')
         ->and(uiScript())->not->toMatch('/<svg(?![^>]*aria-hidden)/');
+});
+
+it('makes every $ref a link to the schema it names', function () {
+    // A reader looking at `carrier: CarrierResource` wants that schema, and the
+    // badge is where they are standing. Built from the ref itself — no name is
+    // special — and only linked when the component is really published, so a
+    // dangling ref cannot become a dead link.
+    $js = uiScript();
+
+    $href = <<<'JS'
+href="#schema_'+escH(encodeURIComponent(name))+'"
+JS;
+    $guard = <<<'JS'
+spec.components.schemas&&spec.components.schemas[name]
+JS;
+    $arrayOfRefs = <<<'JS'
+itemRef.split('/').pop()+'[]'
+JS;
+
+    expect($js)->toContain('function refBadge(ref,spec,extraClass,label)')
+        ->and($js)->toContain(trim($href))
+        ->and($js)->toContain(trim($guard))
+        // `array` alone named nothing: an array of $refs now says what is in it.
+        ->and($js)->toContain(trim($arrayOfRefs))
+        // The reverse direction — "Used by" — was a <div onclick>, so it was
+        // unreachable by keyboard as well as unlinkable.
+        ->and($js)->toContain('<a class="ax-used-item" href="#')
+        ->and($js)->not->toContain('<div class="ax-used-item"');
+});
+
+it('shows a $ref badge as navigable at rest, not only under the pointer', function () {
+    // A reader cannot hover every badge to discover which of them go somewhere.
+    expect(uiStylesheet())->toContain('.ax-ref-link{cursor:pointer;text-decoration:underline dotted');
+});
+
+/**
+ * WS6/WS7 of docs/ui/REBUILD-PLAN.md — the items where the UI showed something
+ * untrue or dropped what the generator emitted. Each assertion names the defect
+ * it replaces.
+ */
+it('classifies and orders every kind of response key', function () {
+    $js = uiScript();
+
+    // `parseInt('default')` is NaN, which failed every comparison and fell
+    // through to the 5xx branch: `default` rendered as a red server error.
+    expect($js)->toContain("if(key==='default')return 'axs-default'")
+        ->and($js)->toContain('function respOrder(a,b)')
+        ->and($js)->toContain('Object.keys(op.responses).sort(respOrder)')
+        ->and(uiStylesheet())->toContain('.axs-1xx{')
+        ->and(uiStylesheet())->toContain('.axs-default{');
+});
+
+it('renders the response headers and links the generator emits', function () {
+    // #[ResponseHeader] produces `headers`; the UI dropped them, so
+    // Retry-After, X-RateLimit-* and Location were invisible in its own output.
+    $js = uiScript();
+
+    expect($js)->toContain('function respHeaders(headers,spec)')
+        ->and($js)->toContain('function respLinks(links,spec)')
+        ->and($js)->toContain('html+=respHeaders(resp.headers,spec)+respLinks(resp.links,spec)');
+});
+
+it('builds a code sample that can be pasted into a shell', function () {
+    $js = uiScript();
+
+    // `{userId}` was left literal, the query string omitted, and every sample
+    // claimed `Authorization: Bearer` whatever the scheme said.
+    expect($js)->toContain('function sampleUrl(server,path,op)')
+        ->and($js)->toContain('function authHeaderFor(op,spec)')
+        ->and($js)->toContain('var url=sampleUrl(server,path,op)')
+        ->and($js)->toContain("value:'Basic {base64_credentials}'")
+        ->and($js)->not->toContain("-H 'Authorization: Bearer {your_token}'");
+});
+
+it('keeps the try-it fields, the server and the history unambiguous', function () {
+    $js = uiScript();
+
+    // Path and query shared the `axi-` prefix, so same-named parameters
+    // collided on one id and Send posted the path value as the query value.
+    expect($js)->toContain("bulkGroup('Path',pathParams,'axi-p-'")
+        ->and($js)->toContain("bulkGroup('Query',queryParams,'axi-q-'")
+        ->and($js)->toContain("document.getElementById('axi-p-'+p.name)")
+        ->and($js)->toContain("document.getElementById('axi-q-'+p.name)")
+        // The server was baked into the button at render time, so Send kept
+        // hitting the previous host after switching environment.
+        ->and($js)->toContain('window.axSend=function(path,method)')
+        ->and($js)->toContain('var server=opServer(op)')
+        // A token is no longer written into every history entry.
+        ->and($js)->not->toContain('auth:(auth&&auth.value)||null')
+        ->and($js)->toContain('v:2,server:server');
+});
+
+it('scopes expand/collapse to the section it was clicked in', function () {
+    $js = uiScript();
+
+    expect($js)->toContain('window.axExpandAll=function(open,btn)')
+        ->and($js)->toContain("btn.closest('.ax-section')")
+        ->and($js)->toContain('axExpandAll(true,this)');
+});
+
+it('renders the markdown an OpenAPI description actually contains', function () {
+    $js = uiScript();
+
+    expect($js)->toContain('<table class="ax-md-table">')   // pipe tables
+        ->and($js)->toContain("+'<ol>'+items+'</ol>'")       // ordered lists
+        ->and($js)->toContain('<blockquote>')
+        ->and($js)->toContain("'$1<hr>'")
+        // Fences are re-injected before the paragraph pass, or a <pre> ends up
+        // inside a <p> and the browser closes the paragraph early.
+        ->and(strpos($js, 'ax-md-pre'))->toBeLessThan(strpos($js, "s=s.split(/\\n{2,}/)"))
+        ->and(uiStylesheet())->toContain('.ax-md-table th{');
+});
+
+it('keeps the renderer source out of binary territory', function () {
+    // The fence sentinel was a literal NUL byte, which made this file — the
+    // largest in the package — grep as binary for every tool.
+    $source = file_get_contents(__DIR__.'/../../../src/Http/UiRenderer.php');
+
+    expect(str_contains($source, "\0"))->toBeFalse()
+        ->and(uiScript())->toContain('\uE000B');
+});
+
+it('cancels the spec request it gave up on', function () {
+    $js = uiScript();
+
+    // The 10s watchdog painted an error while the request kept running, so an
+    // 11s response painted the whole UI over that error.
+    expect($js)->toContain('new AbortController()')
+        ->and($js)->toContain('_specAbort.abort()')
+        ->and($js)->toContain('window.axRetrySpec=function()')
+        ->and($js)->toContain('onclick="axRetrySpec()"')
+        ->and($js)->not->toContain("onclick=\"location.reload()\"");
+});
+
+it('prunes what it stores and offers to forget it', function () {
+    $js = uiScript();
+
+    // Nothing expired anything, and a bearer token was persisted in plaintext
+    // with no forget control.
+    expect($js)->toContain('function pruneStorage()')
+        ->and($js)->toContain('window.axClearStored=function()')
+        ->and($js)->toContain('pruneStorage();')
+        ->and(uiPage())->toContain('Clear stored data');
+});
+
+it('tells you when the theme is following the system', function () {
+    // `auto` removes data-theme, and the glyph swap keys on it, so `auto`
+    // looked exactly like `dark`.
+    expect(uiScript())->toContain("setAttribute('data-theme-pref',t)")
+        ->and(uiStylesheet())->toContain('[data-theme-pref="auto"] .apex-theme-btn::after');
+});
+
+it('finds the operations that really use a schema', function () {
+    $js = uiScript();
+
+    // `JSON.stringify(op).indexOf('#/components/schemas/User')` is a substring
+    // test: `User` was used by every operation touching `UserProfile`.
+    expect($js)->toContain('function refsSchema(node,target,spec,seen,refDepth)')
+        ->and($js)->toContain("if(node['\$ref']===target)return true")
+        ->and($js)->not->toContain("JSON.stringify(op);if(s.indexOf('#/components/schemas/'+name)");
 });

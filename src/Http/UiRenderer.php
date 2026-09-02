@@ -383,6 +383,10 @@ final class UiRenderer
                     <div class="ax-sc-row"><kbd>?</kbd><span>Show this dialog</span></div>
                     <div class="ax-sc-row"><kbd>Esc</kbd><span>Close any overlay</span></div>
                 </div>
+                <div class="ax-sc-footer">
+                    <span class="ax-sc-note">This browser remembers your theme, environment, auth token and request history for this API.</span>
+                    <button type="button" class="ax-sc-clear" onclick="axClearStored()">Clear stored data</button>
+                </div>
             </div>
         </div>
         HTML;
@@ -506,6 +510,14 @@ final class UiRenderer
         .apex-theme-btn .apex-icon-sun{display:none}
         [data-theme="light"] .apex-theme-btn .apex-icon-moon{display:none}
         [data-theme="light"] .apex-theme-btn .apex-icon-sun{display:flex}
+        /* `auto` follows the system, and says so: the glyph tracks what is
+           actually rendered and a dot marks that the choice is automatic. */
+        [data-theme-pref="auto"] .apex-theme-btn::after{content:'';position:absolute;right:3px;bottom:3px;width:4px;height:4px;border-radius:50%;background:var(--accent)}
+        .apex-theme-btn{position:relative}
+        @media (prefers-color-scheme:light){
+            html:not([data-theme]) .apex-theme-btn .apex-icon-moon{display:none}
+            html:not([data-theme]) .apex-theme-btn .apex-icon-sun{display:flex}
+        }
 
         /* Export dropdown */
         .apex-export-wrap{position:relative}
@@ -759,6 +771,9 @@ final class UiRenderer
         .ax-resp-header:hover{background:var(--s1)}
         .ax-resp-status{font-size:13px;font-weight:700;font-family:monospace;flex-shrink:0}
         .axs-2xx{color:var(--green)}.axs-3xx{color:var(--blue)}.axs-4xx{color:var(--amber)}.axs-5xx{color:var(--red)}
+        /* An informational code is not a success, and `default` is not a server
+           error — which is how both of them used to be painted. */
+        .axs-1xx{color:var(--blue-t)}.axs-default{color:var(--t3)}
         .ax-resp-desc{font-size:13px;color:var(--t2);flex:1}
         .ax-resp-arrow{color:var(--t3);font-size:10px;transition:transform .2s}
         .ax-resp.open .ax-resp-arrow{transform:rotate(90deg)}
@@ -921,6 +936,11 @@ final class UiRenderer
         /* ── $ref expanded/collapsible ── */
         .ax-ref-wrap{display:flex;flex-direction:column;gap:4px}
         .ax-ref-badge{cursor:default}
+        /* A linked badge. The dotted underline is the same affordance the prose
+           links use, and it has to be visible at rest: a reader cannot hover
+           every badge to find out which of them go somewhere. */
+        .ax-ref-link{cursor:pointer;text-decoration:underline dotted;text-decoration-thickness:1px;text-underline-offset:2px;transition:background .12s,color .12s}
+        .ax-ref-link:hover{background:var(--accent-soft);color:var(--accent-t);text-decoration-style:solid}
         .ax-ref-expanded{margin-top:4px}
 
         /* ── oneOf/anyOf ── */
@@ -993,8 +1013,15 @@ final class UiRenderer
         /* ── Schemas group icon in sidebar ── */
         .axm-schema{background:var(--purple-soft);color:var(--purple-t)}
         .axi-schema .axi-path{font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px}
+        .ax-resp-hdrs{margin-bottom:12px}
+        .ax-resp-sub{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:6px}
+        .ax-hdr-name{font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px;color:var(--t1)}
+        .ax-link-name{font-family:'JetBrains Mono','SF Mono',monospace;font-size:11.5px;color:var(--t1)}
+        .ax-link-target{font-size:11px;color:var(--accent-t)}
+        .ax-link-desc{font-size:12px;color:var(--t3)}
+        .ax-used-static{cursor:default}
         .ax-used-list{display:flex;flex-direction:column;gap:4px}
-        .ax-used-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;background:var(--card);border:1px solid var(--border);transition:background .12s,border-color .12s}
+        .ax-used-item{display:flex;align-items:center;gap:8px;padding:6px 10px;border-radius:6px;cursor:pointer;background:var(--card);border:1px solid var(--border);color:inherit;text-decoration:none;transition:background .12s,border-color .12s}
         .ax-used-item:hover{background:var(--s2);border-color:var(--border-s)}
 
         /* ── Deprecation banner ── */
@@ -1026,6 +1053,13 @@ final class UiRenderer
         .axw-md code{font-family:'JetBrains Mono','SF Mono',monospace;font-size:.9em;padding:1px 6px;border-radius:4px;background:var(--s2);border:1px solid var(--border);color:var(--brand-3)}
         .axw-md a{color:var(--accent-t);text-decoration:none;border-bottom:1px dashed var(--accent-soft-b)}
         .axw-md a:hover{border-bottom-style:solid}
+        .axw-md ol{margin:6px 0 8px 22px;padding:0;line-height:1.6}
+        .axw-md blockquote{margin:8px 0;padding:6px 12px;border-left:2px solid var(--border-s);color:var(--t3)}
+        .axw-md hr{margin:12px 0;border:0;border-top:1px solid var(--border)}
+        .ax-md-table{width:100%;border-collapse:collapse;font-size:12.5px;margin:8px 0}
+        .ax-md-table th{text-align:left;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);padding:6px 10px;border-bottom:1px solid var(--border)}
+        .ax-md-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--t2);vertical-align:top}
+        .ax-md-table tr:last-child td{border-bottom:0}
         .axw-md strong{color:var(--t1);font-weight:600}
         .axw-md em{font-style:italic;color:var(--t1)}
         .ax-md-pre{margin:8px 0;padding:10px 12px;background:var(--inset);border:1px solid var(--border);border-radius:6px;overflow-x:auto;font-family:'JetBrains Mono','SF Mono',monospace;font-size:12px;color:var(--t1)}
@@ -1106,6 +1140,10 @@ final class UiRenderer
         .ax-sc-close:hover{background:var(--s2);color:var(--t1)}
         .ax-sc-grid{display:flex;flex-direction:column;gap:6px}
         .ax-sc-row{display:flex;align-items:center;gap:8px;padding:6px 4px;font-size:12.5px;color:var(--t2)}
+        .ax-sc-footer{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--border)}
+        .ax-sc-note{flex:1 1 220px;min-width:0;font-size:11.5px;color:var(--t3);line-height:1.5}
+        .ax-sc-clear{padding:6px 10px;font-family:inherit;font-size:12px;color:var(--t2);background:var(--inset);border:1px solid var(--border);border-radius:var(--r);cursor:pointer}
+        .ax-sc-clear:hover{color:var(--red);border-color:var(--red)}
         .ax-sc-row kbd{font-family:'JetBrains Mono','SF Mono',monospace;font-size:10.5px;padding:2px 7px;background:var(--s2);border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;color:var(--t1);min-width:18px;text-align:center}
         .ax-sc-row span{margin-left:auto;color:var(--t2)}
 
@@ -1421,6 +1459,16 @@ final class UiRenderer
         function applyTheme(t){
             if(t==='auto')document.documentElement.removeAttribute('data-theme');
             else document.documentElement.setAttribute('data-theme',t);
+            /* `auto` removes data-theme, so the moon/sun swap — which keys on
+               [data-theme="light"] — always showed the moon and `auto` was
+               indistinguishable from `dark`. State goes on the button. */
+            document.documentElement.setAttribute('data-theme-pref',t);
+            var btn=document.getElementById('apexThemeBtn');
+            if(btn){
+                btn.setAttribute('data-pref',t);
+                btn.setAttribute('title','Theme: '+t+' (click to change)');
+                btn.setAttribute('aria-label','Theme: '+t+'. Change theme');
+            }
         }
         applyTheme(getTheme());
         if(prefersLight&&prefersLight.addEventListener){
@@ -1507,13 +1555,42 @@ final class UiRenderer
         var _specCache=null;
         var _activeEnv=localStorage.getItem('apex-env')||null;
         function getSpecUrl(){return APEX_CFG.specUrl;}
+        /* One in-flight fetch, aborted by its own deadline. The 10s watchdog
+           used to paint an error while the request kept running, so an 11s
+           response then painted the whole UI on top of that error; and every
+           later consumer (the palette, the env list) re-fetched a spec that had
+           already failed. `_specFailed` remembers, and `axRetrySpec` is the
+           only thing that clears it — the Retry button re-fetches instead of
+           reloading the page. */
+        var _specPending=null,_specFailed=null,_specAbort=null;
         function loadSpec(cb,onErr){
             if(_specCache){cb(_specCache);return;}
-            fetch(getSpecUrl())
-                .then(function(r){if(!r.ok)throw new Error('HTTP '+r.status+' '+r.statusText);return r.text().then(function(t){try{return JSON.parse(t);}catch(e){throw new Error('Invalid JSON response');}});})
-                .then(function(s){_specCache=s;cb(s);})
-                .catch(function(e){if(onErr)onErr(e&&e.message?e.message:String(e));});
+            if(_specFailed){if(onErr)onErr(_specFailed);return;}
+            if(!_specPending){
+                _specAbort=(typeof AbortController!=='undefined')?new AbortController():null;
+                var timer=setTimeout(function(){if(_specAbort)_specAbort.abort();},10000);
+                _specPending=fetch(getSpecUrl(),_specAbort?{signal:_specAbort.signal}:undefined)
+                    .then(function(r){
+                        if(!r.ok)throw new Error('HTTP '+r.status+' '+r.statusText);
+
+                        return r.text().then(function(t){
+                            try{return JSON.parse(t);}catch(e){throw new Error('Invalid JSON response');}
+                        });
+                    })
+                    .then(function(sp){clearTimeout(timer);_specCache=sp;_specPending=null;return sp;})
+                    .catch(function(e){
+                        clearTimeout(timer);
+                        _specPending=null;
+                        _specFailed=(e&&e.name==='AbortError')?'Request timed out after 10s':(e&&e.message?e.message:String(e));
+                        throw new Error(_specFailed);
+                    });
+            }
+            _specPending.then(cb).catch(function(e){if(onErr)onErr(e&&e.message?e.message:String(e));});
         }
+        window.axRetrySpec=function(){
+            _specFailed=null;_specCache=null;_specPending=null;
+            init();
+        };
         if(envBtn&&envPop){
             envBtn.addEventListener('click',function(e){
                 e.stopPropagation();
@@ -1646,13 +1723,51 @@ final class UiRenderer
         function lsGetJson(k,d){var v=lsGet(k,null);if(v==null)return d;try{return JSON.parse(v);}catch(e){return d;}}
         function lsSetJson(k,v){lsSet(k,JSON.stringify(v));}
 
+        /* Nothing pruned or expired anything, and the per-endpoint keys grow
+           with every endpoint ever visited. LRU-keep the 60 newest of the
+           per-view keys; the handful of settings keys are never touched. */
+        function pruneStorage(){
+            try{
+                var keep=60,mine=[];
+                for(var i=0;i<localStorage.length;i++){
+                    var full=localStorage.key(i);
+                    if(!full||full.indexOf(_ns+':')!==0)continue;
+                    var k=full.slice(_ns.length+1);
+                    if(!/^(hist:|resp\.|open\.|scroll\.)/.test(k))continue;
+                    var ts=0;
+                    try{
+                        var v=JSON.parse(localStorage.getItem(full));
+                        ts=(v&&v.length&&v[0]&&v[0].ts)||(v&&v.ts)||0;
+                    }catch(e){}
+                    mine.push({full:full,ts:ts});
+                }
+                if(mine.length<=keep)return;
+                mine.sort(function(a,b){return b.ts-a.ts;});
+                mine.slice(keep).forEach(function(e){localStorage.removeItem(e.full);});
+            }catch(e){}
+        }
+
+        /* A bearer token was persisted in plaintext with no way to forget it. */
+        window.axClearStored=function(){
+            try{
+                var doomed=[];
+                for(var i=0;i<localStorage.length;i++){
+                    var k=localStorage.key(i);
+                    if(k&&k.indexOf(_ns+':')===0)doomed.push(k);
+                }
+                doomed.forEach(function(k){localStorage.removeItem(k);});
+                var auth=document.getElementById('axi-auth');if(auth)auth.value='';
+                toast(doomed.length+' stored item(s) cleared');
+            }catch(e){toast('Could not clear storage');}
+        };
+
         /* ── Minimal XSS-safe markdown renderer ── */
         function md(s){
             if(s==null||s==='')return '';
             s=String(s);
             /* Fenced code blocks first */
             var blocks=[];
-            s=s.replace(/```([\s\S]*?)```/g,function(_,c){blocks.push(c);return ' B'+(blocks.length-1)+' ';});
+            s=s.replace(/```([\s\S]*?)```/g,function(_,c){blocks.push(c);return '\uE000B'+(blocks.length-1)+'\uE000';});
             s=escH(s);
             /* Headings */
             s=s.replace(/^### (.+)$/gm,'<h4>$1</h4>')
@@ -1664,22 +1779,51 @@ final class UiRenderer
                 .replace(/`([^`\n]+)`/g,'<code>$1</code>');
             /* Links  whitelist http/https/mailto */
             s=s.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+|mailto:[^)\s]+)\)/g,'<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            /* Tables. An OpenAPI description routinely carries an error-code
+               catalogue or a rate-limit tier list as a pipe table, and it
+               rendered as literal pipes: header, separator, then body rows. */
+            s=s.replace(/(^|\n)(\|.+\|)\n\|[ :\-|]+\|\n((?:\|.+\|\n?)*)/g,function(_,pre,head,body){
+                var cells=function(row){return row.replace(/^\||\|$/g,'').split('|').map(function(c){return c.trim();});};
+                var th=cells(head).map(function(c){return '<th>'+c+'</th>';}).join('');
+                var tr=body.trim()===''?'':body.trim().split(/\n/).map(function(row){
+                    return '<tr>'+cells(row).map(function(c){return '<td>'+c+'</td>';}).join('')+'</tr>';
+                }).join('');
+
+                return pre+'<div class="ax-tablewrap"><table class="ax-md-table"><thead><tr>'+th+'</tr></thead><tbody>'+tr+'</tbody></table></div>';
+            });
+            /* Blockquotes and thematic breaks. `&gt;` because escaping ran first. */
+            s=s.replace(/(^|\n)((?:&gt; ?.*(?:\n|$))+)/g,function(_,pre,quote){
+                return pre+'<blockquote>'+quote.trim().split(/\n/).map(function(l){return l.replace(/^&gt; ?/,'');}).join(' ')+'</blockquote>';
+            });
+            s=s.replace(/(^|\n)(?:---|\*\*\*|___)[-*_ ]*(?=\n|$)/g,'$1<hr>');
+            /* Ordered lists, then unordered */
+            s=s.replace(/(^|\n)((?:\d+[.)] .+\n?)+)/g,function(_,pre,list){
+                var items=list.trim().split(/\n/).map(function(l){return '<li>'+l.replace(/^\d+[.)] /,'')+'</li>';}).join('');
+
+                return pre+'<ol>'+items+'</ol>';
+            });
             /* Unordered lists */
             s=s.replace(/(^|\n)((?:[-*] .+\n?)+)/g,function(_,pre,list){
                 var items=list.trim().split(/\n/).map(function(l){return '<li>'+l.replace(/^[-*] /,'')+'</li>';}).join('');
                 return pre+'<ul>'+items+'</ul>';
             });
+            /* Fences come back BEFORE the paragraph pass: re-injected after it, a
+               <pre> sits inside a <p>, which is invalid — the browser closes the
+               paragraph early and the rest of the block escapes the code block.
+               The sentinel is a PUA code point written as a JS escape: it used to
+               be a literal NUL byte, which made this whole file grep as binary.
+               A ```json info string is dropped from the rendered output. */
+            s=s.replace(/\uE000B(\d+)\uE000/g,function(_,i){return '\n\n<pre class="ax-md-pre"><code>'+escH(blocks[+i]).replace(/^[a-zA-Z0-9]*\n/,'')+'</code></pre>\n\n';});
             /* Paragraphs. A single newline is a SOFT break — a space — as in
                every markdown renderer, so a PHPDoc hard-wrapped at 80 columns
                reflows to the width it is given instead of keeping the source's
                ragged line ends at every viewport. A hard break is markdown's
                own: two trailing spaces, or a trailing backslash. */
             s=s.split(/\n{2,}/).map(function(p){
-                if(/^<(h\d|ul|pre|blockquote)/.test(p.trim()))return p;
+                if(p.trim()==='')return '';
+                if(/^<(h\d|ul|ol|pre|blockquote|div|hr|table)/.test(p.trim()))return p;
                 return '<p>'+p.replace(/(?: {2,}|\\)\n/g,'<br>').replace(/\n/g,' ')+'</p>';
             }).join('');
-            /* Re-inject fenced blocks */
-            s=s.replace(/ B(\d+) /g,function(_,i){return '<pre class="ax-md-pre"><code>'+escH(blocks[+i])+'</code></pre>';});
             return s;
         }
 
@@ -1712,8 +1856,16 @@ final class UiRenderer
         window.axHistClear=function(method,path){histClear(method,path);renderHistory(method,path);toast('History cleared');};
         window.axHistRestore=function(method,path,idx){
             var arr=histLoad(method,path);var h=arr[+idx];if(!h)return;
-            if(h.auth!=null){var a=document.getElementById('axi-auth');if(a){a.value=h.auth;authPersist();}}
-            if(h.params){for(var k in h.params){var el=document.getElementById('axi-'+k);if(el)el.value=h.params[k];}}
+            /* A v1 entry keyed its parameters by bare name, so path and query
+               values are indistinguishable: replaying one would fill the wrong
+               field. Restore the body and skip the rest. */
+            if(h.v!==2){
+                if(h.body!=null){var b1=document.getElementById('axi-body');if(b1)b1.value=h.body;}
+                toast('Older history entry — only the body was restored');
+
+                return;
+            }
+            if(h.params){for(var k in h.params){var el=document.getElementById(k);if(el)el.value=h.params[k];}}
             if(h.headers){for(var hk in h.headers){var hel=document.getElementById('axi-h-'+hk);if(hel)hel.value=h.headers[hk];}}
             if(h.body!=null){var b=document.getElementById('axi-body');if(b)b.value=h.body;}
             toast('Restored from history');
@@ -1940,15 +2092,49 @@ final class UiRenderer
             var c=document.getElementById('axui-content');if(c)c.scrollTop=0;
             axSidebarClose();
         };
+        /* Which operations really reference this schema. The old test was
+           `JSON.stringify(op).indexOf('#/components/schemas/'+name)`: a
+           substring match, so `User` was "used by" every operation touching
+           `UserProfile` or `UserList`, and every operation was re-stringified
+           on every schema view. This walks the operation structurally and
+           compares whole ref strings, following refs one level so a schema used
+           only through another schema still counts. */
+        function refsSchema(node,target,spec,seen,refDepth){
+            if(!node||typeof node!=='object')return false;
+            if(Array.isArray(node)){
+                for(var i=0;i<node.length;i++)if(refsSchema(node[i],target,spec,seen,refDepth))return true;
+
+                return false;
+            }
+            if(typeof node['$ref']==='string'){
+                if(node['$ref']===target)return true;
+                /* Follow, so a schema reached only through another schema still
+                   counts as used. `seen` makes a recursive model terminate; the
+                   spec itself is acyclic, having come from JSON. */
+                if(refDepth<3&&!seen[node['$ref']]){
+                    seen[node['$ref']]=1;
+                    if(refsSchema(resolveRef(node['$ref'],spec),target,spec,seen,refDepth+1))return true;
+                }
+            }
+            for(var k in node){
+                if(k==='$ref')continue;
+                if(refsSchema(node[k],target,spec,seen,refDepth))return true;
+            }
+
+            return false;
+        }
+
         function renderSchemaView(name,schema,spec){
             _schemaIds=0;
             var usedBy=[];
+            var target='#/components/schemas/'+name;
             for(var p in spec.paths||{}){for(var m in spec.paths[p]){
-                var op=spec.paths[p][m];if(typeof op!=='object')continue;
-                var s=JSON.stringify(op);if(s.indexOf('#/components/schemas/'+name)!==-1)usedBy.push({path:p,method:m,op:op});
+                if(!METHODS.includes(m))continue;
+                var op=spec.paths[p][m];if(!op||typeof op!=='object')continue;
+                if(refsSchema(op,target,spec,{},0))usedBy.push({path:p,method:m,op:op});
             }}
             var usedHtml=usedBy.length?'<div class="ax-section"><div class="ax-section-title">Used by ('+usedBy.length+')</div><div class="ax-used-list">'
-                +usedBy.map(function(u){return '<div class="ax-used-item" onclick="axNav(\''+u.method+'__'+escH(u.path)+'\',\''+escH(u.path)+'\',\''+u.method+'\')"><span class="axm axm-'+u.method+'">'+u.method.toUpperCase()+'</span><span>'+escH(u.path)+'</span></div>';}).join('')
+                +usedBy.map(function(u){return '<a class="ax-used-item" href="#'+escH(axHashFor(u.op,u.method+'__'+u.path))+'"><span class="axm axm-'+u.method+'">'+u.method.toUpperCase()+'</span><span>'+escH(u.path)+'</span></a>';}).join('')
                 +'</div></div>':'';
             setDoc('<div class="ax-breadcrumb"><span class="ax-breadcrumb-item ax-breadcrumb-link" onclick="axGoWelcome()">Schemas</span><span class="ax-breadcrumb-sep">›</span><span class="ax-breadcrumb-current">'+escH(name)+'</span></div>'
                 +'<div class="ax-op-header"><div class="ax-op-title-wrap"><h1 class="ax-op-path">'+escH(name)+'</h1>'
@@ -1958,14 +2144,95 @@ final class UiRenderer
                 +usedHtml);
             setPanel('<div class="ax-panel-section-title">JSON Schema</div><pre class="ax-code">'+hlJson(escH(JSON.stringify(schema,null,2)))+'</pre>');
         }
-        function expandToggle(){return '<div class="ax-expand-toggle"><button onclick="axExpandAll(true)">Expand all</button><button onclick="axExpandAll(false)">Collapse all</button></div>';}
-        window.axExpandAll=function(open){
+        /* A Responses Object key is a status code, a wildcard range (`2XX`), or
+           the literal `default`. */
+        function statusClass(status){
+            var key=String(status).toLowerCase();
+            if(key==='default')return 'axs-default';
+            var lead=key.charAt(0);
+
+            return lead==='1'?'axs-1xx':lead==='2'?'axs-2xx':lead==='3'?'axs-3xx'
+                :lead==='4'?'axs-4xx':lead==='5'?'axs-5xx':'axs-default';
+        }
+
+        /* Numeric codes first, then wildcard ranges, then `default` — the order
+           a reader scans them in. */
+        function respOrder(a,b){
+            var rank=function(k){
+                k=String(k).toLowerCase();
+                if(k==='default')return [3,0];
+                if(/^\d{3}$/.test(k))return [1,parseInt(k,10)];
+                if(/^\dxx$/.test(k))return [2,parseInt(k.charAt(0),10)];
+
+                return [4,0];
+            };
+            var ra=rank(a),rb=rank(b);
+
+            return ra[0]-rb[0]||ra[1]-rb[1]||String(a).localeCompare(String(b));
+        }
+
+        /* @param headers  a Headers Object: name => Header Object|$ref */
+        function respHeaders(headers,spec){
+            if(!headers||typeof headers!=='object')return '';
+            var names=Object.keys(headers);
+            if(!names.length)return '';
+
+            return '<div class="ax-resp-hdrs"><div class="ax-resp-sub">Headers</div><div class="ax-tablewrap"><table class="ax-params"><thead><tr>'
+                +'<th>Name</th><th>Type</th><th>Description</th></tr></thead><tbody>'
+                +names.map(function(name){
+                    var h=deref(headers[name],spec)||{};
+                    var sch=h.schema||{};
+                    var type=Array.isArray(sch.type)?sch.type.filter(function(t){return t!=='null';})[0]:sch.type;
+                    if(!type&&sch['$ref'])type=sch['$ref'].split('/').pop();
+
+                    return '<tr><td data-label="Name"><code class="ax-hdr-name">'+escH(name)+'</code></td>'
+                        +'<td data-label="Type"><span class="ax-type-badge">'+escH(type||'string')+'</span>'
+                        +(h.required?'<span class="ax-badge ax-b-req">required</span>':'')
+                        +(h.deprecated?'<span class="ax-badge">deprecated</span>':'')+'</td>'
+                        +'<td data-label="Description" class="axw-md" style="color:var(--t3)">'+(h.description?md(h.description):'')+'</td></tr>';
+                }).join('')
+                +'</tbody></table></div></div>';
+        }
+
+        /* A Links Object names the operations reachable from this response. */
+        function respLinks(links,spec){
+            if(!links||typeof links!=='object')return '';
+            var names=Object.keys(links);
+            if(!names.length)return '';
+
+            return '<div class="ax-resp-hdrs"><div class="ax-resp-sub">Links</div><div class="ax-used-list">'
+                +names.map(function(name){
+                    var l=deref(links[name],spec)||{};
+                    var target=l.operationId||l.operationRef||'';
+                    var href=l.operationId?'#op_'+escH(encodeURIComponent(l.operationId)):'';
+                    var label='<span class="ax-link-name">'+escH(name)+'</span>'
+                        +(target?'<span class="ax-link-target">'+escH(target)+'</span>':'')
+                        +(l.description?'<span class="ax-link-desc">'+escH(l.description)+'</span>':'');
+
+                    return href
+                        ? '<a class="ax-used-item" href="'+href+'">'+label+'</a>'
+                        : '<div class="ax-used-item ax-used-static">'+label+'</div>';
+                }).join('')
+                +'</div></div>';
+        }
+
+        function expandToggle(){return '<div class="ax-expand-toggle"><button type="button" onclick="axExpandAll(true,this)">Expand all</button><button type="button" onclick="axExpandAll(false,this)">Collapse all</button></div>';}
+        /* Scoped to the section it was clicked in. Every section emits its own
+           pair of buttons, but all of them called one page-global function, so
+           "Collapse all" under Request Body collapsed every response schema
+           too — and `_expandAll` then disagreed with the DOM. */
+        window.axExpandAll=function(open,btn){
             _expandAll=open;
-            document.querySelectorAll('.ax-ref-expanded,.ax-prop-nested').forEach(function(el){el.style.display=open?'':'none';});
-            document.querySelectorAll('.ax-schema-collapse-btn').forEach(function(b){b.textContent=open?'▼':'▶';});
+            var scope=(btn&&btn.closest&&btn.closest('.ax-section'))||document;
+            scope.querySelectorAll('.ax-ref-expanded,.ax-prop-nested').forEach(function(el){el.style.display=open?'':'none';});
+            scope.querySelectorAll('.ax-schema-collapse-btn').forEach(function(b){
+                b.textContent=open?'▼':'▶';
+                b.setAttribute('aria-expanded',open?'true':'false');
+            });
         };
 
         function init(){
+            pruneStorage();
             loadSpec(function(spec){
                 if(!spec||typeof spec!=='object'){renderError('Spec is empty or invalid JSON');return;}
                 _server=_server||(spec.servers&&spec.servers[0]&&spec.servers[0].url)||'';
@@ -1986,16 +2253,13 @@ final class UiRenderer
                 var filter=document.getElementById('axui-filter');
                 if(filter){filter.addEventListener('input',function(){renderSidebar(spec,filter.value);});}
             },function(err){renderError(err);});
-            /* Fallback */
-            setTimeout(function(){
-                var body=document.getElementById('axui-sidebar-body');
-                if(body&&body.querySelector('.axui-loading-state')){renderError('Request timed out after 10s');}
-            },10000);
+            /* No DOM probing: the fetch's own deadline reports the timeout, and
+               a spec that arrives late can no longer paint over the error. */
         }
         function renderError(msg){
             /* Both panes, not just the sidebar: the main area is where the reader
                is looking, and a spec that failed to load leaves it empty. */
-            var card='<div class="ax-error-state"><div class="ax-error-icon">⚠</div><div class="ax-error-title">Failed to load spec</div><div class="ax-error-msg">'+escH(String(msg||'Unknown error'))+'</div><div class="ax-error-url">'+escH(APEX_CFG.specUrl||'')+'</div><button class="ax-error-retry" onclick="location.reload()">Retry</button></div>';
+            var card='<div class="ax-error-state"><div class="ax-error-icon">⚠</div><div class="ax-error-title">Failed to load spec</div><div class="ax-error-msg">'+escH(String(msg||'Unknown error'))+'</div><div class="ax-error-url">'+escH(APEX_CFG.specUrl||'')+'</div><button class="ax-error-retry" onclick="axRetrySpec()">Retry</button></div>';
             var body=document.getElementById('axui-sidebar-body');
             if(body)body.innerHTML=card;
             setDoc(card);setPanel('');
@@ -2247,22 +2511,57 @@ final class UiRenderer
                 ? (resolveRef(node['$ref'],spec)||node)
                 : node;
         }
-        function derefOp(op,spec){
+        function derefOp(op,spec,pathItem){
             if(!op||typeof op!=='object')return op;
             var out={};
             for(var k in op)out[k]=op[k];
             if(out.requestBody)out.requestBody=deref(out.requestBody,spec);
-            if(Array.isArray(out.parameters))out.parameters=out.parameters.map(function(p){return deref(p,spec);});
+
+            /* Parameters declared on the Path Item apply to every method under
+               it and were dropped on all of them. Merged with the operation's
+               own, deduped by name+in with the operation winning, as the spec
+               requires. */
+            var merged=[]
+                .concat((pathItem&&Array.isArray(pathItem.parameters))?pathItem.parameters:[])
+                .concat(Array.isArray(out.parameters)?out.parameters:[])
+                .map(function(p){return deref(p,spec);});
+            if(merged.length){
+                var byKey={},order=[];
+                merged.forEach(function(p){
+                    if(!p||typeof p!=='object')return;
+                    var key=(p.name||'')+'\u0000'+(p['in']||'');
+                    if(!(key in byKey))order.push(key);
+                    byKey[key]=p;
+                });
+                out.parameters=order.map(function(k){return byKey[k];});
+            }
+
             if(out.responses){
                 var resolved={};
                 Object.keys(out.responses).forEach(function(status){resolved[status]=deref(out.responses[status],spec);});
                 out.responses=resolved;
             }
+
+            /* Document-level defaults. An API that declares its security once,
+               at the root, read as unauthenticated on every operation. */
+            if(out.security===undefined&&Array.isArray(spec&&spec.security))out.security=spec.security;
+            if(!Array.isArray(out.servers)&&pathItem&&Array.isArray(pathItem.servers))out.servers=pathItem.servers;
+
             return out;
         }
 
+        /* The base URL an operation is actually served from: its own `servers`
+           override the document's, and the try-it panel and code samples must
+           agree with the documentation above them. */
+        function opServer(op){
+            var own=op&&Array.isArray(op.servers)&&op.servers[0]&&op.servers[0].url;
+
+            return own||_server||'';
+        }
+
         function renderOperation(path,method,op,spec,isWebhook){
-            op=derefOp(op,spec);
+            var pathItem=(isWebhook?(spec.webhooks||{}):(spec.paths||{}))[path];
+            op=derefOp(op,spec,pathItem);
             _schemaIds=0;
             var dep=op.deprecated?'<span class="ax-depr-badge">deprecated</span>':'';
             var tag=(op.tags||['General'])[0];
@@ -2348,12 +2647,15 @@ final class UiRenderer
             }
             // Responses
             if(op.responses){
+                /* `parseInt('default')` is NaN, which failed every comparison
+                   and fell through to the 5xx branch: a `default` response
+                   rendered as a red server error, and so did `2XX`. */
                 html+='<div class="ax-section"><div class="ax-section-title-row"><div class="ax-section-title">Responses</div>'+expandToggle()+'</div>';
-                var rKeys=Object.keys(op.responses);
+                var rKeys=Object.keys(op.responses).sort(respOrder);
                 rKeys.forEach(function(status,ri){
-                    var resp=op.responses[status];var sc=parseInt(status);
-                    var cls=sc<300?'axs-2xx':sc<400?'axs-3xx':sc<500?'axs-4xx':'axs-5xx';
-                    var icon=sc<300?'✓':sc<400?'→':'✕';
+                    var resp=op.responses[status];
+                    var cls=statusClass(status);
+                    var icon=cls==='axs-2xx'?'✓':cls==='axs-3xx'?'→':cls==='axs-4xx'||cls==='axs-5xx'?'✕':'•';
                     var isFirst=ri===0;
                     var bodyId='ax-resp-body-'+escH(status);
                     html+='<div class="ax-resp'+(isFirst?' open':'')+'" id="ax-resp-'+escH(status)+'">'
@@ -2363,6 +2665,12 @@ final class UiRenderer
                         +'<span class="ax-resp-arrow" aria-hidden="true">▶</span>'
                         +'</button>'
                         +'<div class="ax-resp-body" id="'+bodyId+'" style="'+(isFirst?'':'display:none')+'">';
+                    /* `headers` and `links` were dropped outright, so the
+                       package's own #[ResponseHeader] output — Retry-After,
+                       X-RateLimit-*, Location, pagination cursors — was
+                       invisible in the documentation it generates. */
+                    html+=respHeaders(resp.headers,spec)+respLinks(resp.links,spec);
+
                     var rc=resp.content||{};var rck=Object.keys(rc);
                     if(rck.length>1){
                         html+='<div class="ax-resp-ct-tabs">';
@@ -2454,6 +2762,25 @@ final class UiRenderer
             return cur;
         }
 
+        /* Any $ref is a jump, not a label: the component it names has a view of
+           its own, and the badge is exactly where a reader is standing when
+           they want it. Derived from the ref — no name is special — and linked
+           only when the target really is a published schema, so a dangling ref
+           cannot become a dead link. The href is the same deep link the sidebar
+           uses, so the hashchange router renders it and Back returns here. */
+        function refBadge(ref,spec,extraClass,label){
+            var path=String(ref||'');
+            var name=path.split('/').pop();
+            var known=path.indexOf('#/components/schemas/')===0
+                && !!(spec&&spec.components&&spec.components.schemas&&spec.components.schemas[name]);
+            var cls=(extraClass?extraClass+' ':'')+'ax-type-badge ax-ref-badge';
+            var text=escH(label||name);
+
+            return known
+                ? '<a class="'+cls+' ax-ref-link" href="#schema_'+escH(encodeURIComponent(name))+'" title="Go to '+escH(name)+'">'+text+'</a>'
+                : '<span class="'+cls+'">'+text+'</span>';
+        }
+
         function renderSchema(schema,spec,depth){
             if(!schema)return '';
             if(schema['$ref']){
@@ -2463,11 +2790,11 @@ final class UiRenderer
                     var sid='axs'+(++_schemaIds);
                     return '<div class="ax-ref-wrap">'
                         +'<button type="button" class="ax-schema-collapse-btn" data-schema="'+sid+'" aria-expanded="true" aria-controls="'+sid+'" aria-label="Collapse '+escH(refName)+'" onclick="axToggleSchema(\''+sid+'\')">▼</button>'
-                        +'<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>'
+                        +refBadge(schema['$ref'],spec)
                         +'<div id="'+sid+'" class="ax-ref-expanded">'+renderSchema(resolved,spec,depth+1)+'</div>'
                         +'</div>';
                 }
-                return '<span class="ax-type-badge ax-ref-badge">'+escH(refName)+'</span>';
+                return refBadge(schema['$ref'],spec);
             }
             if(schema.allOf)return '<div class="ax-schema-obj"><div class="ax-allof-label">allOf</div>'+schema.allOf.map(function(s){return renderSchema(s,spec,depth+1);}).join('')+'</div>';
             if(schema.oneOf)return '<div class="ax-oneof-wrap"><div class="ax-oneof-label">One of:</div>'+schema.oneOf.map(function(s,i){return '<div class="ax-oneof-item'+(i>0?' ax-oneof-sep':'')+'">'+(i>0?'<div style="font-size:10px;color:var(--t3);margin:2px 0">or</div>':'')+renderSchema(s,spec,depth+1)+'</div>';}).join('')+'</div>';
@@ -2480,20 +2807,31 @@ final class UiRenderer
                 var props=schema.properties||{};var req=schema.required||[];var propKeys=Object.keys(props);
                 if(!propKeys.length)return '<span class="ax-type-badge">object {}</span>'+(schema.additionalProperties?'<span style="font-size:11px;color:var(--t3);margin-left:6px">+ extra fields</span>':'');
                 var html='<div class="ax-schema-obj">';
-                if(schema.description)html+='<div class="ax-schema-desc">'+escH(schema.description)+'</div>';
+                if(schema.description)html+='<div class="ax-schema-desc axw-md">'+md(schema.description)+'</div>';
                 propKeys.forEach(function(pn){
                     var pv=props[pn];
                     /* OpenAPI 3.1 type-arrays: strip null and display the primary type */
                     var rawType=pv.type;
                     if(Array.isArray(rawType)){rawType=rawType.filter(function(t){return t!=='null';})[0]||'any';}
                     var pt=rawType||(pv['$ref']?pv['$ref'].split('/').pop():(pv.properties?'object':'any'));
-                    var isNested=(rawType==='object'||pv.properties)&&depth<2;
+                    /* `array` alone said nothing about what was in it — the
+                       item's own $ref names it, and links to it. */
+                    var itemRef=rawType==='array'&&pv.items&&pv.items['$ref']?pv.items['$ref']:null;
+                    var typeHtml=pv['$ref']
+                        ? refBadge(pv['$ref'],spec,'ax-prop-type')
+                        : (itemRef
+                            ? refBadge(itemRef,spec,'ax-prop-type',itemRef.split('/').pop()+'[]')
+                            : '<span class="ax-prop-type ax-type-badge">'+escH(pt)+'</span>');
+                    /* A $ref property was an un-openable name badge: `isNested`
+                       required an inline object, so every nested model in the
+                       tree could be read only by leaving the page. */
+                    var isNested=(rawType==='object'||pv.properties||pv['$ref']||itemRef)&&depth<2;
                     var nestedId=isNested?'axs'+(++_schemaIds):'';
                     var isReq=req.indexOf(pn)!==-1;
                     html+='<div class="ax-prop-row">'
                         +(isNested?'<button type="button" class="ax-schema-collapse-btn" data-schema="'+nestedId+'" aria-expanded="'+(_expandAll?'true':'false')+'" aria-controls="'+nestedId+'" aria-label="Toggle '+escH(pn)+'" onclick="axToggleSchema(\''+nestedId+'\')">'+(_expandAll?'▼':'▶')+'</button>':'')
                         +'<span class="ax-prop-name">'+escH(pn)+'</span>'
-                        +'<span class="ax-prop-type ax-type-badge">'+escH(pt)+'</span>'
+                        +typeHtml
                         +'<span class="ax-prop-badges">'+propBadges(pv,isReq)+'</span>'
                         +(pv.description?'<span class="ax-prop-desc axw-md">'+md(pv.description)+'</span>':'')
                         +'</div>';
@@ -2502,7 +2840,9 @@ final class UiRenderer
                 });
                 return html+'</div>';
             }
-            if(type==='array')return '<span class="ax-type-badge">array</span><span style="font-size:11px;color:var(--t3);margin:0 4px">of</span>'+renderSchema(schema.items||{},spec,depth);
+            /* depth+1: passing the same depth let `array of array of …` recurse
+               past the cap the object branch relies on. */
+            if(type==='array')return '<span class="ax-type-badge">array</span><span style="font-size:11px;color:var(--t3);margin:0 4px">of</span>'+renderSchema(schema.items||{},spec,depth+1);
             if(schema.enum)return '<div class="ax-enum-wrap">'+schema.enum.map(function(v){return '<span class="ax-enum-val">'+escH(String(v))+'</span>';}).join('')+'</div>';
             return '<span class="ax-type-badge">'+escH(type)+(schema.format?'<span style="opacity:.6"> ('+escH(schema.format)+')</span>':'')+'</span>';
         }
@@ -2548,14 +2888,15 @@ final class UiRenderer
                         +'<option value="basic">Basic</option>'
                         +'<option value="apikey">API Key</option>'
                         +'</select>'
-                        +'<input class="ax-try-input" id="axi-auth" type="password" placeholder="Token…" style="flex:1">'
+                        +'<input class="ax-try-input" id="axi-auth" type="password" placeholder="Token…" aria-label="Authorization value" style="flex:1">'
                         +'</div>';
                 }
                 function paramFields(list,prefix){
                     var h='';
                     list.forEach(function(p){
-                        h+='<label class="ax-try-label" style="font-size:11px;color:var(--t3)">'+escH(p.name)+(p.required?' <span style="color:var(--red)">*</span>':'')+'</label>'
-                            +'<input class="ax-try-input" id="'+(prefix||'axi-')+escH(p.name)+'" placeholder="'+escH(p.example!=null?String(p.example):'')+'"><div style="margin-bottom:4px"></div>';
+                        var fid=(prefix||'axi-')+escH(p.name);
+                        h+='<label class="ax-try-label" for="'+fid+'" style="font-size:11px;color:var(--t3)">'+escH(p.name)+(p.required?' <span style="color:var(--red)" aria-hidden="true">*</span>':'')+'</label>'
+                            +'<input class="ax-try-input" id="'+fid+'" name="'+escH(p.name)+'"'+(p.required?' required aria-required="true"':'')+' placeholder="'+escH(paramSample(p))+'"><div style="margin-bottom:4px"></div>';
                     });
                     return h;
                 }
@@ -2576,15 +2917,21 @@ final class UiRenderer
                         +'<div class="ax-bulk-err" id="'+gid+'-err"></div>'
                         +'</div>';
                 }
-                if(pathParams.length)tryHtml+=bulkGroup('Path',pathParams,'axi-','axb-path');
-                if(queryParams.length)tryHtml+=bulkGroup('Query',queryParams,'axi-','axb-query');
+                /* Path and query shared the `axi-` prefix, so a parameter of
+                   the same name in both collided on one id: getElementById
+                   returned the first, Send posted the path value as the query
+                   value, and the Path bulk editor wrote into the Query field. */
+                if(pathParams.length)tryHtml+=bulkGroup('Path',pathParams,'axi-p-','axb-path');
+                if(queryParams.length)tryHtml+=bulkGroup('Query',queryParams,'axi-q-','axb-query');
                 if(headerParams.length)tryHtml+=bulkGroup('Headers',headerParams,'axi-h-','axb-hdr');
                 if(hasBody&&op.requestBody){
                     var ct=op.requestBody.content||{};var ex='{}';
                     if(ct['application/json']&&ct['application/json'].schema)ex=JSON.stringify(buildExample(ct['application/json'].schema,spec),null,2);
                     tryHtml+='<label class="ax-try-label" style="margin-top:8px">Request Body</label><textarea class="ax-try-input ax-try-textarea" id="axi-body">'+escH(ex)+'</textarea>';
                 }
-                tryHtml+='<button class="ax-try-send" id="axi-send" onclick="axSend(\''+escH(_server)+'\',\''+escH(path)+'\',\''+escH(method)+'\')">Send Request</button><div id="axi-result"></div></div>';
+                /* No server baked in: it is read at click time, or switching
+                   environment leaves Send quietly hitting the previous host. */
+                tryHtml+='<button class="ax-try-send" id="axi-send" onclick="axSend(\''+escH(path)+'\',\''+escH(method)+'\')">Send Request</button><div id="axi-result"></div></div>';
             }
             /* History section */
             var histHtml='<div class="ax-hist-section"><div class="ax-panel-section-title-row"><div class="ax-panel-section-title">Recent</div><button class="ax-hist-toggle" onclick="this.parentElement.parentElement.classList.toggle(\'collapsed\')">▾</button></div><div id="ax-hist-list" class="ax-hist-list"></div></div>';
@@ -2626,32 +2973,109 @@ final class UiRenderer
             setTimeout(function(){btn.textContent='Copy';btn.style.color='';},1800);
         };
 
+        /* One sample value per parameter: what the spec offers, else something
+           of the right type, else the placeholder — so a copied sample is
+           runnable and its blanks are obvious. */
+        function paramSample(p){
+            var sch=p.schema||{};
+            if(p.example!==undefined)return String(p.example);
+            if(sch.example!==undefined)return String(sch.example);
+            if(sch.default!==undefined)return String(sch.default);
+            if(Array.isArray(sch.enum)&&sch.enum.length)return String(sch.enum[0]);
+            var t=Array.isArray(sch.type)?sch.type[0]:sch.type;
+
+            return t==='integer'||t==='number'?'1':(t==='boolean'?'true':'{'+p.name+'}');
+        }
+
+        /* A sample value is encoded; a placeholder is not. Encoding it turns
+           `{shipment}` into `%7Bshipment%7D`, which stops looking like a blank
+           to fill in and starts looking like a value that works. */
+        function sampleValue(p){
+            var v=paramSample(p);
+
+            return v==='{'+p.name+'}'?v:encodeURIComponent(v);
+        }
+
+        /* The URL a code sample should show. `{userId}` was left literal and the
+           query string omitted entirely, so every copied sample 404'd. */
+        function sampleUrl(server,path,op){
+            var params=(op&&op.parameters)||[];
+            var url=server+path;
+            params.forEach(function(p){
+                if(p&&p['in']==='path')url=url.replace('{'+p.name+'}',sampleValue(p));
+            });
+            var qs=params.filter(function(p){
+                if(!p||p['in']!=='query')return false;
+                var sch=p.schema||{};
+
+                return p.required||p.example!==undefined||sch.example!==undefined||sch.default!==undefined;
+            }).map(function(p){return encodeURIComponent(p.name)+'='+sampleValue(p);});
+
+            return url+(qs.length?'?'+qs.join('&'):'');
+        }
+
+        /* The auth header the operation actually requires. Every sample claimed
+           `Authorization: Bearer` — wrong for Basic, wrong for an API key, and
+           wrong for an endpoint that needs nothing at all. */
+        function authHeaderFor(op,spec){
+            var reqs=(op&&op.security!==undefined)?op.security:((spec&&spec.security)||[]);
+            if(!Array.isArray(reqs)||!reqs.length)return null;
+            var schemes=(spec&&spec.components&&spec.components.securitySchemes)||{};
+
+            for(var i=0;i<reqs.length;i++){
+                var names=Object.keys(reqs[i]||{});
+                for(var j=0;j<names.length;j++){
+                    var sch=schemes[names[j]];
+                    if(!sch)continue;
+                    var type=String(sch.type||'').toLowerCase();
+                    if(type==='http'){
+                        var scheme=String(sch.scheme||'bearer');
+                        var label=scheme.charAt(0).toUpperCase()+scheme.slice(1);
+
+                        return scheme.toLowerCase()==='basic'
+                            ? {name:'Authorization',value:'Basic {base64_credentials}'}
+                            : {name:'Authorization',value:label+' {your_token}'};
+                    }
+                    if(type==='apikey'&&String(sch['in']||'header').toLowerCase()==='header'){
+                        return {name:sch.name||'X-API-Key',value:'{your_api_key}'};
+                    }
+                    if(type==='oauth2'||type==='openidconnect'){
+                        return {name:'Authorization',value:'Bearer {access_token}'};
+                    }
+                }
+            }
+            /* A requirement naming a scheme this document never defined: the
+               endpoint is protected, and bearer is the honest guess. */
+            return {name:'Authorization',value:'Bearer {your_token}'};
+        }
+
         function genCode(lang,server,path,method,op,spec){
-            var url=server+path;var hasBody=['post','put','patch'].includes(method);
+            var url=sampleUrl(server,path,op);var hasBody=['post','put','patch'].includes(method);
             var ct=(op.requestBody&&op.requestBody.content)||{};var bodyObj=null;
             if(hasBody&&ct['application/json']&&ct['application/json'].schema)bodyObj=buildExample(ct['application/json'].schema,spec);
-            var hasSec=op.security===undefined||(op.security&&op.security.length>0);
+            var authH=authHeaderFor(op,spec);var hasSec=!!authH;
+            var hName=authH?authH.name:'Authorization';var hValue=authH?authH.value:'';
             switch(lang){
                 case 'curl':{
                     var c="curl -X "+method.toUpperCase()+" \\\n  '"+url+"'";
                     c+=" \\\n  -H 'Accept: application/json'";
-                    if(hasSec)c+=" \\\n  -H 'Authorization: Bearer {your_token}'";
+                    if(hasSec)c+=" \\\n  -H '"+hName+": "+hValue+"'";
                     if(bodyObj){c+=" \\\n  -H 'Content-Type: application/json'";c+=" \\\n  -d '"+JSON.stringify(bodyObj,null,2)+"'";}
                     return c;
                 }
                 case 'js':{
                     var o="const response = await fetch('"+url+"', {\n  method: '"+method.toUpperCase()+"',\n  headers: {\n    'Accept': 'application/json',";
-                    if(hasSec)o+="\n    'Authorization': 'Bearer {your_token}',";
+                    if(hasSec)o+="\n    '"+hName+"': '"+hValue+"',";
                     if(bodyObj)o+="\n    'Content-Type': 'application/json',";
                     o+="\n  }"+(bodyObj?",\n  body: JSON.stringify("+JSON.stringify(bodyObj,null,2)+")":"")+"\n});\nconst data = await response.json();";
                     return o;
                 }
                 case 'python':{
-                    var py="import requests\n\nresponse = requests."+method.toLowerCase()+"(\n    '"+url+"',\n    headers={'Accept': 'application/json'"+(hasSec?",'Authorization': 'Bearer {your_token}'":"")+"},"+(bodyObj?"\n    json="+JSON.stringify(bodyObj,null,2):"");
+                    var py="import requests\n\nresponse = requests."+method.toLowerCase()+"(\n    '"+url+"',\n    headers={'Accept': 'application/json'"+(hasSec?",'"+hName+"': '"+hValue+"'":"")+"},"+(bodyObj?"\n    json="+JSON.stringify(bodyObj,null,2):"");
                     return py+"\n)\ndata = response.json()";
                 }
                 case 'php':{
-                    var php="$response = (new \\GuzzleHttp\\Client())\n    ->"+method.toLowerCase()+"('"+url+"', [\n        'headers' => ['Accept' => 'application/json'"+(hasSec?", 'Authorization' => 'Bearer {your_token}'"  :"")+"],"+(bodyObj?"\n        'json' => "+JSON.stringify(bodyObj,null,2):"");
+                    var php="$response = (new \\GuzzleHttp\\Client())\n    ->"+method.toLowerCase()+"('"+url+"', [\n        'headers' => ['Accept' => 'application/json'"+(hasSec?", '"+hName+"' => '"+hValue+"'":"")+"],"+(bodyObj?"\n        'json' => "+JSON.stringify(bodyObj,null,2):"");
                     return php+"\n    ]);\n$data = json_decode((string) $response->getBody(), true);";
                 }
                 case 'go':{
@@ -2659,7 +3083,7 @@ final class UiRenderer
                     if(bodyObj){go+="\tpayload, _ := json.Marshal("+JSON.stringify(bodyObj)+")\n";go+="\treq, _ := http.NewRequest(\""+method.toUpperCase()+"\", \""+url+"\", bytes.NewBuffer(payload))\n";}
                     else go+="\treq, _ := http.NewRequest(\""+method.toUpperCase()+"\", \""+url+"\", nil)\n";
                     go+="\treq.Header.Set(\"Accept\", \"application/json\")\n";
-                    if(hasSec)go+="\treq.Header.Set(\"Authorization\", \"Bearer {your_token}\")\n";
+                    if(hasSec)go+="\treq.Header.Set(\""+hName+"\", \""+hValue+"\")\n";
                     if(bodyObj)go+="\treq.Header.Set(\"Content-Type\", \"application/json\")\n";
                     go+="\tclient := &http.Client{}\n\tresp, err := client.Do(req)\n\tif err != nil { panic(err) }\n\tdefer resp.Body.Close()\n\tbody, _ := io.ReadAll(resp.Body)\n\tfmt.Println(string(body))\n}";
                     return go;
@@ -2684,19 +3108,26 @@ final class UiRenderer
             }
         }
 
-        window.axSend=function(server,path,method){
+        window.axSend=function(path,method){
             var btn=document.getElementById('axi-send'),result=document.getElementById('axi-result');
             if(!btn||!result)return;
             var authType=document.getElementById('axi-auth-type');
             var auth=document.getElementById('axi-auth');
             var body=document.getElementById('axi-body');
+            /* Resolved here, not at render time: the operation's parameters may
+               come from the Path Item or from `components`, and the server may
+               have changed since this panel was drawn. */
+            var spec=_specCache||{};
+            var pathItem=(spec.paths||{})[path]||{};
+            var op=derefOp(pathItem[method]||{},spec,pathItem);
+            var server=opServer(op);
             var url=server+path;
-            var specParams=(_specCache&&_specCache.paths&&_specCache.paths[path]&&_specCache.paths[path][method]&&_specCache.paths[path][method].parameters)||[];
+            var specParams=op.parameters||[];
             specParams.forEach(function(p){
-                var el=document.getElementById('axi-'+p.name);if(!el||!el.value)return;
-                if(p.in==='path')url=url.replace('{'+p.name+'}',encodeURIComponent(el.value));
+                var el=document.getElementById('axi-p-'+p.name);if(!el||!el.value)return;
+                if(p['in']==='path')url=url.replace('{'+p.name+'}',encodeURIComponent(el.value));
             });
-            var qp=specParams.filter(function(p){return p.in==='query';}).map(function(p){var el=document.getElementById('axi-'+p.name);return el&&el.value?p.name+'='+encodeURIComponent(el.value):'';}).filter(Boolean).join('&');
+            var qp=specParams.filter(function(p){return p['in']==='query';}).map(function(p){var el=document.getElementById('axi-q-'+p.name);return el&&el.value?encodeURIComponent(p.name)+'='+encodeURIComponent(el.value):'';}).filter(Boolean).join('&');
             if(qp)url+='?'+qp;
             var headers={'Accept':'application/json'};
             if(auth&&auth.value){
@@ -2705,7 +3136,7 @@ final class UiRenderer
                 else if(at==='basic')headers['Authorization']='Basic '+btoa(auth.value);
                 else if(at==='apikey')headers['X-API-Key']=auth.value;
             }
-            specParams.filter(function(p){return p.in==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headers[p.name]=el.value;});
+            specParams.filter(function(p){return p['in']==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headers[p.name]=el.value;});
             var hasBodyMethod=!['get','head'].includes(method);
             if(body&&body.value&&hasBodyMethod)headers['Content-Type']='application/json';
             var opts={method:method.toUpperCase(),headers:headers};
@@ -2714,8 +3145,16 @@ final class UiRenderer
             var t0=Date.now();
             result.innerHTML='<div class="axui-loading-state"><div class="axui-spinner"></div><span>Waiting for response…</span></div>';
             /* Snapshot of params for history */
-            var paramSnap={};specParams.forEach(function(p){var el=document.getElementById('axi-'+p.name);if(el&&el.value)paramSnap[p.name]=el.value;});
-            var headerSnap={};specParams.filter(function(p){return p.in==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headerSnap[p.name]=el.value;});
+            /* Keyed by field id, so a restored entry lands in the group it
+               came from. Version 2 entries; v1 ones had ambiguous keys and are
+               ignored on restore rather than replayed into the wrong field. */
+            var paramSnap={};specParams.forEach(function(p){
+                var pre=p['in']==='path'?'axi-p-':p['in']==='query'?'axi-q-':p['in']==='header'?'axi-h-':null;
+                if(!pre)return;
+                var el=document.getElementById(pre+p.name);
+                if(el&&el.value)paramSnap[pre+p.name]=el.value;
+            });
+            var headerSnap={};specParams.filter(function(p){return p['in']==='header';}).forEach(function(p){var el=document.getElementById('axi-h-'+p.name);if(el&&el.value)headerSnap[p.name]=el.value;});
             fetch(url,opts).then(function(r){
                 var ms=Date.now()-t0;var sc=r.status;
                 var cls=sc<300?'ax-res-s-ok':sc<400?'ax-res-s-info':sc<500?'ax-res-s-warn':'ax-res-s-err';
@@ -2744,14 +3183,14 @@ final class UiRenderer
                             +'<div class="ax-res-pane" data-pane="headers" style="display:none">'+hdrTable+'</div>'
                             +'<div class="ax-res-pane" data-pane="raw" style="display:none"><pre class="ax-res-pre">'+escH(raw)+'</pre></div>'
                         +'</div></div>';
-                    histPush(method,path,{status:sc,ms:ms,auth:(auth&&auth.value)||null,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
+                    histPush(method,path,{v:2,server:server,status:sc,ms:ms,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
                     renderHistory(method,path);
                 });
             }).catch(function(err){
                 result.innerHTML='<div class="ax-res-panel"><div class="ax-res-status-bar"><span class="ax-res-status ax-res-s-err">Network Error</span><span class="ax-res-meta">'+escH(err.message)+'</span></div><div class="ax-res-body-wrap"><div class="ax-res-pane">'
                     +'<div style="font-size:12px;color:var(--t3);padding:10px;line-height:1.6">'
                     +'<strong>Possible causes:</strong><ul style="margin:6px 0 0 18px;padding:0"><li>The server is offline or unreachable.</li><li>CORS is not configured to allow this origin.</li><li>The URL is wrong: <code>'+escH(url)+'</code></li></ul></div></div></div></div>';
-                histPush(method,path,{status:0,ms:Date.now()-t0,auth:(auth&&auth.value)||null,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
+                histPush(method,path,{v:2,server:server,status:0,ms:Date.now()-t0,params:paramSnap,headers:headerSnap,body:(body&&body.value)||null});
                 renderHistory(method,path);
             }).finally(function(){btn.disabled=false;btn.textContent='Send Request';});
         };
