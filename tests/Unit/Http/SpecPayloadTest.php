@@ -39,3 +39,14 @@ it('does not attach a download name to YAML', function () {
     expect($payload->contentType)->toBe('application/yaml')
         ->and($payload->downloadName)->toBeNull();
 });
+
+it('never lets the documentation page be cached', function () {
+    // The page inlines the entire stylesheet and script, so a cached copy pins
+    // the reader to an old UI with no symptom and nothing to invalidate — while
+    // the spec it fetches is already no-store.
+    $payload = SpecPayload::html('<!doctype html><title>x</title>');
+
+    expect($payload->headers)->toMatchArray(['Cache-Control' => 'no-store'])
+        ->and($payload->contentType)->toBe('text/html; charset=UTF-8')
+        ->and($payload->downloadName)->toBeNull();
+});

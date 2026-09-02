@@ -49,7 +49,7 @@ final class ValidationExtractor implements ValidationExtractorInterface
             return null;
         }
 
-        $schema = $this->schemaBuilder->fromClass($class);
+        $schema = SchemaBuilder::anySchema($this->schemaBuilder->fromClass($class));
         $content = [];
 
         // #[MapRequestPayload(acceptFormat: 'json')] pins the media type.

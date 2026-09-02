@@ -46,7 +46,7 @@ final class McpServer
     public const REFERENCES = [
         'skill' => ['skills/apexdocs/SKILL.md', 'Overview, golden rules, workflow, debugging checklist'],
         'attributes' => ['skills/apexdocs/references/attributes.md', 'Every PHP attribute: signature, target, precedence, what it emits'],
-        'schemas-and-types' => ['skills/apexdocs/references/schemas-and-types.md', 'How DTOs, return types, generics, enums and PHPDoc become JSON Schema'],
+        'schemas-and-types' => ['skills/apexdocs/references/schemas-and-types.md', 'How DTOs, API resources, return types, generics, enums and PHPDoc become JSON Schema'],
         'inference' => ['skills/apexdocs/references/inference.md', 'What the generator infers without attributes: operationId, tags, summary, parameters, responses, security, request bodies'],
         'config' => ['skills/apexdocs/references/config.md', 'Every config key (Laravel array, Symfony tree, Config object) and its effect'],
         'commands' => ['skills/apexdocs/references/commands.md', 'apexdocs:generate|validate|export|diff|watch|mock|mcp|install-ai|snapshot'],
