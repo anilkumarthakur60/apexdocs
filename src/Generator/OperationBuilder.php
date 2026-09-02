@@ -195,7 +195,7 @@ final class OperationBuilder
         // 1. Explicit #[RequestBody] attribute  works in any framework
         $rbAttr = AttributeReader::first($method, RequestBodyAttr::class);
         if ($rbAttr !== null) {
-            $schema = $this->schemaBuilder->fromClass($rbAttr->class);
+            $schema = SchemaBuilder::anySchema($this->schemaBuilder->fromClass($rbAttr->class));
             $mediaType = trim($rbAttr->contentType) !== '' ? trim($rbAttr->contentType) : 'application/json';
             $body = [
                 'required' => $rbAttr->required,

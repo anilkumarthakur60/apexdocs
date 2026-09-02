@@ -348,6 +348,70 @@ Return types are read the same way, with generics unwrapped:
 /** @return array<string, OrderDto> */             // object map of $ref
 ```
 
+### API Resource Schemas
+
+An API resource has no public properties — its keys live in `toArray()`. That
+method is read **statically**: the class is never instantiated and the method
+never called, so documenting a resource needs no model, request or database.
+
+```php
+/** @mixin \App\Models\User */                     // where the types come from
+final class UserResource extends JsonResource
+{
+    public function toArray($request): array
+    {
+        return [
+            'id'         => $this->id,             // → integer, from the model's @property
+            'email'      => $this->email,          // → string
+            'created_at' => $this->created_at,     // → string, format: date-time (Carbon)
+            'is_active'  => (bool) $this->active,  // → boolean, from the cast
+            'full_name'  => $this->first.' '.$this->last,   // → string, from the concatenation
+            'avatar'     => $this->avatar ?? null, // → nullable
+            'author'     => new AuthorResource($this->author),          // → $ref
+            'posts'      => PostResource::collection($this->whenLoaded('posts')),
+                                                   // → array of $ref, and *not* required
+            'links'      => ['self' => $this->url] // → a nested object with its own keys
+        ];
+    }
+}
+```
+
+The same applies to `jsonSerialize()` on a value object, to a
+`ResourceCollection` (`$this->collection` becomes an array of whatever it
+collects), and to `...parent::toArray($request)`, `$this->mergeWhen(…)`,
+`array_merge(…)` and `array_filter(…)`.
+
+A key is **required** unless it is conditional: `when…()`, `mergeWhen()`,
+`array_filter()`, or absent from one of several `return` statements.
+
+Types are read from the expression, never invented — a key nothing can be
+learned about is published with no type at all. The exceptions are these naming
+conventions, applied only when the expression yields nothing:
+
+| Key | Type |
+|---|---|
+| `id`, `*_id` | `integer` |
+| `*_at` | `string`, `format: date-time` |
+| `count`, `*_count` | `integer` |
+| `is_*`, `has_*`, `can_*` | `boolean` |
+| `email`, `url`, `*_url`, `uuid` | `string` with the matching `format` |
+
+To document a body too dynamic to read — or to override any of the above —
+annotate the method. The annotation wins over everything:
+
+```php
+/** @return array{id: string, name: string, roles: string[], meta?: array{plan: string}} */
+public function toArray($request): array
+{
+    return $this->resource->toApiPayload();        // unreadable, and it does not matter
+}
+```
+
+A class with neither public properties nor a readable payload method falls back
+to its `@property` / `@property-read` annotations, which is how an Eloquent
+model describes its columns. Failing that, it stays `{type: object}` — the
+schema says nothing rather than something wrong.
+
 ### Webhooks
 
 ```php
