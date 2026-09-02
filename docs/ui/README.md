@@ -26,9 +26,30 @@ the active row carries `aria-current="page"`, decorative glyphs are
 one keyboard-only focus ring drawn from `--ring`. Measured with the harness
 below: 222/222 navigation rows reachable by Tab, up from 0/211.
 
-**Outstanding:** the rest of WS3 — live-region announcements for the
-try-it-out result, roving `tabindex` inside the navigation tree, an audit of the
-dialogs' focus traps — and WS4–WS7.
+**Landed since:** the correctness half of WS6 and WS7 — Path Item and `$ref`ed
+parameters merged, document-level `security`/`servers` honoured, `default`/`2XX`
+response keys classified and ordered, response `headers` and `links` rendered,
+namespaced try-it field ids, click-time server resolution, runnable code samples
+(path substitution, query string, real auth scheme), section-scoped
+expand/collapse, `$ref` properties expandable, the structural schema→operation
+index, markdown tables/ordered lists/quotes/rules with fences outside `<p>`, an
+abortable spec fetch with a working Retry, storage pruning plus a *Clear stored
+data* control, and a distinct `auto` theme indicator.
+
+**Outstanding**, in the order the plan gives them:
+
+| Item | Where |
+|---|---|
+| Event delegation for the ~40 inline `onclick` sites, plus the CSP nonce it enables | WS3 |
+| Native `<details>`/`<summary>` and `<dialog>` conversion, `axModal` focus stack | WS3 |
+| Live-region announcements (`#apex-live`, `#apex-alert`, `aria-busy` on results) | WS3 |
+| Try-it as a real `<form>` with `<fieldset>`/`<legend>` and Enter-to-submit | WS3 |
+| Export menu / env popover ARIA (`menuitem`, arrow keys, focus restore) | WS3 |
+| Build-once navigation tree (`renderNavOnce`/`applyNavState`/`filterNav`), persisted collapse, two-line rows, tag ordering from `spec.tags` | WS4 |
+| One weighted search index feeding both the palette and the sidebar filter; combobox ARIA; `pushState` router | WS5 |
+| `#ax-ctx` jump chips, persisted open response codes, constraint badges, `allOf` merging, `discriminator` | WS6 |
+| `axSend` abort/cancel button, `hlJson` size cap, 204 handling, response download | WS6 |
+| Loading skeletons, `#apex-progress` tied to the fetch, server-URL `variables`, OAuth2 helper cleanup | WS7 |
 
 ## Measuring
 
