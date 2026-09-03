@@ -20,7 +20,7 @@ final class SchemaBuilder
 {
     private const REF_PREFIX = '#/components/schemas/';
 
-    /** Psalm/PHPStan string and integer refinements — all one JSON type. */
+    /** Psalm/PHPStan string and integer refinements - all one JSON type. */
     private const STRING_ALIASES = [
         'string', 'class-string', 'interface-string', 'enum-string', 'trait-string',
         'callable-string', 'literal-string', 'non-empty-string', 'non-falsy-string',
@@ -35,7 +35,7 @@ final class SchemaBuilder
     /**
      * Framework bases that stand in for "some payload" without being one.
      * Matched EXACTLY, never by inheritance: `UserResource extends JsonResource`
-     * must keep its schema — it is only the bare base, written as a return type,
+     * must keep its schema - it is only the bare base, written as a return type,
      * that has nothing to say. Reflected, each publishes its own plumbing:
      * `{resource, with, additional}` for JsonResource, `{exists,
      * wasRecentlyCreated, timestamps}` for an Eloquent Model.
@@ -53,7 +53,7 @@ final class SchemaBuilder
      * Classes that *carry* a payload rather than being one. Reflecting them
      * documents the framework's plumbing: `Illuminate\Http\JsonResponse` has
      * public `original` and `exception`, so a controller declared
-     * `: JsonResponse` published `{original, exception}` as its response body —
+     * `: JsonResponse` published `{original, exception}` as its response body -
      * a confident, wrong answer where the truth is that the body is unknown.
      *
      * Matched by inheritance, so one entry covers Illuminate's JsonResponse,
@@ -114,8 +114,8 @@ final class SchemaBuilder
             str_ends_with($type, '{}')               => $this->mapOf(substr($type, 0, -2), $depth),
             class_exists($type) || interface_exists($type) || enum_exists($type)
                                                      => $this->fromClass($type, $depth),
-            // A name that resolves to nothing — an unimported class, a typo, a
-            // `callable`, a `resource` — constrains nothing. Guessing `string`
+            // A name that resolves to nothing - an unimported class, a typo, a
+            // `callable`, a `resource` - constrains nothing. Guessing `string`
             // here is how a JSON object came to be documented as a string; for
             // a return type it also means no 200 content is invented.
             default                                  => [],
@@ -135,7 +135,7 @@ final class SchemaBuilder
         }
 
         // A collection or paginator written without its generic is a list of
-        // something unknown — the same reading `Collection<T>` already gets.
+        // something unknown - the same reading `Collection<T>` already gets.
         if (TypeInferrer::isIterableWrapper($class)) {
             return ['type' => 'array', 'items' => new \stdClass];
         }
@@ -229,8 +229,8 @@ final class SchemaBuilder
     {
         // A class that declares how it becomes an array says more than its
         // property list does. For an API resource the keys live in `toArray()`
-        // and the public surface is plumbing — Laravel's own `$collects` and
-        // `$resource` are public and belong in no payload — and for a
+        // and the public surface is plumbing - Laravel's own `$collects` and
+        // `$resource` are public and belong in no payload - and for a
         // JsonSerializable value object `jsonSerialize()` *is* the JSON.
         $shape = ArrayShapeReader::forClass($ref);
         if ($shape !== []) {
@@ -250,7 +250,7 @@ final class SchemaBuilder
 
             // A static property is class state, not instance data: it cannot
             // appear in a payload. `JsonResource::$wrap` is the example that
-            // matters — it was being published as a response key.
+            // matters - it was being published as a response key.
             if ($prop->isStatic()) {
                 continue;
             }

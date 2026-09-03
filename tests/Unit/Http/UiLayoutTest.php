@@ -7,7 +7,7 @@ use ApexDocs\Http\Theme;
 use ApexDocs\Http\UiRenderer;
 
 /**
- * Layout invariants of the shell — the ones a stylesheet or a script can break
+ * Layout invariants of the shell - the ones a stylesheet or a script can break
  * silently, with a green build and no console error.
  *
  * Three of these describe defects that shipped: the request console was
@@ -42,7 +42,7 @@ function uiPage(): string
 /**
  * Flat selector => declarations pairs, at-rule preludes skipped: `[^{}]` can
  * never span a brace, so the match always starts after the innermost `{`. Which
- * media query a rule sits in is deliberately discarded — these invariants hold
+ * media query a rule sits in is deliberately discarded - these invariants hold
  * at every width.
  *
  * @return list<array{0: string, 1: string}>
@@ -55,7 +55,7 @@ function uiCssRules(): array
 }
 
 /**
- * The compound each selector in a list actually targets — `a b > c` targets `c`.
+ * The compound each selector in a list actually targets - `a b > c` targets `c`.
  * A rule that hides `.ax-pseg` inside `#axui-panel` is not a rule about
  * `#axui-panel`.
  *
@@ -103,7 +103,7 @@ it('never makes the panel slot a scroll container', function () {
     // `position:sticky` on the promoted rail needs #axui-content to be the
     // scroll container. Any overflow value other than the initial one turns the
     // slot into a scrollport for its own sticky child, which degrades the rail
-    // to static — with no error and no console warning.
+    // to static - with no error and no console warning.
     $offenders = [];
     foreach (uiCssRules() as [$selector, $body]) {
         if (! uiTargets($selector, '#axui-panel-slot')) {
@@ -235,7 +235,7 @@ it('pins the context bar below the toolbar wherever the toolbar is sticky', func
     $css = uiStylesheet();
 
     // Below 900px the document scrolls and #apex-bar is sticky at the viewport
-    // top, so `top:0` here would park #ax-ctx behind it — the bar outranks it by
+    // top, so `top:0` here would park #ax-ctx behind it - the bar outranks it by
     // 994 z-index tiers. At >=900px it lives inside the #axui-content
     // scrollport, whose top already sits under the bar.
     expect($css)->toContain('#ax-ctx{position:sticky;top:var(--bar-h)')
@@ -256,7 +256,7 @@ it('gives every coarse-pointer target 44px on both axes', function () {
 });
 
 it('stretches the article across its grid cell instead of shrink-wrapping it', function () {
-    // Once the console is promoted to a rail, the article is a grid item — and
+    // Once the console is promoted to a rail, the article is a grid item - and
     // `margin-inline:auto` on a grid item cancels the stretch and sizes the box
     // to fit-content. It rendered 592px wide inside a 1216px cell, narrower
     // than even its own max-width, and every pixel of the slack read as dead
@@ -281,8 +281,8 @@ it('treats a single newline in a description as a soft break', function () {
     // Every PHPDoc is hard-wrapped at ~80 columns. Turning each newline into a
     // <br> froze those line ends into the page, so a description kept the
     // source's ragged right edge at every viewport, however much room it had.
-    // Markdown's own hard break — two trailing spaces, or a trailing backslash
-    // — is the only one that survives.
+    // Markdown's own hard break - two trailing spaces, or a trailing backslash
+    // - is the only one that survives.
     $softBreak = <<<'JS'
 .replace(/(?: {2,}|\\)\n/g,'<br>').replace(/\n/g,' ')
 JS;
@@ -327,7 +327,7 @@ it('resolves a $ref-ed response, parameter and body before rendering them', func
 it('navigates with real links, so the keyboard and the back button work', function () {
     $js = uiScript();
 
-    // <a href> — focusable, activatable with Enter, openable in a new tab, and
+    // <a href> - focusable, activatable with Enter, openable in a new tab, and
     // routed by the hash listener rather than a click handler.
     expect($js)->toContain("html+='<a class=\"axi'")
         ->and($js)->not->toContain("html+='<div class=\"axi'")
@@ -386,8 +386,8 @@ it('marks every decorative glyph hidden from assistive tech', function () {
 
 it('makes every $ref a link to the schema it names', function () {
     // A reader looking at `carrier: CarrierResource` wants that schema, and the
-    // badge is where they are standing. Built from the ref itself — no name is
-    // special — and only linked when the component is really published, so a
+    // badge is where they are standing. Built from the ref itself - no name is
+    // special - and only linked when the component is really published, so a
     // dangling ref cannot become a dead link.
     $js = uiScript();
 
@@ -406,7 +406,7 @@ JS;
         ->and($js)->toContain(trim($guard))
         // `array` alone named nothing: an array of $refs now says what is in it.
         ->and($js)->toContain(trim($arrayOfRefs))
-        // The reverse direction — "Used by" — was a <div onclick>, so it was
+        // The reverse direction - "Used by" - was a <div onclick>, so it was
         // unreachable by keyboard as well as unlinkable.
         ->and($js)->toContain('<a class="ax-used-item" href="#')
         ->and($js)->not->toContain('<div class="ax-used-item"');
@@ -418,7 +418,7 @@ it('shows a $ref badge as navigable at rest, not only under the pointer', functi
 });
 
 /**
- * WS6/WS7 of docs/ui/REBUILD-PLAN.md — the items where the UI showed something
+ * WS6/WS7 of docs/ui/REBUILD-PLAN.md - the items where the UI showed something
  * untrue or dropped what the generator emitted. Each assertion names the defect
  * it replaces.
  */
@@ -496,8 +496,8 @@ it('renders the markdown an OpenAPI description actually contains', function () 
 });
 
 it('keeps the renderer source out of binary territory', function () {
-    // The fence sentinel was a literal NUL byte, which made this file — the
-    // largest in the package — grep as binary for every tool.
+    // The fence sentinel was a literal NUL byte, which made this file - the
+    // largest in the package - grep as binary for every tool.
     $source = file_get_contents(__DIR__.'/../../../src/Http/UiRenderer.php');
 
     expect(str_contains($source, "\0"))->toBeFalse()

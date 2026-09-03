@@ -5,7 +5,7 @@ declare(strict_types=1);
 use ApexDocs\Bridge\Laravel\RuleParser;
 
 /**
- * Rule shapes that used to produce wrong schemas — or, in the closure case,
+ * Rule shapes that used to produce wrong schemas - or, in the closure case,
  * kill the whole build with "Object of class Closure could not be converted to
  * string".
  */

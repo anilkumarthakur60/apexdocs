@@ -95,8 +95,8 @@ final readonly class SpecPayload
     }
 
     /**
-     * The documentation page carries the whole UI — stylesheet and script are
-     * inlined — and is rebuilt from source on every request. Cached by the
+     * The documentation page carries the whole UI - stylesheet and script are
+     * inlined - and is rebuilt from source on every request. Cached by the
      * browser, it pins the reader to the UI of whenever they first opened it,
      * with no visible symptom and nothing to invalidate: the spec it fetches is
      * already `no-store`, so only the page itself can go stale.

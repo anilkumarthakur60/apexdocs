@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /*
  * The mock router is dispatched by `php -S host:port resources/mock/server.php`
- * — i.e. it's the entry script for the built-in dev server, where `return true`
+ * - i.e. it's the entry script for the built-in dev server, where `return true`
  * means "I handled this request inline". We can't `require` it directly without
  * the dev-server context (top-level `return` is invalid), so these tests assert
  * the file's *structure*: the router never inlines the spec, never evals user
@@ -43,7 +43,7 @@ it('MockCommand spawns the server without a shell', function () {
     $source = file_get_contents(__DIR__.'/../../../src/Bridge/Laravel/Console/Commands/MockCommand.php');
 
     // An argument array through proc_open means no quoting rules to get wrong,
-    // and "VAR=value cmd" — which only works in a POSIX shell — never appears.
+    // and "VAR=value cmd" - which only works in a POSIX shell - never appears.
     expect($source)->toContain('proc_open(')
         ->and($source)->toContain('PHP_BINARY')
         ->and($source)->not->toContain('passthru(')

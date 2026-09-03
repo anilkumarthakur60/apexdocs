@@ -90,7 +90,7 @@ test('a response wrapper is not a payload', function () {
 test('the bare resource base is not a payload, but a subclass is', function () {
     $b = new SchemaBuilder(6, new ApexDocs\Extractor\ComponentRegistry);
 
-    // Reflected, the base published `{resource, with, additional, wrap}` — its
+    // Reflected, the base published `{resource, with, additional, wrap}` - its
     // own plumbing, and `$wrap` is not even an instance property.
     expect($b->fromTypeString(Illuminate\Http\Resources\Json\JsonResource::class))->toBe([])
         ->and($b->fromTypeString(Illuminate\Database\Eloquent\Model::class))->toBe([])
@@ -108,7 +108,7 @@ test('a static property is never a payload key', function () {
 test('a name that resolves to nothing constrains nothing', function () {
     $b = new SchemaBuilder;
 
-    // Previously `{type: string}` — which is how an unresolved class name came
+    // Previously `{type: string}` - which is how an unresolved class name came
     // to document a JSON object as a string.
     expect($b->fromTypeString('NoSuchClass'))->toBe([])
         ->and($b->fromTypeString('callable'))->toBe([])

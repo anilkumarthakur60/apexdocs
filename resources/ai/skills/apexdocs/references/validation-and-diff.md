@@ -10,7 +10,7 @@
 | `servers[i]: missing url` | server entry without url (core drops those; a transformer may add one) | |
 | `METHOD /path: no responses` | transformer removed responses | |
 | `… response N has no description (required by the spec)` | `#[ApiResponse]` with empty description **and** unknown status (no reason phrase), or a transformer | add `description:` |
-| `… 'N' is not a valid response key` | status outside `1XX–5XX`/`default` (core maps to `default`) | |
+| `… 'N' is not a valid response key` | status outside `1XX-5XX`/`default` (core maps to `default`) | |
 | `… duplicate operationId 'x' (also on …)` | two routes share a name, or unnamed routes differing only in punctuation and a transformer overrode ids | name routes uniquely |
 | `… path template declares {x} but no matching parameter` | `#[PathParam]` name differs from the template, or a transformer removed it | match names |
 | `… path parameter 'x' must be required` | transformer set `required: false` | |

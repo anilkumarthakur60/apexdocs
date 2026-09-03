@@ -1,4 +1,4 @@
-# Documentation UI — rebuild plan and audit trail
+# Documentation UI - rebuild plan and audit trail
 
 The docs UI was consolidated from six interchangeable backends (a native one plus
 Scalar, Swagger UI, ReDoc, Stoplight and RapiDoc) down to one. These files are the
@@ -9,7 +9,7 @@ workstreams have landed.
 |------|------------|
 | `AUDIT-FINDINGS.md` | 159 findings from five parallel audits: feature inventory, responsive behaviour, accessibility, competitive gaps, and every reference to the multi-UI system. Each carries file/line numbers. |
 | `REBUILD-PLAN.md` | The implementation plan: layout decision, the full breakpoint specification, and seven workstreams with scope, dependencies and a feature-parity checklist. |
-| `measure.mjs` | Responsive/a11y harness. Drives headless Chrome over CDP (no npm deps) and reports horizontal overflow, elements wider than the viewport, which panels are actually visible, and undersized touch targets — per viewport. |
+| `measure.mjs` | Responsive/a11y harness. Drives headless Chrome over CDP (no npm deps) and reports horizontal overflow, elements wider than the viewport, which panels are actually visible, and undersized touch targets - per viewport. |
 
 ## Status
 
@@ -26,7 +26,7 @@ the active row carries `aria-current="page"`, decorative glyphs are
 one keyboard-only focus ring drawn from `--ring`. Measured with the harness
 below: 222/222 navigation rows reachable by Tab, up from 0/211.
 
-**Landed since:** the correctness half of WS6 and WS7 — Path Item and `$ref`ed
+**Landed since:** the correctness half of WS6 and WS7 - Path Item and `$ref`ed
 parameters merged, document-level `security`/`servers` honoured, `default`/`2XX`
 response keys classified and ordered, response `headers` and `links` rendered,
 namespaced try-it field ids, click-time server resolution, runnable code samples

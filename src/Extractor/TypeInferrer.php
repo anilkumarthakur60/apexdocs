@@ -37,7 +37,7 @@ final class TypeInferrer
      *
      * `Collection<Post>` is unwrapped to `Post[]` by {@see normalise()}. Written
      * without its generic, the same class would otherwise be reflected as an
-     * object with no properties — a `Collection` component schema that says
+     * object with no properties - a `Collection` component schema that says
      * nothing. It is an array of something unknown, and that is worth saying.
      *
      * The name is not enough on its own: a DTO of one's own called `Collection`
@@ -68,7 +68,7 @@ final class TypeInferrer
                 ->resolveTypeString(self::normalise($docType));
         }
 
-        // 2. Reflection return type — already fully qualified, so only the
+        // 2. Reflection return type - already fully qualified, so only the
         //    relative keywords need a class to point at.
         $reflType = $method->getReturnType();
         if ($reflType === null) {

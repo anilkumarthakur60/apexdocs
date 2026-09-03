@@ -9,7 +9,7 @@ use ApexDocs\Spec\Document;
 use ApexDocs\Tests\Fixtures\Controllers\UserController;
 
 /*
- * End-to-end smoke test — builds a full Document from a hand-built route
+ * End-to-end smoke test - builds a full Document from a hand-built route
  * collection and asserts the spec contains the expected paths, tags, schemas,
  * and operation metadata. Catches regressions across the whole pipeline.
  */

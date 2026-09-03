@@ -1,7 +1,7 @@
 /**
  * Responsive/a11y measurement harness for the ApexDocs UI.
  *
- * Drives headless Chrome over CDP (no npm deps — Node 22 has a global
+ * Drives headless Chrome over CDP (no npm deps - Node 22 has a global
  * WebSocket) so we can measure real layout at real viewport sizes instead of
  * eyeballing screenshots.
  *
@@ -163,7 +163,7 @@ for (const vp of VIEWPORTS) {
   const metrics = { width: vp.width, height: vp.height, deviceScaleFactor: 1, mobile: vp.mobile }
 
   // about:blank between runs, otherwise a same-URL navigate is a no-op and the
-  // page keeps the previous viewport's layout — which silently reported the
+  // page keeps the previous viewport's layout - which silently reported the
   // wrong width for every viewport after the first.
   await send('Page.navigate', { url: 'about:blank' })
   await sleep(150)

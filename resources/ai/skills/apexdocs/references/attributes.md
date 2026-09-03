@@ -94,7 +94,7 @@ Each becomes one property of one `application/json` object schema; `nullable` �
 ## Responses
 
 ### `#[ApiResponse(int $status = 200, string $description = '', ?string $resource = null, bool $collection = false, ?array $schema = null, array $headers = [], array $examples = [])]`  method, repeatable
-Key = status (100–599; anything else → `default`). `description` defaults to the reason phrase
+Key = status (100-599; anything else → `default`). `description` defaults to the reason phrase
 (`OK`, `Created`, `Not Found`, …, else `Response`). Content precedence: `schema` (inline, as given)
 → `resource` (`{type: object, properties: {data: <schema of class>}}`; `collection: true` →
 `data: {type: array, items: …}` plus `meta: $ref PaginationMeta`, `links: $ref PaginationLinks`

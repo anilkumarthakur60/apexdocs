@@ -18,7 +18,7 @@ use ApexDocs\Tests\Fixtures\Dtos\UserDto;
  *
  * Why not run the full JSON-Schema meta-schema? It's a 2k-line schema that
  * imports JSON-Schema 2020-12 + the OpenAPI dialect; bringing that as a test
- * dependency would mean pulling in opis/json-schema or similar — a runtime-
+ * dependency would mean pulling in opis/json-schema or similar - a runtime-
  * sized dependency just for testing. Instead we encode the invariants that
  * MUST hold for any OpenAPI 3.1 document to be valid against the meta-schema,
  * plus the rules that distinguish 3.1 from 3.0. If we ship something that
@@ -58,7 +58,7 @@ it('uses 3.1 type-array form for nullable, not deprecated `nullable: true`', fun
     $userSchema = $spec['components']['schemas']['UserDto'] ?? [];
     $emailProp = $userSchema['properties']['email'] ?? [];
 
-    expect($emailProp)->not->toHaveKey('nullable') // 3.0 syntax — banned in 3.1
+    expect($emailProp)->not->toHaveKey('nullable') // 3.0 syntax - banned in 3.1
         ->and($emailProp['type'])->toBeArray()
         ->and($emailProp['type'])->toContain('null');
 });

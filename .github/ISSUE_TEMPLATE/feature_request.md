@@ -30,4 +30,4 @@ assignees: ''
 
 ### Additional context
 
-<!-- Anything else — prior art in other packages, related issues, screenshots. -->
+<!-- Anything else - prior art in other packages, related issues, screenshots. -->

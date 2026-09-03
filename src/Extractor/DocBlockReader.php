@@ -172,7 +172,7 @@ final class DocBlockReader
      *
      * The Eloquent-model convention: the columns of a model are documented as
      * annotations (by hand or by ide-helper) because no PHP property declares
-     * them. `@property-write` is skipped — it never appears in a payload.
+     * them. `@property-write` is skipped - it never appears in a payload.
      *
      * @return array<string, string>
      */
@@ -199,7 +199,7 @@ final class DocBlockReader
     }
 
     /**
-     * Class names from `@mixin` — for an API resource, the model whose
+     * Class names from `@mixin` - for an API resource, the model whose
      * attributes `$this->…` actually reads.
      *
      * @return list<string>

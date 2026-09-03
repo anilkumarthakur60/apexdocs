@@ -12,8 +12,8 @@ use Illuminate\Foundation\Http\FormRequest;
 /**
  * The C5 sandbox guarantees: a misbehaving FormRequest can never crash
  * documentation generation. These fixtures simulate every failure mode the
- * extractor was hardened against — constructor side effects, throwing
- * rules(), rules() that needs request context — and the extractor must
+ * extractor was hardened against - constructor side effects, throwing
+ * rules(), rules() that needs request context - and the extractor must
  * either return the schema (good case) or null (bad case), never propagate.
  */
 class FixtureRulesRequest extends FormRequest
@@ -39,7 +39,7 @@ class FixtureContextHungryRequest extends FormRequest
 {
     public function rules(): array
     {
-        // Real apps do this all the time — references that only resolve
+        // Real apps do this all the time - references that only resolve
         // mid-request.
         $id = $this->route('id');
 
@@ -78,7 +78,7 @@ it('extracts a body schema from a well-behaved FormRequest', function () {
             ->toHaveKey('age');
 });
 
-it('returns null when rules() throws — does not propagate', function () {
+it('returns null when rules() throws - does not propagate', function () {
     $m = new \ReflectionMethod(FixtureControllerStub::class, 'methodWithThrower');
 
     expect(fn () => $this->extractor->extract($m, $this->route))->not->toThrow(\Throwable::class);
@@ -88,7 +88,7 @@ it('returns null when rules() throws — does not propagate', function () {
 it('returns null when rules() references missing request context', function () {
     $m = new \ReflectionMethod(FixtureControllerStub::class, 'methodWithContextHungry');
 
-    // No app/container set up here — route() resolution will fail. We accept
+    // No app/container set up here - route() resolution will fail. We accept
     // *either* null (best case) or a degraded schema, but never an exception.
     expect(fn () => $this->extractor->extract($m, $this->route))->not->toThrow(\Throwable::class);
 });

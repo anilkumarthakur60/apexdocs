@@ -221,7 +221,7 @@ it('drops an unusable path prefix instead of documenting the whole app', functio
         new Route(['GET'], '/admin/secret', [InvariantController::class, 'plain']),
     ];
 
-    // ['api', null] — an env-driven prefix that resolved to nothing.
+    // ['api', null] - an env-driven prefix that resolved to nothing.
     $spec = invariantSpec($routes, new Config(title: 'I', version: '1', pathPrefixes: ['api', null]));
 
     expect(array_keys($spec['paths']))->toBe(['/api/users']);

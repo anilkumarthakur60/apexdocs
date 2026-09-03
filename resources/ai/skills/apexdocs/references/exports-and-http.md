@@ -17,7 +17,7 @@
 Framework-neutral response description: `body`, `contentType`, `headers`, `downloadName`.
 Factories accept `ApexDocs|Document`: `json`, `yaml`, `postman`, `insomnia`, `bruno`, `html(string)`.
 `json`/`yaml` send `Access-Control-Allow-Origin: *` and `Cache-Control: no-store`; `html` sends
-`no-store` too — the page inlines the whole UI, so a cached copy pins the reader to an old one.
+`no-store` too - the page inlines the whole UI, so a cached copy pins the reader to an old one.
 Laravel's `DocsController` and the PSR-15 `Handler` both use it, so content types and download
 names never diverge.
 

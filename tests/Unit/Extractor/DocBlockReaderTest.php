@@ -10,7 +10,7 @@ use ApexDocs\Tests\Fixtures\Dtos\UserDto;
 /**
  * The parser is wired differently for phpstan/phpdoc-parser v1 and v2. When
  * that wiring is wrong, construction throws, every parse returns null, and
- * @return / @param annotations quietly stop contributing to the spec — with no
+ * @return / @param annotations quietly stop contributing to the spec - with no
  * error anywhere. These tests fail loudly instead.
  */
 class DocBlockFixture

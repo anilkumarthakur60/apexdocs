@@ -58,7 +58,7 @@ it('terminates on a self-referencing DTO and points the cycle at the component',
 
     expect($schema['properties']['parent']['oneOf'][0]['$ref'])->toBe('#/components/schemas/SelfReferencing')
         ->and($schema['properties']['parent']['oneOf'][1])->toBe(['type' => 'null'])
-        // The element type comes from `@var SelfReferencing[]` — a bare `array`
+        // The element type comes from `@var SelfReferencing[]` - a bare `array`
         // declaration alone would only give `items: {}`.
         ->and($schema['properties']['children']['items']['$ref'])->toBe('#/components/schemas/SelfReferencing');
 });

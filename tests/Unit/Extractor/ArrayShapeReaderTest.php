@@ -8,7 +8,7 @@ use ApexDocs\Extractor\NameResolver;
 use ApexDocs\Extractor\SchemaBuilder;
 
 /**
- * A class whose payload is assembled by a method — every API resource — has
+ * A class whose payload is assembled by a method - every API resource - has
  * nothing public to reflect, and used to be published as a keyless
  * `{type: object}`. These cover the keys being recovered from the method
  * instead, and the guarantee that an unreadable body still degrades to that
@@ -137,7 +137,7 @@ class MoneyValue implements JsonSerializable
 
 /**
  * `$collects` and `$collection` are public on Laravel's ResourceCollection, and
- * a collection that names what it collects redeclares `$collects` — so a
+ * a collection that names what it collects redeclares `$collects` - so a
  * resource is reached with public properties in scope, and its keys must still
  * come from `toArray()`.
  */
@@ -404,7 +404,7 @@ it('still reflects a plain DTO from its public properties', function () {
 it('reads a shape straight from the reader, inventing no types', function () {
     $shape = Shapes::forClass(new ReflectionClass(TagResource::class));
 
-    // TagResource mixes in no model, so `$this->name` resolves to nothing —
+    // TagResource mixes in no model, so `$this->name` resolves to nothing -
     // the key is reported without a type rather than with a guessed one.
     expect($shape)->toBe([
         'name' => [],

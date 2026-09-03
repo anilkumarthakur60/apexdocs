@@ -11,7 +11,7 @@ use ReflectionNamedType;
 
 /**
  * Recovers the JSON shape of a class whose payload is assembled by a method
- * instead of declared as public properties — the API resource case:
+ * instead of declared as public properties - the API resource case:
  *
  *     final class UserResource extends JsonResource
  *     {
@@ -26,7 +26,7 @@ use ReflectionNamedType;
  *     }
  *
  * Reflecting that class finds nothing to document: every key lives inside
- * `toArray()`. So the array literal is read statically — the class is never
+ * `toArray()`. So the array literal is read statically - the class is never
  * instantiated and the method never called, which means no model, request,
  * container or database is involved.
  *
@@ -34,14 +34,14 @@ use ReflectionNamedType;
  * `@return array{id: int, name: string}` annotation over the body it describes:
  * the author said it explicitly, and it is the escape hatch for a body too
  * dynamic to read. {@see fromAnnotations()} is the separate, weaker source for
- * a class with no payload method at all — an Eloquent model, whose columns
+ * a class with no payload method at all - an Eloquent model, whose columns
  * exist only as `@property` tags.
  *
  * A key whose value expression yields no evidence is documented as a key with
  * no type rather than a guessed one, except for the handful of naming
  * conventions in {@see fromKeyName()}.
  *
- * Pure PHP — no framework dependency; Laravel's conditional helpers are
+ * Pure PHP - no framework dependency; Laravel's conditional helpers are
  * recognised by name only.
  *
  * @phpstan-type ShapeNode array{
@@ -170,7 +170,7 @@ final class ArrayShapeReader
     }
 
     /**
-     * The shape implied by `@property` annotations — the fallback for a class
+     * The shape implied by `@property` annotations - the fallback for a class
      * with neither a payload method nor a public property, which is how an
      * Eloquent model documents its columns.
      *
@@ -279,7 +279,7 @@ final class ArrayShapeReader
 
         foreach ($node->items as $item) {
             if ($item->keyName === null) {
-                // `array{int, string}` is a tuple, not an object — there are no
+                // `array{int, string}` is a tuple, not an object - there are no
                 // key names to document.
                 return [];
             }
@@ -606,7 +606,7 @@ final class ArrayShapeReader
         }
 
         // Each attempt returns null when it does not recognise the expression
-        // and an array — possibly empty — when it does.
+        // and an array - possibly empty - when it does.
         $node = $this->fromConditional($value, $depth)
             ?? $this->fromCoalesce($value, $depth)
             ?? $this->fromTernary($value, $depth)
@@ -647,7 +647,7 @@ final class ArrayShapeReader
         return $node;
     }
 
-    /** `$this->avatar ?? null` — the left branch types the key. */
+    /** `$this->avatar ?? null` - the left branch types the key. */
     private function fromCoalesce(array $value, int $depth): ?array
     {
         $split = TokenScanner::indexOfTopLevel($value, T_COALESCE);
@@ -701,7 +701,7 @@ final class ArrayShapeReader
         return $node;
     }
 
-    /** `(bool) $this->active` — the cast is the whole answer. */
+    /** `(bool) $this->active` - the cast is the whole answer. */
     private static function fromCast(array $value): ?array
     {
         return match ($value[0][0]) {
@@ -861,7 +861,7 @@ final class ArrayShapeReader
         };
     }
 
-    /** `count($this->posts)`, `sprintf(…)` — functions with one obvious type. */
+    /** `count($this->posts)`, `sprintf(…)` - functions with one obvious type. */
     private static function fromFunctionCall(array $value): ?array
     {
         if ($value[0][0] !== T_STRING || ($value[1][1] ?? '') !== '(') {
@@ -999,7 +999,7 @@ final class ArrayShapeReader
         $reflection = new ReflectionClass($class);
 
         // `$this->collection` inside a resource collection is the list of
-        // resources it collects — the one member whose declared type
+        // resources it collects - the one member whose declared type
         // (a bare Collection) is less true than the convention.
         if ($member === 'collection' && ($collects = self::collects($reflection)) !== null) {
             return ['type' => $collects.'[]'];
@@ -1041,7 +1041,7 @@ final class ArrayShapeReader
 
         // An Eloquent-style model declares its column types in `$casts` (or the
         // `casts()` method) and its key type in `$keyType`. Both are static
-        // declarations, so no model is constructed and no database is touched —
+        // declarations, so no model is constructed and no database is touched -
         // and they are the only *declared* truth about a column, which is why
         // they beat the naming conventions.
         $declared = $this->declaredAttributeType($reflection, $member);
@@ -1066,8 +1066,8 @@ final class ArrayShapeReader
     }
 
     /**
-     * The type a model *declares* for one attribute: its cast, or — for the
-     * primary key — `$keyType`, which is how a UUID model says its `id` is a
+     * The type a model *declares* for one attribute: its cast, or - for the
+     * primary key - `$keyType`, which is how a UUID model says its `id` is a
      * string where the naming convention would guess an integer.
      *
      * Duck-typed on the declarations themselves rather than on Eloquent, so it
@@ -1167,7 +1167,7 @@ final class ArrayShapeReader
      */
     private static function fromCastType(string $cast): array
     {
-        // `decimal:2`, `encrypted:array`, `datetime:Y-m-d` — the modifier is
+        // `decimal:2`, `encrypted:array`, `datetime:Y-m-d` - the modifier is
         // formatting, the head is the type.
         [$head, $modifier] = array_pad(explode(':', $cast, 2), 2, null);
         $head = strtolower(trim((string) $head));
@@ -1210,7 +1210,7 @@ final class ArrayShapeReader
 
     /**
      * What a resource collection collects: its `$collects` property, else the
-     * class it is named after — `UserCollection` collects `User` or
+     * class it is named after - `UserCollection` collects `User` or
      * `UserResource`, the same two candidates Laravel itself tries.
      */
     private static function collects(ReflectionClass $class): ?string
@@ -1276,7 +1276,7 @@ final class ArrayShapeReader
     /**
      * Last resort, and the only place a type is guessed rather than read: the
      * naming conventions an API payload almost always follows. Overridable by
-     * annotating the key — `@return array{id: string, …}` — or the model
+     * annotating the key - `@return array{id: string, …}` - or the model
      * attribute it reads.
      *
      * @return array<string, mixed>

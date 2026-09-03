@@ -19,7 +19,7 @@ jobs:
           - php: '8.2'
             laravel: '11.*'
             deps: 'lowest'
-          # Coverage row — runs once with xdebug enabled, uploads to Codecov.
+          # Coverage row - runs once with xdebug enabled, uploads to Codecov.
           - php: '8.3'
             laravel: '12.*'
             deps: 'highest'

@@ -350,7 +350,7 @@ Return types are read the same way, with generics unwrapped:
 
 ### API Resource Schemas
 
-An API resource has no public properties — its keys live in `toArray()`. That
+An API resource has no public properties - its keys live in `toArray()`. That
 method is read **statically**: the class is never instantiated and the method
 never called, so documenting a resource needs no model, request or database.
 
@@ -384,7 +384,7 @@ collects), and to `...parent::toArray($request)`, `$this->mergeWhen(…)`,
 A key is **required** unless it is conditional: `when…()`, `mergeWhen()`,
 `array_filter()`, or absent from one of several `return` statements.
 
-Types are read from the expression, never invented — a key nothing can be
+Types are read from the expression, never invented - a key nothing can be
 learned about is published with no type at all. The exceptions are these naming
 conventions, applied only when the expression yields nothing:
 
@@ -396,7 +396,7 @@ conventions, applied only when the expression yields nothing:
 | `is_*`, `has_*`, `can_*` | `boolean` |
 | `email`, `url`, `*_url`, `uuid` | `string` with the matching `format` |
 
-To document a body too dynamic to read — or to override any of the above —
+To document a body too dynamic to read - or to override any of the above -
 annotate the method. The annotation wins over everything:
 
 ```php
@@ -409,7 +409,7 @@ public function toArray($request): array
 
 A class with neither public properties nor a readable payload method falls back
 to its `@property` / `@property-read` annotations, which is how an Eloquent
-model describes its columns. Failing that, it stays `{type: object}` — the
+model describes its columns. Failing that, it stays `{type: object}` - the
 schema says nothing rather than something wrong.
 
 ### Webhooks

@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Model-informed resource keys.** A key that reads a model attribute is typed
   from what the model *declares*: its `$casts` map, the Laravel 11 `casts()`
-  method (both read statically — no model is constructed, no database touched),
+  method (both read statically - no model is constructed, no database touched),
   and `$keyType` for the primary key, which is how a UUID model says its `id` is
   a string where the naming convention would have guessed an integer. Casts map
   as Eloquent casts them, including `decimal:` → string and an enum-class cast →
@@ -19,34 +19,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   outside Laravel. Also typed now: `__()`/`trans()`, and the collection
   pipelines (`map`, `filter`, `pluck`, `flatten`, …).
 - **Response headers and links are rendered.** The package's own
-  `#[ResponseHeader]` output — `Retry-After`, `X-RateLimit-*`, `Location`,
-  pagination cursors — was dropped by its own UI. A Links Object now lists the
+  `#[ResponseHeader]` output - `Retry-After`, `X-RateLimit-*`, `Location`,
+  pagination cursors - was dropped by its own UI. A Links Object now lists the
   operations reachable from a response, linked where it names an `operationId`.
 - **Markdown in descriptions:** pipe tables (an OpenAPI description routinely
   carries an error-code catalogue as one, and it rendered as literal pipes),
   ordered lists, blockquotes and thematic breaks. Code fences are re-injected
-  *before* the paragraph pass — after it, a `<pre>` sat inside a `<p>`, which is
+  *before* the paragraph pass - after it, a `<pre>` sat inside a `<p>`, which is
   invalid, and the browser closed the paragraph early.
-- **A `$ref` is now a link.** Every reference in a schema — a property, an
-  array's items, a response or request body, a `oneOf` branch — navigates to
+- **A `$ref` is now a link.** Every reference in a schema - a property, an
+  array's items, a response or request body, a `oneOf` branch - navigates to
   that component's own view, and an array of references names its item type
   (`CarrierResource[]`) where it used to say only `array`. Derived from the ref
   itself, so it holds for any schema; linked only when the component is really
   published, so a dangling reference cannot become a dead link. The reverse
-  direction, a schema's "Used by" list, is now links too — it was a
+  direction, a schema's "Used by" list, is now links too - it was a
   `<div onclick>`, so it was unreachable by keyboard.
 - **A documentation UI that can be used with a keyboard.** Measured before:
   211 endpoint rows in the navigation and 34 group headers, none reachable by
   Tab; response accordions unreachable; no `:focus-visible` rule anywhere, so
   focus was invisible; no `h1`. The navigation is now real `<a href>` links
-  routed by a `hashchange` listener — which also makes Back and Forward walk the
-  endpoints visited, and lets an endpoint be opened in a new tab — every
+  routed by a `hashchange` listener - which also makes Back and Forward walk the
+  endpoints visited, and lets an endpoint be opened in a new tab - every
   disclosure control is a `<button>` reporting `aria-expanded`/`aria-controls`,
   each view names itself with an `h1`, the active row carries
   `aria-current="page"`, and there is one focus ring, keyboard-only, drawn from
   the existing `--ring` token.
-- **API resource schemas.** A class whose payload is assembled by a method —
-  every Laravel API resource, every `JsonSerializable` value object — now
+- **API resource schemas.** A class whose payload is assembled by a method -
+  every Laravel API resource, every `JsonSerializable` value object - now
   publishes its keys instead of an empty `{type: object}`. `toArray()` /
   `jsonSerialize()` is read *statically* (`ApexDocs\Extractor\ArrayShapeReader`
   over `ApexDocs\Extractor\TokenScanner`): the class is never instantiated and
@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `ResourceCollection` → an array of whatever it collects (`$collects`, else
     Laravel's own naming convention);
   - `$this->attribute` typed through reflection, `@var`, `@property` /
-    `@property-read` and `@mixin` — so a resource over an annotated model gets
+    `@property-read` and `@mixin` - so a resource over an annotated model gets
     real types;
   - `array_merge()` / `array_replace()` / `array_filter()` around the returned
     literal, `...parent::toArray($request)` and `...$this->fields()` spreads,
@@ -73,7 +73,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `@return array{…}` on the payload method overrides everything and is the
   escape hatch for a body too dynamic to read.
 - **`@property` / `@property-read` annotations** are read for any class with no
-  public property and no payload method — how an Eloquent model documents its
+  public property and no payload method - how an Eloquent model documents its
   columns. New: `DocBlockReader::propertyTypes()`, `DocBlockReader::mixins()`,
   and `ApexDocs\Extractor\NameResolver`, which resolves the short class names in
   a file against its `use` statements.
@@ -142,7 +142,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unauthenticated on every operation.** Document-level `security` is now the
   default when an operation declares none, and `servers` on the document or the
   Path Item is honoured by the try-it panel and the code samples.
-- **`default` and `2XX` response keys rendered as red 5xx errors** —
+- **`default` and `2XX` response keys rendered as red 5xx errors** -
   `parseInt('default')` is NaN, which lost every comparison and fell through to
   the 5xx branch. Response keys are now classified properly and ordered
   numeric → wildcard → `default`.
@@ -153,7 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`axi-p-`/`axi-q-`/`axi-h-`), history entries are versioned (v1 entries keyed
   by bare name are no longer replayed into the wrong field), and the bearer
   token is no longer written into every entry.
-- **Send kept hitting the previous host after switching environment** — the
+- **Send kept hitting the previous host after switching environment** - the
   server was baked into the button at render time. It, and the operation's
   resolved parameters, are read at click time.
 - **A copied code sample could not be run:** `{userId}` was left literal, the
@@ -162,11 +162,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   substituted from their examples, documented query parameters appended, and the
   header derived from `securitySchemes` (Basic, an API key's own header name,
   OAuth2), or omitted when the endpoint needs no auth.
-- **"Collapse all" in one section collapsed every other section** — each
+- **"Collapse all" in one section collapsed every other section** - each
   section emits its own pair of buttons but they all called one page-global
   function. Scoped to the clicked section now.
 - **"Used by" listed operations that never used the schema.** It matched
-  `JSON.stringify(op).indexOf('#/components/schemas/User')` — a substring test,
+  `JSON.stringify(op).indexOf('#/components/schemas/User')` - a substring test,
   so `User` was used by everything touching `UserProfile`. The index is
   structural, compares whole references, and follows a reference through another
   schema, so a nested model finally lists its real callers.
@@ -179,7 +179,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Nothing ever expired what the UI stores**, and a bearer token was persisted
   in plaintext with no way to forget it. The per-endpoint keys are LRU-pruned to
   60 on load, and the shortcuts dialog carries a *Clear stored data* control.
-- **The `auto` theme looked exactly like `dark`** — the glyph swap keys on
+- **The `auto` theme looked exactly like `dark`** - the glyph swap keys on
   `data-theme`, which `auto` removes. It now tracks what is actually rendered
   and marks itself as automatic.
 - The fence sentinel in `UiRenderer` was a literal NUL byte, which made the
@@ -187,20 +187,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a JS escape, so the source stays ASCII.
 - **Nearly half of a real spec's response bodies were wrong.** Measured on a
   205-operation Laravel app: 95 operations documented their 200 as
-  `$ref: JsonResponse` — that is, `{original, exception}`, the internals of
-  Illuminate's response class — and 45 more documented a JSON object as
+  `$ref: JsonResponse` - that is, `{original, exception}`, the internals of
+  Illuminate's response class - and 45 more documented a JSON object as
   `type: string`. Three causes, all fixed:
   - A response *wrapper* is no longer treated as a payload (matched by
     inheritance, so one rule covers `JsonResponse`, `RedirectResponse`,
     `StreamedResponse`, PSR-7 responses and views). Nor is the bare abstract
-    base a payload class extends — `JsonResource`, `ResourceCollection`,
-    Eloquent's `Model` — matched exactly, so subclasses keep their schemas.
+    base a payload class extends - `JsonResource`, `ResourceCollection`,
+    Eloquent's `Model` - matched exactly, so subclasses keep their schemas.
   - **PHPDoc types are resolved against the file's own `use` statements.**
     `@return Response` and `@return UserResource` matched no class before, so
     every unqualified annotation in a namespaced app fell through to the
     fallback type. This is also what now links 9 endpoints in that app straight
     to their resource schemas.
-  - The fallback for a name that resolves to nothing is `{}` — no constraint —
+  - The fallback for a name that resolves to nothing is `{}` - no constraint -
     instead of `{type: string}`, and for a return type that means no invented
     200 content. PHPStan's scalar refinements (`numeric-string`,
     `positive-int`, …) are recognised explicitly rather than caught by it.
@@ -211,28 +211,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   emitted as Response Object `$ref`s (`#/components/responses/ValidationError`),
   and the operation renderer read the response object raw: no `description`, no
   `content`, so the accordion body came out empty and
-  `.ax-resp-body:empty{display:none}` hid it — a control that visibly did
+  `.ax-resp-body:empty{display:none}` hid it - a control that visibly did
   nothing when clicked. Responses, parameters and the request body of an
   operation are now resolved through `components` before rendering (a shallow
-  copy — the cached spec the JSON view shows is left alone), so a `$ref`-ed
+  copy - the cached spec the JSON view shows is left alone), so a `$ref`-ed
   request body reaches the code samples and the try-it form too.
-- **The documentation page was browser-cacheable.** It inlines the whole UI —
-  stylesheet and script — and is rebuilt from source per request, so a cached
+- **The documentation page was browser-cacheable.** It inlines the whole UI -
+  stylesheet and script - and is rebuilt from source per request, so a cached
   copy pinned the reader to whichever UI they first loaded, with no symptom and
   nothing to invalidate. It now sends `Cache-Control: no-store`, like the spec
   endpoints it fetches from.
 - **The documentation column used a third of the space it had.** Above 1200px
   the article is a grid item, and the `margin-inline:auto` that centres it in
   flow cancels a grid item's stretch and sizes the box to fit-content: it
-  rendered 592px wide inside a 1216px cell — narrower than even its own 900px
-  measure — and all the slack showed as dead space between the documentation and
+  rendered 592px wide inside a 1216px cell - narrower than even its own 900px
+  measure - and all the slack showed as dead space between the documentation and
   the request console (312px of it at 1920px, 632px at 2560px). In rail mode the
   article now fills its cell, which the console already bounds:
   `#axui-doc{grid-area:1/1;max-width:none;margin-inline:0}`. `--doc-max` still
   applies below the threshold, where the viewport is the only bound.
 - **A description never reflowed.** `md()` turned every newline into `<br>`, so
   a PHPDoc hard-wrapped at 80 columns kept the source's line ends at every
-  viewport — short ragged lines in a wide column, and double-wrapped ones on a
+  viewport - short ragged lines in a wide column, and double-wrapped ones on a
   phone. A single newline is now a soft break, as in every markdown renderer;
   markdown's own hard break (two trailing spaces, or a trailing backslash) still
   emits `<br>`.
@@ -246,7 +246,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every serialiser actually emits, and no component is published for it.
 - A collection or paginator written without its generic (`Collection`, not
   `Collection<Post>`) became an empty object component. It is now
-  `{type: array, items: {}}` — the same reading `Collection<T>` already got.
+  `{type: array, items: {}}` - the same reading `Collection<T>` already got.
 - The command palette navigated to `?ui=apex#op_…`, so picking a result reloaded
   the page, wrote a dead parameter into the URL bar and history, and dropped any
   `?theme=` override on the way. It now resolves the hash in place, exactly like
@@ -373,7 +373,7 @@ HTTP-server-handler interfaces.
 
 ### Tested
 
-265 Pest tests, 753 assertions, across PHP 8.2–8.4 and Laravel 11–12,
+265 Pest tests, 753 assertions, across PHP 8.2-8.4 and Laravel 11-12,
 including an OpenAPI 3.1 structural conformance suite, a WCAG contrast check over
 both themes, and a hostile-input sweep asserting the generator never emits an
 invalid document or throws into the host application.

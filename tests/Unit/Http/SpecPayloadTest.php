@@ -42,7 +42,7 @@ it('does not attach a download name to YAML', function () {
 
 it('never lets the documentation page be cached', function () {
     // The page inlines the entire stylesheet and script, so a cached copy pins
-    // the reader to an old UI with no symptom and nothing to invalidate — while
+    // the reader to an old UI with no symptom and nothing to invalidate - while
     // the spec it fetches is already no-store.
     $payload = SpecPayload::html('<!doctype html><title>x</title>');
 

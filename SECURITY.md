@@ -18,7 +18,7 @@ Report security issues privately to **anilkumarthakur60@gmail.com** with the
 subject prefix `[ApexDocs Security]`. Include:
 
 - A description of the issue and the impact you believe it has.
-- A minimal reproduction (spec, controller, route, config — whichever applies).
+- A minimal reproduction (spec, controller, route, config - whichever applies).
 - The affected version(s) of ApexDocs.
 - Optionally, a suggested patch.
 
@@ -37,7 +37,7 @@ you in the release notes unless you ask us not to.
 - **The docs routes are not registered in production by default.**
   `apexdocs.environments` defaults to `['local', 'staging']`. If you add
   `production` to that list, also replace the default `['web']` middleware with
-  `['web', 'auth']` or a guard of your own — an OpenAPI document is a complete
+  `['web', 'auth']` or a guard of your own - an OpenAPI document is a complete
   map of your API surface, including parameter names and validation rules.
 - **Set `apexdocs.servers` explicitly in production.** Without it the Laravel
   bridge injects `config('app.url')`, so make sure `APP_URL` is correct. The
@@ -47,5 +47,5 @@ you in the release notes unless you ask us not to.
   serves example data from your spec with no authentication; do not bind it to a
   public interface.
 - **`ui.announcement_banner` is rendered as raw HTML** so it can carry links.
-  Only put trusted content there — it is configuration, not user input, and is
+  Only put trusted content there - it is configuration, not user input, and is
   not escaped.

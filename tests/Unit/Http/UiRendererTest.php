@@ -7,8 +7,8 @@ use ApexDocs\Http\UiRenderer;
 
 /**
  * UiRenderer is the package's biggest single file (~2.2k lines). These tests
- * don't pretend to validate the generated HTML semantically — that's what a
- * real browser test would do — but they enforce the things a unit test CAN
+ * don't pretend to validate the generated HTML semantically - that's what a
+ * real browser test would do - but they enforce the things a unit test CAN
  * catch: the page renders, the title/version/spec URL are properly
  * HTML-escaped, and every asset is inlined so the page needs no network.
  */
@@ -65,7 +65,7 @@ it('inlines its assets (no external CDN)', function () {
     $html = ui()->render('/spec.json', cfg());
 
     // Zero outbound requests is the property that justified deleting the
-    // CDN-backed UIs — the page must work fully offline.
+    // CDN-backed UIs - the page must work fully offline.
     expect($html)->toContain('<style')
         ->and($html)->toContain('<script')
         ->and($html)->not->toMatch('#<script[^>]*src="https?://#')      // no remote script

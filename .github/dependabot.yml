@@ -1,7 +1,7 @@
 version: 2
 
 updates:
-  # Composer dependencies — opens a PR weekly when a runtime or dev dep updates.
+  # Composer dependencies - opens a PR weekly when a runtime or dev dep updates.
   - package-ecosystem: composer
     directory: /
     schedule:
@@ -21,7 +21,7 @@ updates:
         patterns:
           - '*'
 
-  # GitHub Actions versions — small, but worth keeping current for security.
+  # GitHub Actions versions - small, but worth keeping current for security.
   - package-ecosystem: github-actions
     directory: /
     schedule:

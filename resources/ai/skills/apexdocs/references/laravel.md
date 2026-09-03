@@ -60,7 +60,7 @@ Tips for accurate bodies: keep `rules()` free of request/route access (`$this->r
 ## API resources → response schemas
 
 A `JsonResource` / `ResourceCollection` subclass is documented from the `toArray()` it declares,
-read statically — never instantiated, never called, no model or request needed. Full expression
+read statically - never instantiated, never called, no model or request needed. Full expression
 table in `schemas-and-types.md`; the Laravel-specific parts:
 
 - **Types come from the model.** Put `@mixin \App\Models\User` on the resource and `@property`

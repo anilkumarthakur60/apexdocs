@@ -7,15 +7,15 @@ namespace ApexDocs\Extractor;
 use ReflectionClass;
 
 /**
- * Resolves the short class names written inside a PHP file — `new UserResource(…)`,
- * `PostResource::collection(…)`, `@property Carbon $created_at` — to fully
+ * Resolves the short class names written inside a PHP file - `new UserResource(…)`,
+ * `PostResource::collection(…)`, `@property Carbon $created_at` - to fully
  * qualified names.
  *
  * Reflection exposes a file's classes but never its import table, and the body
  * of an API resource is written almost entirely in unqualified names, so the
  * `use` statements are recovered by tokenising the file once.
  *
- * Pure PHP — no framework dependency.
+ * Pure PHP - no framework dependency.
  */
 final class NameResolver
 {
@@ -97,8 +97,8 @@ final class NameResolver
 
     /**
      * Resolve every class-ish identifier inside a type string of the shape
-     * {@see TypeInferrer::normalise()} produces — `User`, `?User`, `User|null`,
-     * `PostResource[]`, `Tag{}` — leaving primitives untouched.
+     * {@see TypeInferrer::normalise()} produces - `User`, `?User`, `User|null`,
+     * `PostResource[]`, `Tag{}` - leaving primitives untouched.
      */
     public function resolveTypeString(string $type): string
     {
@@ -144,7 +144,7 @@ final class NameResolver
      *
      * `use` in a closure signature and `use` of a trait inside a class body are
      * both T_USE. The closure form is skipped by looking ahead; a trait import
-     * is harmless — the alias it records maps to the right class anyway.
+     * is harmless - the alias it records maps to the right class anyway.
      *
      * @return array<string, string>
      */
@@ -186,7 +186,7 @@ final class NameResolver
     }
 
     /**
-     * Consume one `use` statement — plain, aliased, or grouped — and return the
+     * Consume one `use` statement - plain, aliased, or grouped - and return the
      * index of its last token.
      *
      * @param  list<array{0: int, 1: string, 2: int}|string>  $tokens

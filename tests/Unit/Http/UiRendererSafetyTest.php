@@ -99,7 +99,7 @@ it('leaves HTML entities untouched when highlighting JSON', function () {
     preg_match_all($pattern, 'curl -d &#39;{&quot;a&quot;: 1}&#39;', $matches);
 
     // The entity must be matched whole, so the replace callback can pass it
-    // through — never as the bare digits inside it.
+    // through - never as the bare digits inside it.
     expect($matches[0])->toContain('&#39;')
         ->and($matches[0])->not->toContain('39');
 });

@@ -7,7 +7,7 @@ direction (small, framework-agnostic core; Pest-only tooling).
 
 ### Summary
 
-<!-- 1–3 sentences on what this PR changes and why. -->
+<!-- 1-3 sentences on what this PR changes and why. -->
 
 ### Type of change
 
@@ -29,11 +29,11 @@ direction (small, framework-agnostic core; Pest-only tooling).
 ### Checklist
 
 - [ ] Public API (`ApexDocs\ApexDocs`, `Config`, `Contract\*`, `Attribute\*`)
-      is unchanged — or this PR includes a deprecation path
+      is unchanged - or this PR includes a deprecation path
 - [ ] No new runtime dependencies (or strong justification provided)
 - [ ] CHANGELOG.md updated under `[Unreleased]` if user-visible
 - [ ] No emojis added to source files
-- [ ] No comments restating *what* the code does — comments only for *why*
+- [ ] No comments restating *what* the code does - comments only for *why*
 
 ### Related issues
 

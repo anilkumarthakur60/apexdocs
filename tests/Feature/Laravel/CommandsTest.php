@@ -5,7 +5,7 @@ declare(strict_types=1);
 /**
  * Smoke + behavioural coverage for all Artisan commands shipped by the
  * Laravel bridge. These commands are part of the public surface (anyone who
- * `composer require`s the package can run them in CI) — they must keep
+ * `composer require`s the package can run them in CI) - they must keep
  * working across the matrix.
  */
 afterEach(function () {

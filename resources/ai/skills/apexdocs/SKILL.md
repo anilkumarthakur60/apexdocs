@@ -41,10 +41,10 @@ right now, why a route is missing) come from the `apexdocs` MCP server  prefer i
    schemas; return `Dto[]`, `Collection<int, Dto>`, `LengthAwarePaginator<Dto>` for lists.
    Untyped `array` → `{type: array, items: {}}`.
    An **API resource** is read from its `toArray()` (or `jsonSerialize()`) without being run, so
-   its keys are documented already; give the resource a `@mixin \App\Models\X` — or the model
-   `@property` annotations — and the keys get real types too. `@return array{…}` on the payload
+   its keys are documented already; give the resource a `@mixin \App\Models\X` - or the model
+   `@property` annotations - and the keys get real types too. `@return array{…}` on the payload
    method overrides everything and is the fix for a body too dynamic to read.
-4. **`ApexDocs` is immutable** — `routes()`, `filterRoutes()`, `transformDocument()`… return a
+4. **`ApexDocs` is immutable** - `routes()`, `filterRoutes()`, `transformDocument()`… return a
    *new* instance. In Laravel: `app()->extend(ApexDocs::class, fn ($d) => $d->filterRoutes(...))`
    or chain straight into `->generate()`.
 5. **Route selection is layered**: `api_path_prefix` → `exclude_paths` → `spec_group` →
@@ -111,10 +111,10 @@ Full semantics in `references/attributes.md`.
 |---|---|
 | Endpoint missing | `list_routes` → `reason`: prefix (`api_path_prefix`), `exclude_paths`, `spec_group`/`#[ApiGroup]`, `filterRoutes`, `#[Hidden]`, or only HEAD/OPTIONS/PROPFIND verbs |
 | No request body | Method not POST/PUT/PATCH; FormRequest not type-hinted; `rules()` throws / has required params / returns `[]`; use `#[RequestBody]`/`#[BodyParam]` |
-| Response is bare `{type: object}` | Return type untyped or `JsonResponse`; add `@return Dto` or `#[ApiResponse(resource:)]`. For a resource: no own `toArray()` (the inherited one is in `/vendor/`), or its body is unreadable — annotate it `@return array{…}` |
-| List documented as `items: {}` | `@return array` without element type — write `@return Dto[]` |
+| Response is bare `{type: object}` | Return type untyped or `JsonResponse`; add `@return Dto` or `#[ApiResponse(resource:)]`. For a resource: no own `toArray()` (the inherited one is in `/vendor/`), or its body is unreadable - annotate it `@return array{…}` |
+| List documented as `items: {}` | `@return array` without element type - write `@return Dto[]` |
 | Property missing from schema | Not public; or `max_depth` reached (nested object collapses to `{type: object}`) |
-| Resource key present but untyped (`{}`) | Nothing in the expression said anything — add `@mixin`/`@property` to the model, a cast, or `@return array{…}` |
+| Resource key present but untyped (`{}`) | Nothing in the expression said anything - add `@mixin`/`@property` to the model, a cast, or `@return array{…}` |
 | Resource key wrongly `required` | It is unconditional in the literal; wrap it in `when…()`, or mark it optional in `@return array{key?: T}` |
 | Property wrongly required | No default + non-nullable → required; readonly nullable → required; add a default or make mutable |
 | Security wrong / 401 missing | `security.auto_detect`; middleware contains `auth`/`sanctum`/`passport`/`jwt`? override with `#[Security]`/`#[NoSecurity]` |

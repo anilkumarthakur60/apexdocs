@@ -26,7 +26,7 @@ use Symfony\Component\Routing\RouterInterface;
 
 /**
  * The Symfony bridge stays untested at the container level until someone
- * actually plugs the bundle into a Symfony app — by which point a compile
+ * actually plugs the bundle into a Symfony app - by which point a compile
  * failure breaks their boot. These tests run the extension against a real
  * ContainerBuilder and assert that every public service resolves to an
  * instance of the expected concrete class.

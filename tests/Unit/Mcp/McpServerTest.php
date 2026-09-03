@@ -13,7 +13,7 @@ use ApexDocs\Tests\Fixtures\Controllers\UserController;
 
 /*
  * Framework-agnostic coverage of the MCP server: protocol handling, every
- * tool, resources and prompts — driven by the fixture controllers through an
+ * tool, resources and prompts - driven by the fixture controllers through an
  * in-process snapshot, so no Laravel container is involved.
  */
 

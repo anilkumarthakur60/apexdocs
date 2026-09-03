@@ -23,7 +23,7 @@ JSON Schema 2020-12. `maxDepth` = `responses.max_depth` (default 6, min 1).
 | `numeric-string`, `literal-string`, `class-string`, … | `{type: string}` |
 | `positive-int`, `non-negative-int`, `int<a, b>`, … | `{type: integer}` |
 | `array-key` | `{type: ["string","integer"]}` |
-| anything else — a name that resolves to nothing, `callable`, `resource` | `{}` (no constraint), and **no inferred 200 content** |
+| anything else - a name that resolves to nothing, `callable`, `resource` | `{}` (no constraint), and **no inferred 200 content** |
 
 Generics are normalised first (`TypeInferrer::normalise`):
 `Collection<int, T>`, `Collection<T>`, `list<T>`, `array<int, T>`, `LengthAwarePaginator<T>`,
@@ -47,7 +47,7 @@ Classes that never become a component:
 |---|---|---|
 | `DateTimeInterface` (Carbon included) | `{type: string, format: date-time}` | every serialiser emits ISO-8601 |
 | a collection/paginator with no generic (`TypeInferrer::ITERABLE_GENERICS`, and it must really be `Traversable`) | `{type: array, items: {}}` | the same reading `Collection<T>` gets |
-| a response wrapper — `Symfony\…\HttpFoundation\Response` and every subclass (`JsonResponse`, `RedirectResponse`, `StreamedResponse`), PSR-7 `ResponseInterface`, `Illuminate\Contracts\View\View` | `{}` → no content | it carries the payload, it is not the payload: reflected, `JsonResponse` published `{original, exception}` |
+| a response wrapper - `Symfony\…\HttpFoundation\Response` and every subclass (`JsonResponse`, `RedirectResponse`, `StreamedResponse`), PSR-7 `ResponseInterface`, `Illuminate\Contracts\View\View` | `{}` → no content | it carries the payload, it is not the payload: reflected, `JsonResponse` published `{original, exception}` |
 | the bare abstract bases, matched **exactly**: `JsonResource`, `ResourceCollection`, Eloquent `Model`, `Relation`, `Builder` | `{}` → no content | a subclass keeps its schema; only the base has nothing to say |
 
 Static properties are never payload keys.
@@ -60,7 +60,7 @@ Source order: payload method (`jsonSerialize()` then `toArray()`) → own public
 - **Enums**: `enum` of backing values (`type` integer if int-backed, else string); pure enums →
   case names.
 - **Payload methods** (`ArrayShapeReader`): a `jsonSerialize()` or `toArray()` **declared outside
-  `/vendor/`** wins over the property list — the keys of an API resource are in the method, and its
+  `/vendor/`** wins over the property list - the keys of an API resource are in the method, and its
   public surface (`$collects`, `$resource`) is plumbing. `@return array{…}` on that method beats
   its body and is the escape hatch for an unreadable one. Details in the section below.
 - **Objects**: every **public** property declared on the class itself (parents handled below):
@@ -90,7 +90,7 @@ that does *not* write its own `toArray()` stays `{type: object}`.
 
 Per `return` statement, the array literal (also inside `array_merge()`, `array_replace()`,
 `array_filter()`). Several `return`s merge; a key missing from one becomes optional. Keys must be
-literal strings — `self::FIELD => …` is skipped; a numeric-keyed literal is a list, not an object.
+literal strings - `self::FIELD => …` is skipped; a numeric-keyed literal is a list, not an object.
 
 | Value expression | Result |
 |---|---|
@@ -107,12 +107,12 @@ literal strings — `self::FIELD => …` is skipped; a numeric-keyed literal is 
 | `$this->attr`, `$this->rel->attr`, `$this->resource->attr` | reflection property type → `@var` → `@property`/`@property-read` (up the hierarchy) → the model's **`$casts`** / **`casts()`** / **`$keyType`** → `@mixin` target; `$this->resource` *is* the `@mixin` target |
 | `$this->method()` | declared class return type, else `METHOD_TYPES` |
 | `$this->collection` (a `ResourceCollection`) | array of `$collects`, else `FooCollection` → `Foo`/`FooResource` |
-| anything else | key with **no type** — never a guessed one |
+| anything else | key with **no type** - never a guessed one |
 
 `optional` (i.e. left out of `required`): `when()`, `unless()`, `whenLoaded()`, `whenNull()`,
 `whenNotNull()`, `whenAppended()`, `whenCounted()`, `whenAggregated()`, `whenExistsLoaded()`,
-`whenHas()`, `whenPivotLoaded()`, `whenPivotLoadedAs()`, `mergeWhen()`, `mergeUnless()` —
-including nested inside `Resource::collection(…)` — plus every key
+`whenHas()`, `whenPivotLoaded()`, `whenPivotLoadedAs()`, `mergeWhen()`, `mergeUnless()` -
+including nested inside `Resource::collection(…)` - plus every key
 of an `array_filter()` payload and any key missing from one `return` branch. The value argument of
 a conditional still types the key.
 
@@ -125,7 +125,7 @@ Last-resort naming conventions, applied **only** when the expression yielded no 
 `count`/`*_count` → integer; `is_*`/`has_*`/`can_*` → boolean; `email` → string `email`;
 `url`/`*_url` → string `uri`; `uuid` → string `uuid`.
 
-Cast vocabulary (read from `$casts` or the `casts()` literal — no model is constructed):
+Cast vocabulary (read from `$casts` or the `casts()` literal - no model is constructed):
 `bool`/`boolean` → boolean; `int`/`integer`/`timestamp` → integer; `real`/`float`/`double` →
 number; `decimal:n`/`string`/`hashed` → **string** (Eloquent formats a decimal and returns a
 string); `array`/`json`/`collection` → array; `object` → object; `date` → `date`;

@@ -158,7 +158,7 @@ it('keeps the focus ring visible as a non-text boundary', function (string $mode
 
     // WCAG 2.1 asks 3:1 of a non-text UI boundary, and the ring is the only
     // thing telling a keyboard user where they are. It has to hold on the
-    // elevated surfaces too — dialogs and popovers are where focus mostly lands.
+    // elevated surfaces too - dialogs and popovers are where focus mostly lands.
     foreach (['--bg', '--elev', '--card', '--inset'] as $surface) {
         $ratio = tokenContrast($palette, '--ring', $surface);
 
@@ -174,7 +174,7 @@ it('renders no hard-coded hex colour outside the palette', function () {
     $css->setAccessible(true);
     $stylesheet = $css->invoke(new UiRenderer);
 
-    // Strip the palette itself — that is where literal colours belong.
+    // Strip the palette itself - that is where literal colours belong.
     $body = preg_replace('/^.*?@media\(prefers-color-scheme:light\)[^}]*}}/s', '', $stylesheet) ?? $stylesheet;
 
     preg_match_all('/#[0-9a-fA-F]{6}\b/', $body, $matches);

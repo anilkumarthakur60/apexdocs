@@ -6,7 +6,7 @@ use ApexDocs\Tests\Fixtures\Controllers\UserController;
 
 /*
  * End-to-end: the standalone `bin/apexdocs-mcp` executable, in its default
- * subprocess mode — a client speaks JSON-RPC over stdio, the server spawns a
+ * subprocess mode - a client speaks JSON-RPC over stdio, the server spawns a
  * fresh PHP process per snapshot that runs the bootstrap file. This is the
  * exact path a Symfony/Slim/plain-PHP project uses.
  */

@@ -64,7 +64,7 @@ final class ResponseExtractor
 
     /**
      * A Responses Object key must be an HTTP status code or the literal
-     * "default"; anything outside 100–599 goes into the default bucket rather
+     * "default"; anything outside 100-599 goes into the default bucket rather
      * than producing a key no validator accepts.
      */
     private function responseKey(int $status): string

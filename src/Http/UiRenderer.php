@@ -671,7 +671,7 @@ final class UiRenderer
            scrollport. Anything genuinely wide gets its own `.ax-tablewrap`. */
         /* Centred against a measure only while the article is a block in flow
            (below the rail threshold, where the viewport is the only bound). The
-           auto margin is undone once it becomes a grid item — see >=1200px. */
+           auto margin is undone once it becomes a grid item - see >=1200px. */
         #axui-doc{max-width:var(--doc-max);margin-inline:auto;padding:16px var(--gutter) 28px;overflow-x:clip}
         [id]{scroll-margin-top:calc(var(--ctx-h) + 12px)}
 
@@ -772,7 +772,7 @@ final class UiRenderer
         .ax-resp-status{font-size:13px;font-weight:700;font-family:monospace;flex-shrink:0}
         .axs-2xx{color:var(--green)}.axs-3xx{color:var(--blue)}.axs-4xx{color:var(--amber)}.axs-5xx{color:var(--red)}
         /* An informational code is not a success, and `default` is not a server
-           error — which is how both of them used to be painted. */
+           error - which is how both of them used to be painted. */
         .axs-1xx{color:var(--blue-t)}.axs-default{color:var(--t3)}
         .ax-resp-desc{font-size:13px;color:var(--t2);flex:1}
         .ax-resp-arrow{color:var(--t3);font-size:10px;transition:transform .2s}
@@ -1166,7 +1166,7 @@ final class UiRenderer
     private function cssResponsive(): string
     {
         return <<<'CSS'
-        /* ══ BASE  phones, 0–599px (design target 320–430px) ══
+        /* ══ BASE  phones, 0-599px (design target 320-430px) ══
            Progressive disclosure first, because it is a pure source-order
            question: these two classes are also `.apex-icon-btn`s and
            `.apex-env-wrap`s, which set `display` themselves at the same
@@ -1266,7 +1266,7 @@ final class UiRenderer
             #axui-content-inner{display:grid;grid-template-columns:minmax(0,1fr) var(--rail-w);align-items:start}
             /* The article now fills its cell: the rail already bounds it, so a
                measure of its own only opens a gap between the two columns.
-               `margin-inline` MUST be reset with `max-width` — an auto inline
+               `margin-inline` MUST be reset with `max-width` - an auto inline
                margin on a grid item cancels the stretch and sizes the box to
                fit-content, which rendered the article 592px wide inside a
                1216px cell, narrower than even its own max-width, with all the
@@ -1289,7 +1289,7 @@ final class UiRenderer
                that keeps the rail blank on the views with no console. */
         }
 
-        /* ══ >=1560px — wide desktop ══
+        /* ══ >=1560px - wide desktop ══
            No `--doc-max` here: past 1200px the article is a grid item that
            fills its cell, so a measure would have nothing to act on. */
         @media (min-width:1560px){
@@ -1459,8 +1459,8 @@ final class UiRenderer
         function applyTheme(t){
             if(t==='auto')document.documentElement.removeAttribute('data-theme');
             else document.documentElement.setAttribute('data-theme',t);
-            /* `auto` removes data-theme, so the moon/sun swap — which keys on
-               [data-theme="light"] — always showed the moon and `auto` was
+            /* `auto` removes data-theme, so the moon/sun swap - which keys on
+               [data-theme="light"] - always showed the moon and `auto` was
                indistinguishable from `dark`. State goes on the button. */
             document.documentElement.setAttribute('data-theme-pref',t);
             var btn=document.getElementById('apexThemeBtn');
@@ -1560,7 +1560,7 @@ final class UiRenderer
            response then painted the whole UI on top of that error; and every
            later consumer (the palette, the env list) re-fetched a spec that had
            already failed. `_specFailed` remembers, and `axRetrySpec` is the
-           only thing that clears it — the Retry button re-fetches instead of
+           only thing that clears it - the Retry button re-fetches instead of
            reloading the page. */
         var _specPending=null,_specFailed=null,_specAbort=null;
         function loadSpec(cb,onErr){
@@ -1808,13 +1808,13 @@ final class UiRenderer
                 return pre+'<ul>'+items+'</ul>';
             });
             /* Fences come back BEFORE the paragraph pass: re-injected after it, a
-               <pre> sits inside a <p>, which is invalid — the browser closes the
+               <pre> sits inside a <p>, which is invalid - the browser closes the
                paragraph early and the rest of the block escapes the code block.
                The sentinel is a PUA code point written as a JS escape: it used to
                be a literal NUL byte, which made this whole file grep as binary.
                A ```json info string is dropped from the rendered output. */
             s=s.replace(/\uE000B(\d+)\uE000/g,function(_,i){return '\n\n<pre class="ax-md-pre"><code>'+escH(blocks[+i]).replace(/^[a-zA-Z0-9]*\n/,'')+'</code></pre>\n\n';});
-            /* Paragraphs. A single newline is a SOFT break — a space — as in
+            /* Paragraphs. A single newline is a SOFT break - a space - as in
                every markdown renderer, so a PHPDoc hard-wrapped at 80 columns
                reflows to the width it is given instead of keeping the source's
                ragged line ends at every viewport. A hard break is markdown's
@@ -1861,7 +1861,7 @@ final class UiRenderer
                field. Restore the body and skip the rest. */
             if(h.v!==2){
                 if(h.body!=null){var b1=document.getElementById('axi-body');if(b1)b1.value=h.body;}
-                toast('Older history entry — only the body was restored');
+                toast('Older history entry - only the body was restored');
 
                 return;
             }
@@ -2155,7 +2155,7 @@ final class UiRenderer
                 :lead==='4'?'axs-4xx':lead==='5'?'axs-5xx':'axs-default';
         }
 
-        /* Numeric codes first, then wildcard ranges, then `default` — the order
+        /* Numeric codes first, then wildcard ranges, then `default` - the order
            a reader scans them in. */
         function respOrder(a,b){
             var rank=function(k){
@@ -2220,7 +2220,7 @@ final class UiRenderer
         /* Scoped to the section it was clicked in. Every section emits its own
            pair of buttons, but all of them called one page-global function, so
            "Collapse all" under Request Body collapsed every response schema
-           too — and `_expandAll` then disagreed with the DOM. */
+           too - and `_expandAll` then disagreed with the DOM. */
         window.axExpandAll=function(open,btn){
             _expandAll=open;
             var scope=(btn&&btn.closest&&btn.closest('.ax-section'))||document;
@@ -2242,8 +2242,8 @@ final class UiRenderer
                 else{renderWelcome(spec);}
                 renderSidebarFooter(spec);
                 var hash=location.hash.slice(1);if(hash)navigateHash(hash,spec);
-                /* The sidebar navigates by href, so the hash — not a click
-                   handler — is what selects a view. This is also what makes the
+                /* The sidebar navigates by href, so the hash - not a click
+                   handler - is what selects a view. This is also what makes the
                    browser's Back button walk the endpoints visited. */
                 window.addEventListener('hashchange',function(){
                     var h=location.hash.slice(1);
@@ -2309,7 +2309,7 @@ final class UiRenderer
                 items.forEach(function(i){
                     var dep=i.op.deprecated?' axi-depr':'';
                     /* A real <a href>: keyboard-reachable, focusable, and
-                       middle-click/cmd-click opens the endpoint in a new tab —
+                       middle-click/cmd-click opens the endpoint in a new tab -
                        none of which a <div onclick> can do. The hashchange
                        listener renders it, which also makes Back work. */
                     var active=i.key===_activeOpKey;
@@ -2501,7 +2501,7 @@ final class UiRenderer
         /* An operation may point at `components` instead of inlining: a Response,
            a Parameter and a Request Body are all $ref-able, and ApexDocs itself
            emits the inferred 401/422/429 as `#/components/responses/…`. Every
-           consumer below reads plain objects — an unresolved response has no
+           consumer below reads plain objects - an unresolved response has no
            `description` and no `content`, so its accordion opened onto an empty
            body that `:empty{display:none}` then hid, and the click looked dead.
            Resolved once here, on a shallow copy: `op` belongs to the cached
@@ -2666,8 +2666,8 @@ final class UiRenderer
                         +'</button>'
                         +'<div class="ax-resp-body" id="'+bodyId+'" style="'+(isFirst?'':'display:none')+'">';
                     /* `headers` and `links` were dropped outright, so the
-                       package's own #[ResponseHeader] output — Retry-After,
-                       X-RateLimit-*, Location, pagination cursors — was
+                       package's own #[ResponseHeader] output - Retry-After,
+                       X-RateLimit-*, Location, pagination cursors - was
                        invisible in the documentation it generates. */
                     html+=respHeaders(resp.headers,spec)+respLinks(resp.links,spec);
 
@@ -2764,7 +2764,7 @@ final class UiRenderer
 
         /* Any $ref is a jump, not a label: the component it names has a view of
            its own, and the badge is exactly where a reader is standing when
-           they want it. Derived from the ref — no name is special — and linked
+           they want it. Derived from the ref - no name is special - and linked
            only when the target really is a published schema, so a dangling ref
            cannot become a dead link. The href is the same deep link the sidebar
            uses, so the hashchange router renders it and Back returns here. */
@@ -2814,7 +2814,7 @@ final class UiRenderer
                     var rawType=pv.type;
                     if(Array.isArray(rawType)){rawType=rawType.filter(function(t){return t!=='null';})[0]||'any';}
                     var pt=rawType||(pv['$ref']?pv['$ref'].split('/').pop():(pv.properties?'object':'any'));
-                    /* `array` alone said nothing about what was in it — the
+                    /* `array` alone said nothing about what was in it - the
                        item's own $ref names it, and links to it. */
                     var itemRef=rawType==='array'&&pv.items&&pv.items['$ref']?pv.items['$ref']:null;
                     var typeHtml=pv['$ref']
@@ -2974,7 +2974,7 @@ final class UiRenderer
         };
 
         /* One sample value per parameter: what the spec offers, else something
-           of the right type, else the placeholder — so a copied sample is
+           of the right type, else the placeholder - so a copied sample is
            runnable and its blanks are obvious. */
         function paramSample(p){
             var sch=p.schema||{};
@@ -3015,7 +3015,7 @@ final class UiRenderer
         }
 
         /* The auth header the operation actually requires. Every sample claimed
-           `Authorization: Bearer` — wrong for Basic, wrong for an API key, and
+           `Authorization: Bearer` - wrong for Basic, wrong for an API key, and
            wrong for an endpoint that needs nothing at all. */
         function authHeaderFor(op,spec){
             var reqs=(op&&op.security!==undefined)?op.security:((spec&&spec.security)||[]);

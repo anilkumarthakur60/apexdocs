@@ -2,7 +2,7 @@
 
 # Everything not listed below ships in the Composer dist: src/, resources/,
 # composer.json, LICENSE, README.md, CHANGELOG.md. (There is no "export"
-# attribute in git — only export-ignore — so the shipped set is defined by
+# attribute in git - only export-ignore - so the shipped set is defined by
 # omission.)
 /tests              export-ignore
 /.github            export-ignore

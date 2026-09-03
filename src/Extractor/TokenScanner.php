@@ -21,7 +21,7 @@ use ReflectionMethod;
  * strings, get the id -1 so every token can be read the same way.
  *
  * Used by {@see ArrayShapeReader} to read a payload method without running it.
- * Pure PHP — no framework dependency.
+ * Pure PHP - no framework dependency.
  */
 final class TokenScanner
 {
@@ -68,7 +68,7 @@ final class TokenScanner
     /**
      * Split the array literal starting at $cursor into element token slices,
      * leaving $cursor on the closing bracket. Null when there is no literal
-     * there — `return $this->attributes;` and friends.
+     * there - `return $this->attributes;` and friends.
      *
      * @param  list<array{0: int, 1: string}>  $tokens
      * @return list<list<array{0: int, 1: string}>>|null
@@ -168,7 +168,7 @@ final class TokenScanner
     }
 
     /**
-     * The string key of an element, or null when it is not a literal string —
+     * The string key of an element, or null when it is not a literal string -
      * `self::FIELD => …` cannot be read without evaluating code, and a numeric
      * key means the literal is a list rather than an object.
      *
@@ -313,7 +313,7 @@ final class TokenScanner
     }
 
     /**
-     * The class name starting at $index — one token in PHP 8 unless written
+     * The class name starting at $index - one token in PHP 8 unless written
      * with leading separators.
      *
      * @param  list<array{0: int, 1: string}>  $tokens
