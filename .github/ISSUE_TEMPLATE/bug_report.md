@@ -34,7 +34,7 @@ Steps:
 
 - ApexDocs version: <!-- e.g. 0.1.0 -->
 - PHP version: <!-- php -v -->
-- Framework + version: <!-- Laravel 11.x / Symfony 7.x / standalone -->
+- Framework + version: <!-- Laravel 12.x / Symfony 7.x / standalone -->
 - OS: <!-- macOS / Linux / Windows -->
 
 ### Additional context

@@ -1,6 +1,6 @@
 # Laravel bridge (`ApexDocs\Bridge\Laravel`)
 
-Auto-discovered `ServiceProvider` (+ facade alias `ApexDocs`). Requires Laravel 11 or 12.
+Auto-discovered `ServiceProvider` (+ facade alias `ApexDocs`). Requires Laravel 12 or 13.
 
 ## Container bindings (all singletons unless noted)
 

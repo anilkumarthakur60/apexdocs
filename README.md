@@ -53,8 +53,16 @@ Zero framework dependencies in the core. Works with Laravel, Symfony, Slim, or a
 ## Requirements
 
 - PHP 8.2+
-- Laravel 11 or 12 (for the Laravel bridge)
+- Laravel 12 or 13 (for the Laravel bridge)
 - Symfony 6.4, 7, or 8 (for the Symfony bridge)
+
+Supported Laravel releases track [Laravel's own support policy](https://laravel.com/docs/releases#support-policy);
+versions past their security-fix date are dropped.
+
+| Laravel | PHP       | Security fixes until |
+| ------- | --------- | -------------------- |
+| 12      | 8.2 - 8.5 | February 24th, 2027  |
+| 13      | 8.3 - 8.5 | March 17th, 2028     |
 
 The core depends only on `phpstan/phpdoc-parser`, `symfony/yaml` (6.4 through
 8), and the PSR interfaces for caching and HTTP messages  no framework.

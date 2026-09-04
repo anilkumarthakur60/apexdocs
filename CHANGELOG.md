@@ -127,6 +127,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Support window now tracks Laravel's own policy.** Tested against Laravel 12
+  and 13 on PHP 8.2 through 8.5. Laravel 11 is dropped: its security-fix window
+  closed in March 2026. Laravel 13 requires PHP 8.3 or newer, so that pair is
+  excluded from the 8.2 CI row. Dev dependencies widened to match: Pest 3 or 4,
+  Testbench 10 or 11, and the Symfony test components up to 8.
 - `ui.show_ui_switcher` → `ui.show_toolbar` (`Config::$showUiSwitcher` →
   `Config::$showToolbar`). The flag hides the entire header bar, not a tab
   strip, so the old name described something that no longer existed.

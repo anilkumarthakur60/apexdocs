@@ -12,21 +12,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        php: ['8.2', '8.3', '8.4']
-        laravel: ['11.*', '12.*']
+        php: ['8.2', '8.3', '8.4', '8.5']
+        laravel: ['12.*', '13.*']
         deps: ['highest']
         include:
           - php: '8.2'
-            laravel: '11.*'
+            laravel: '12.*'
             deps: 'lowest'
           # Coverage row - runs once with xdebug enabled, uploads to Codecov.
-          - php: '8.3'
-            laravel: '12.*'
+          - php: '8.4'
+            laravel: '13.*'
             deps: 'highest'
             coverage: true
         exclude:
+          # Laravel 13 requires PHP 8.3 or newer.
           - php: '8.2'
-            laravel: '12.*'
+            laravel: '13.*'
 
     steps:
       - uses: actions/checkout@v6
@@ -52,7 +53,7 @@ jobs:
         run: |
           composer require --no-update --dev \
             "laravel/framework:${{ matrix.laravel }}" \
-            "orchestra/testbench:$( [ '${{ matrix.laravel }}' = '11.*' ] && echo '9.*' || echo '10.*' )"
+            "orchestra/testbench:$( [ '${{ matrix.laravel }}' = '12.*' ] && echo '10.*' || echo '11.*' )"
 
       - name: Install dependencies
         run: |

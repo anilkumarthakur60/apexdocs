@@ -12,8 +12,13 @@ composer install
 vendor/bin/pest
 ```
 
-You need PHP 8.2+ locally. The CI matrix runs 8.2, 8.3, and 8.4 against
-Laravel 11 and 12.
+You need PHP 8.2+ locally. The CI matrix runs 8.2, 8.3, 8.4, and 8.5 against
+Laravel 12 and 13. Laravel 13 needs PHP 8.3 or newer, so that pair is skipped
+on 8.2.
+
+The committed `composer.lock` tracks the newest supported stack, which puts its
+floor at PHP 8.3. On 8.2, run `composer update` instead of `composer install`
+and you will get the Laravel 12 line.
 
 ## What to send
 
