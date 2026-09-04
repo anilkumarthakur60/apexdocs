@@ -29,6 +29,15 @@ it('surfaces subprocess failures with stderr', function () {
     expect(fn () => $provider->snapshot())->toThrow(RuntimeException::class, 'boom');
 });
 
+it('reports the real exit code rather than a reaped -1', function () {
+    // proc_get_status() reaps the child, so before PHP 8.3 proc_close() answers
+    // -1 and a successful run looks like a failure. Output on stdout keeps this
+    // distinguishable from the stderr case above.
+    $provider = new SubprocessSnapshotProvider([PHP_BINARY, '-r', 'echo "{}"; exit(3);']);
+
+    expect(fn () => $provider->snapshot())->toThrow(RuntimeException::class, 'exit 3');
+});
+
 it('rejects output that is not a snapshot', function () {
     expect(fn () => (new SubprocessSnapshotProvider([PHP_BINARY, '-r', 'echo "not json";']))->snapshot())
         ->toThrow(RuntimeException::class, 'valid JSON');
