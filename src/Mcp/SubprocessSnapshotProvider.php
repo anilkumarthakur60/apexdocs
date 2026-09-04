@@ -38,6 +38,7 @@ final class SubprocessSnapshotProvider implements SnapshotProviderInterface
 
         $stdout = '';
         $stderr = '';
+        $exit = -1;
         $deadline = microtime(true) + $this->timeoutSeconds;
 
         while (true) {
@@ -46,6 +47,11 @@ final class SubprocessSnapshotProvider implements SnapshotProviderInterface
 
             $status = proc_get_status($process);
             if (! $status['running']) {
+                // proc_get_status() reaps the child, and before PHP 8.3 only the
+                // first call carries the real code - proc_close() then reports
+                // -1. Take the code from the read that saw the exit.
+                $exit = $status['exitcode'];
+
                 // Drain whatever arrived between the last read and exit.
                 $stdout .= (string) stream_get_contents($pipes[1]);
                 $stderr .= (string) stream_get_contents($pipes[2]);
@@ -66,7 +72,7 @@ final class SubprocessSnapshotProvider implements SnapshotProviderInterface
 
         fclose($pipes[1]);
         fclose($pipes[2]);
-        $exit = proc_close($process);
+        proc_close($process);
 
         if ($exit !== 0) {
             throw new \RuntimeException(sprintf(

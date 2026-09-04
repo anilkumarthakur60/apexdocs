@@ -138,6 +138,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **MCP snapshots failed on PHP 8.2.** `SubprocessSnapshotProvider` read the
+  child's exit code from `proc_close()`, but `proc_get_status()` has already
+  reaped the process by then, and before PHP 8.3 only the first status read
+  carries the real code. Every successful snapshot therefore looked like
+  `exit -1` on 8.2, which broke `spec_summary` and `validate_spec` over the
+  standalone MCP binary. The code now comes from the status read that observed
+  the exit.
+
 - **Path Item parameters were dropped on every method.** A parameter declared
   once for a path applies to all of its operations; the UI read only
   `operation.parameters`, and a `$ref`-ed parameter rendered a row with
